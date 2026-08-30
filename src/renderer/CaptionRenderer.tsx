@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import type { CSSProperties } from "react";
 import type { CaptionClip, EffectCue } from "../types";
 import { captionSegments } from "./caption-segments";
 import { focusPresentation } from "./operations/FocusRenderer";
@@ -17,7 +18,8 @@ export function CaptionRenderer({ clip, cue, currentMs, mode, reducedMotion }: {
     return transformPresentation(props);
   };
   const transition = { duration: reducedMotion ? 0 : Math.max(0.12, (cue?.durationMs ?? 0) / 1000), ease: "easeOut" as const };
-  return <section className={`stage-shell operation-${cue?.kind.toLowerCase() ?? "none"} intensity-${cue?.intensity ?? "subtle"} phase-${timeline.phase}`} aria-label="Learner-visible caption stage"><div className="stage-label">Learner-visible caption stage · {mode === "plain" ? "plain captions" : timeline.phase}</div><p className="caption-line">{captionSegments(clip).map((segment) => {
+  const stageStyle = { "--cue-duration": `${cue?.durationMs ?? 0}ms` } as CSSProperties;
+  return <section style={stageStyle} className={`stage-shell operation-${cue?.kind.toLowerCase() ?? "none"} intensity-${cue?.intensity ?? "subtle"} phase-${timeline.phase}`} aria-label="Learner-visible caption stage"><div className="stage-label">Learner-visible caption stage · {mode === "plain" ? "plain captions" : timeline.phase}</div><p className="caption-line">{captionSegments(clip).map((segment) => {
     if (!segment.wordId) return <span key={segment.key} className="caption-surface">{segment.text}</span>;
     const presentation = present(segment.wordId);
     return <motion.span key={segment.key} className={presentation.className} animate={{ opacity: presentation.opacity, scale: presentation.scale }} transition={transition}>{segment.text}</motion.span>;
