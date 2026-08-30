@@ -1,13 +1,14 @@
 # CueLayer
 
-**Caption-native, source-grounded pedagogical motion captions.**
+**Source-traceable pedagogical motion captions.**
 
-CueLayer applies restrained, meaningful motion to exact spans in an existing teacher transcript. It reduces the mechanical effort of following a lesson without replacing the learner's work of selecting, organizing, integrating, and taking notes.
+CueLayer composes a source-traceable classroom caption, then applies restrained, meaningful motion to it. It reduces the mechanical effort of following a lesson without replacing the learner's work of selecting, organizing, integrating, and taking notes.
 
 ## Product thesis
 
 - The foreground product is only **AI special-effect captions**.
-- All substantive learner-visible text is traceable to exact transcript spans.
+- All substantive learner-visible text is source-traceable, not necessarily verbatim transcript text.
+- The composer may perform high-confidence cleanup, glossary correction, trusted referent completion, and source-backed notation canonicalisation.
 - Motion should represent teaching meaning, not decorate speech.
 - Most classroom speech should remain visually quiet.
 - Course and lesson knowledge provide grounding for later AI effect planning.
@@ -21,8 +22,10 @@ CueLayer applies restrained, meaningful motion to exact spans in an existing tea
 
 ## Explicit non-goals for V0
 
-AI notes, summaries, diagrams, equations, normalized teaching content, tutors, quizzes, student interaction flows, teacher dashboards, cueboards, post-class recap, LMS features, and realtime ASR.
+AI notes, summaries, diagrams, unsolicited explanations, silent factual correction, tutors, quizzes, student interaction flows, teacher dashboards, cueboards, post-class recap, LMS features, and realtime ASR.
 
 ## Architecture boundary
 
-An eventual AI planner selects a semantic operation, exact transcript spans, a treatment preset, and timing policy. The deterministic renderer owns layout, CSS, Motion behavior, and accessibility. It never invents substantive teaching text.
+The pipeline is raw speech → raw transcript → Grounded Caption Composer → grounded caption → Effect Planner → Motion Renderer. Composition and motion planning are separate systems. The planner targets grounded-caption fragments; the renderer owns layout, CSS, Motion behavior, and accessibility. Neither may invent substantive teaching text.
+
+Trusted context is limited to the current slide or board, lesson context pack, teacher-approved course material, and teacher-approved subject pack—in that order. General model knowledge is not a trusted source. Plain and FX views always use the same composed caption text.

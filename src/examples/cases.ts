@@ -1,57 +1,52 @@
-import { makeTranscript, spanFromRange, transcriptText } from "../grammar/span-utils";
+import { composeGroundedCaption } from "../composer/GroundedCaptionComposer";
+import { captionSpan, makeTranscript, speechTokenIds } from "../grammar/span-utils";
 import { validateEffectPlan } from "../grammar/validation";
-import type { FxExample } from "../grammar/types";
+import type { CaptionFragment, EffectPlan, FxExample, GroundedCaption, SourceRef, Transcript } from "../grammar/types";
 
-const chemistry = makeTranscript("chemistry-cause", "As nuclear charge increases, the attraction to the outer electron becomes stronger, so atomic radius decreases.");
-const maths = makeTranscript("maths-sequence", "First expand the bracket, then collect the x terms, and finally divide by three.");
-const grammar = makeTranscript("grammar-contrast", "A defining relative clause gives essential information, but a non-defining relative clause adds extra information.");
-const biology = makeTranscript("biology-transform", "When the stomata close, less water vapour leaves the leaf.");
-const history = makeTranscript("history-focus", "The source is useful because it was written at the time of the event.");
-const physics = makeTranscript("physics-focus", "The resultant force is zero, so the object continues at constant velocity.");
-const literature = makeTranscript("literature-none", "Notice that the narrator describes the room before describing the people in it.");
-const geography = makeTranscript("geography-none", "The river carries material downstream when it has enough energy to move it.");
+const display = (treatmentId: string, intensity: "subtle" | "normal" | "strong" = "normal") => ({ treatmentId, intensity, startMs: 900, durationMs: 1200, holdMs: 1100, decay: "restore-caption" as const });
+const speech = (transcript: Transcript, start: number, end: number): SourceRef => ({ kind: "speech", tokenIds: speechTokenIds(transcript, start, end) });
+const rule = (ruleId: Extract<SourceRef, { kind: "normalization-rule" }> ["ruleId"]): SourceRef => ({ kind: "normalization-rule", ruleId });
+const fragment = (id: string, text: string, provenance: SourceRef[], transformation: CaptionFragment["transformation"] = "verbatim"): CaptionFragment => ({ id, text, provenance, transformation, confidence: 0.99 });
+const caption = (fragments: CaptionFragment[], suppressed: GroundedCaption["suppressed"] = [], pedagogicalCues: GroundedCaption["pedagogicalCues"] = []): GroundedCaption => ({ fragments, suppressed, pedagogicalCues });
+const base = (id: string, title: string, subject: string, rawTranscript: Transcript, groundedCaption: GroundedCaption, plan: EffectPlan, extra: Pick<FxExample, "sourceType" | "trustedLessonContext" | "explicitTeachingRelation" | "intendedLearningFunction" | "studentWork" | "risk">): FxExample => ({ id, title, subject, rawTranscript, groundedCaption: composeGroundedCaption(rawTranscript, groundedCaption), expectedGroundedCaption: groundedCaption.fragments.map(({ text }) => text).join(""), candidateEffectPlan: plan, ...extra });
+
+const fillerRaw = makeTranscript("filler-cleanup", "So, um, basically nuclear charge increases across the period.");
+const referentRaw = makeTranscript("referent-resolution", "This increases across the period.");
+const ellipsisRaw = makeTranscript("ellipsis-resolution", "The first increases, while the second stays approximately constant.");
+const notationRaw = makeTranscript("notation-canonicalization", "dy by dx equals two u times du by dx.");
+const historyRaw = makeTranscript("history-focus", "The source is useful because it was written at the time of the event.");
+const chemistryRaw = makeTranscript("chemistry-cause", "As nuclear charge increases, the attraction to the outer electron becomes stronger, so atomic radius decreases.");
+const mathsRaw = makeTranscript("maths-sequence", "First expand the bracket, then collect the x terms, and finally divide by three.");
+const biologyRaw = makeTranscript("biology-transform", "When the stomata close, less water vapour leaves the leaf.");
+const literatureRaw = makeTranscript("literature-none", "Notice that the narrator describes the room before describing the people in it.");
+
+const fillerCaption = caption(
+  [fragment("filler-subject", "Nuclear charge", [speech(fillerRaw, 3, 5), rule("filler-removal")], "cleanup"), fragment("filler-predicate", " increases across the period.", [speech(fillerRaw, 5, 9), rule("punctuation")], "cleanup")],
+  [{ tokenIds: speechTokenIds(fillerRaw, 0, 3), reason: "filler", preserveAsPedagogicalCue: true }],
+  [{ kind: "FOCUS", source: [speech(fillerRaw, 0, 3)], reason: "The omitted lead-in still signals an upcoming point of notice." }],
+);
+const referentCaption = caption([
+  fragment("referent-subject", "Nuclear charge", [speech(referentRaw, 0, 1), { kind: "lesson-source", sourceId: "current-concept", locator: "currentConcept", exactText: "nuclear charge" }], "referent-resolution"),
+  fragment("referent-predicate", " increases across the period.", [speech(referentRaw, 1, 5)], "verbatim"),
+]);
+const ellipsisCaption = caption([
+  fragment("ellipsis-first", "Nuclear charge", [speech(ellipsisRaw, 0, 2), { kind: "lesson-source", sourceId: "trend-subjects", locator: "first", exactText: "nuclear charge" }], "referent-resolution"),
+  fragment("ellipsis-middle", " increases, while ", [speech(ellipsisRaw, 2, 4)], "verbatim"),
+  fragment("ellipsis-second", "shielding", [speech(ellipsisRaw, 4, 6), { kind: "lesson-source", sourceId: "trend-subjects", locator: "second", exactText: "shielding" }], "referent-resolution"),
+  fragment("ellipsis-end", " stays approximately constant.", [speech(ellipsisRaw, 6, 9)], "verbatim"),
+]);
+const notationCaption = caption([fragment("notation", "dy/dx = 2u · du/dx", [speech(notationRaw, 0, 10), { kind: "lesson-source", sourceId: "calculus-slide", locator: "worked-example.line-2", exactText: "dy/dx = 2u · du/dx" }, rule("notation-normalization")], "canonicalization")]);
 
 export const fxExamples: FxExample[] = [
-  {
-    id: "literature-normal-caption", title: "Ordinary descriptive setup", sourceType: "adapted", subject: "Literature", transcript: literature, teacherLine: transcriptText(literature), explicitTeachingRelation: "No relation is being emphasised.", plainCaptionBaseline: "Render the teacher's full sentence as ordinary captions.",
-    candidateEffectPlan: { operation: { kind: "NONE" }, display: { treatmentId: "plain", intensity: "subtle", startMs: 0, durationMs: 0, holdMs: 0, decay: "remain" } },
-    intendedLearningFunction: "Keep routine narration readable without creating false importance.", studentWork: "Decide why the order of description may matter.", risk: "An effect could make an ordinary observation appear like a completed interpretation.",
-  },
-  {
-    id: "geography-normal-caption", title: "Ordinary process statement", sourceType: "synthetic", subject: "Geography", transcript: geography, teacherLine: transcriptText(geography), explicitTeachingRelation: "No relation is being singled out.", plainCaptionBaseline: "Render the teacher's full sentence as ordinary captions.",
-    candidateEffectPlan: { operation: { kind: "NONE" }, display: { treatmentId: "plain", intensity: "subtle", startMs: 0, durationMs: 0, holdMs: 0, decay: "remain" } },
-    intendedLearningFunction: "Preserve a quiet default for explanatory speech.", studentWork: "Connect this statement to their own prior knowledge of erosion and transport.", risk: "Highlighting a generic process sentence can falsely imply a tested key point.",
-  },
-  {
-    id: "history-source-focus", title: "Focus a source-quality phrase", sourceType: "adapted", subject: "History", transcript: history, teacherLine: transcriptText(history), explicitTeachingRelation: "The teacher explicitly gives a reason for usefulness.", plainCaptionBaseline: "Render the teacher's full sentence as ordinary captions.",
-    candidateEffectPlan: { operation: { kind: "FOCUS", targets: [spanFromRange(history, 5, 11)] }, display: { treatmentId: "marker-sweep", intensity: "normal", startMs: 1200, durationMs: 900, holdMs: 1050, decay: "restore-caption" } },
-    intendedLearningFunction: "Direct attention to the criterion without paraphrasing it.", studentWork: "Apply the criterion to assess the source's usefulness.", risk: "The emphasis may be mistaken for a complete source evaluation.",
-  },
-  {
-    id: "physics-resultant-focus", title: "Focus a physical condition", sourceType: "synthetic", subject: "Physics", transcript: physics, teacherLine: transcriptText(physics), explicitTeachingRelation: "The teacher explicitly connects zero resultant force and constant velocity.", plainCaptionBaseline: "Render the teacher's full sentence as ordinary captions.",
-    candidateEffectPlan: { operation: { kind: "FOCUS", targets: [spanFromRange(physics, 1, 4)] }, display: { treatmentId: "spotlight", intensity: "strong", startMs: 900, durationMs: 850, holdMs: 900, decay: "fade" } },
-    intendedLearningFunction: "Make the condition easy to locate while the full sentence remains present.", studentWork: "Explain why the condition does not mean the object must be stationary.", risk: "Strong focus can hide the important qualifying phrase that follows.",
-  },
-  {
-    id: "chemistry-causal-relation", title: "Progressive causal explanation", sourceType: "adapted", subject: "Chemistry", transcript: chemistry, teacherLine: transcriptText(chemistry), explicitTeachingRelation: "nuclear charge increases → attraction becomes stronger → atomic radius decreases", plainCaptionBaseline: "Render the teacher's full sentence as ordinary captions.",
-    candidateEffectPlan: { operation: { kind: "RELATE", items: [spanFromRange(chemistry, 1, 4), spanFromRange(chemistry, 6, 12), spanFromRange(chemistry, 13, 16)], relation: "cause", reveal: "progressive" }, display: { treatmentId: "progressive-chain", intensity: "normal", startMs: 1000, durationMs: 1800, holdMs: 1200, decay: "restore-caption" } },
-    intendedLearningFunction: "Reduce tracking effort across an explicitly spoken cause chain.", studentWork: "Explain the mechanism in their own words and connect it to electron shells.", risk: "A connector can overstate causality if the spoken explanation is tentative.",
-  },
-  {
-    id: "maths-sequence-relation", title: "Progressive worked-method sequence", sourceType: "synthetic", subject: "Mathematics", transcript: maths, teacherLine: transcriptText(maths), explicitTeachingRelation: "First expand → then collect → finally divide", plainCaptionBaseline: "Render the teacher's full sentence as ordinary captions.",
-    candidateEffectPlan: { operation: { kind: "RELATE", items: [spanFromRange(maths, 1, 4), spanFromRange(maths, 5, 10), spanFromRange(maths, 11, 15)], relation: "sequence", reveal: "progressive" }, display: { treatmentId: "aligned-sequence", intensity: "normal", startMs: 800, durationMs: 1600, holdMs: 1000, decay: "remain" } },
-    intendedLearningFunction: "Make the stated order easier to follow without supplying the algebra.", studentWork: "Carry out each algebraic step and check the calculation.", risk: "The sequence might be read as a universal method beyond this problem.",
-  },
-  {
-    id: "grammar-contrast-relation", title: "Simultaneous grammar contrast", sourceType: "adapted", subject: "English grammar", transcript: grammar, teacherLine: transcriptText(grammar), explicitTeachingRelation: "defining relative clause ↔ non-defining relative clause contrast", plainCaptionBaseline: "Render the teacher's full sentence as ordinary captions.",
-    candidateEffectPlan: { operation: { kind: "RELATE", items: [spanFromRange(grammar, 1, 7), spanFromRange(grammar, 9, 16)], relation: "contrast", reveal: "simultaneous" }, display: { treatmentId: "split-contrast", intensity: "subtle", startMs: 900, durationMs: 1000, holdMs: 1400, decay: "restore-caption" } },
-    intendedLearningFunction: "Keep both spoken clause descriptions visually comparable.", studentWork: "Identify clauses in a new sentence and decide whether commas are needed.", risk: "The layout can imply that the two definitions are exhaustive.",
-  },
-  {
-    id: "biology-state-change", title: "State change in a plant process", sourceType: "synthetic", subject: "Biology", transcript: biology, teacherLine: transcriptText(biology), explicitTeachingRelation: "stomata close → less water vapour leaves the leaf", plainCaptionBaseline: "Render the teacher's full sentence as ordinary captions.",
-    candidateEffectPlan: { operation: { kind: "TRANSFORM", from: spanFromRange(biology, 2, 4), to: spanFromRange(biology, 5, 11), mode: "state-change" }, display: { treatmentId: "shift-and-reveal", intensity: "normal", startMs: 900, durationMs: 1200, holdMs: 1200, decay: "fade" } },
-    intendedLearningFunction: "Make a spoken change and its stated outcome easier to trace in the caption.", studentWork: "Explain how this change helps the plant and what trade-off it creates.", risk: "The visual hand-off may look like a complete causal explanation when it is only one link.",
-  },
+  base("filler-cleanup", "Remove a high-confidence filler", "Chemistry", fillerRaw, fillerCaption, { operation: { kind: "FOCUS", targets: [captionSpan("filler-subject", "Nuclear charge")] }, display: display("marker-sweep") }, { sourceType: "synthetic", trustedLessonContext: [], explicitTeachingRelation: "The omitted lead-in remains a hidden focus cue; the visible sentence does not add meaning.", intendedLearningFunction: "Keep the key term immediately readable after safe cleanup.", studentWork: "Explain why nuclear charge changes across a period.", risk: "Over-aggressive filler removal could erase a useful teaching signal." }),
+  base("referent-resolution", "Resolve a trusted referent", "Chemistry", referentRaw, referentCaption, { operation: { kind: "FOCUS", targets: [captionSpan("referent-subject", "Nuclear charge")] }, display: display("spotlight", "strong") }, { sourceType: "synthetic", trustedLessonContext: [{ kind: "lesson-source", sourceId: "current-concept", locator: "currentConcept", exactText: "nuclear charge" }], explicitTeachingRelation: "The trusted current concept resolves 'This'.", intendedLearningFunction: "Make an otherwise ambiguous subject readable without inventing an explanation.", studentWork: "Connect the trend to the underlying atomic structure.", risk: "An incorrect context pack would create a misleading subject." }),
+  base("ellipsis-resolution", "Resolve paired trend subjects", "Chemistry", ellipsisRaw, ellipsisCaption, { operation: { kind: "RELATE", items: [captionSpan("ellipsis-first", "Nuclear charge"), captionSpan("ellipsis-second", "shielding")], relation: "contrast", reveal: "simultaneous" }, display: display("split-contrast", "subtle") }, { sourceType: "synthetic", trustedLessonContext: [{ kind: "lesson-source", sourceId: "trend-subjects", locator: "first", exactText: "nuclear charge" }, { kind: "lesson-source", sourceId: "trend-subjects", locator: "second", exactText: "shielding" }], explicitTeachingRelation: "The teacher explicitly contrasts the first and second quantities.", intendedLearningFunction: "Make a supplied pair of referents easier to track.", studentWork: "Explain why the two trends differ.", risk: "The context must not be used when the pair is uncertain." }),
+  base("notation-canonicalization", "Use trusted notation", "Mathematics", notationRaw, notationCaption, { operation: { kind: "NONE" }, display: display("plain", "subtle") }, { sourceType: "adapted", trustedLessonContext: [{ kind: "lesson-source", sourceId: "calculus-slide", locator: "worked-example.line-2", exactText: "dy/dx = 2u · du/dx" }], explicitTeachingRelation: "The slide supplies the exact canonical notation.", intendedLearningFunction: "Present an already-taught expression in its trusted canonical form.", studentWork: "Carry out the derivative reasoning that the spoken line refers to.", risk: "Never canonicalise notation from general model knowledge alone." }),
+  base("history-source-focus", "Focus a source-quality phrase", "History", historyRaw, caption([fragment("history", "The source is useful because it was written at the time of the event.", [speech(historyRaw, 0, 13)])]), { operation: { kind: "FOCUS", targets: [captionSpan("history", "The source is useful because it was written at the time of the event.", 29, 58)] }, display: display("marker-sweep") }, { sourceType: "adapted", trustedLessonContext: [], explicitTeachingRelation: "The teacher explicitly gives a reason for usefulness.", intendedLearningFunction: "Direct attention to the stated criterion.", studentWork: "Apply the criterion to assess the source.", risk: "Emphasis must not look like a complete source evaluation." }),
+  base("chemistry-causal-relation", "Progressive causal explanation", "Chemistry", chemistryRaw, caption([fragment("chemistry", "As nuclear charge increases, the attraction to the outer electron becomes stronger, so atomic radius decreases.", [speech(chemistryRaw, 0, 16)])]), { operation: { kind: "RELATE", items: [captionSpan("chemistry", "As nuclear charge increases, the attraction to the outer electron becomes stronger, so atomic radius decreases.", 3, 27), captionSpan("chemistry", "As nuclear charge increases, the attraction to the outer electron becomes stronger, so atomic radius decreases.", 32, 75), captionSpan("chemistry", "As nuclear charge increases, the attraction to the outer electron becomes stronger, so atomic radius decreases.", 80, 103)], relation: "cause", reveal: "progressive" }, display: display("progressive-chain") }, { sourceType: "adapted", trustedLessonContext: [], explicitTeachingRelation: "nuclear charge increases → attraction becomes stronger → atomic radius decreases", intendedLearningFunction: "Reduce tracking effort across a spoken cause chain.", studentWork: "Explain the mechanism in their own words.", risk: "A connector can overstate tentative causality." }),
+  base("maths-sequence-relation", "Progressive worked-method sequence", "Mathematics", mathsRaw, caption([fragment("maths", "First expand the bracket, then collect the x terms, and finally divide by three.", [speech(mathsRaw, 0, 14)])]), { operation: { kind: "RELATE", items: [captionSpan("maths", "First expand the bracket, then collect the x terms, and finally divide by three.", 0, 24), captionSpan("maths", "First expand the bracket, then collect the x terms, and finally divide by three.", 26, 45), captionSpan("maths", "First expand the bracket, then collect the x terms, and finally divide by three.", 51, 74)], relation: "sequence", reveal: "progressive" }, display: display("aligned-sequence") }, { sourceType: "synthetic", trustedLessonContext: [], explicitTeachingRelation: "First expand → then collect → finally divide", intendedLearningFunction: "Make the stated order easier to follow.", studentWork: "Carry out each algebraic step.", risk: "The sequence might be read as universal." }),
+  base("biology-state-change", "State change in a plant process", "Biology", biologyRaw, caption([fragment("biology", "When the stomata close, less water vapour leaves the leaf.", [speech(biologyRaw, 0, 10)])]), { operation: { kind: "TRANSFORM", from: captionSpan("biology", "When the stomata close, less water vapour leaves the leaf.", 9, 22), to: captionSpan("biology", "When the stomata close, less water vapour leaves the leaf.", 24, 55), mode: "state-change" }, display: display("shift-and-reveal") }, { sourceType: "synthetic", trustedLessonContext: [], explicitTeachingRelation: "stomata close → less water vapour leaves the leaf", intendedLearningFunction: "Trace a spoken state change and outcome.", studentWork: "Explain the benefit and trade-off.", risk: "The hand-off may look like a complete causal account." }),
+  base("literature-normal-caption", "Ordinary descriptive setup", "Literature", literatureRaw, caption([fragment("literature", "Notice that the narrator describes the room before describing the people in it.", [speech(literatureRaw, 0, 13)])]), { operation: { kind: "NONE" }, display: display("plain", "subtle") }, { sourceType: "adapted", trustedLessonContext: [], explicitTeachingRelation: "No relation is being emphasised.", intendedLearningFunction: "Keep routine narration quiet.", studentWork: "Decide why the order of description may matter.", risk: "An effect could overstate an ordinary observation." }),
 ];
 
-if (import.meta.env.DEV) fxExamples.forEach((example) => validateEffectPlan(example.transcript, example.candidateEffectPlan));
+if (import.meta.env.DEV) fxExamples.forEach((example) => validateEffectPlan(example.groundedCaption, example.candidateEffectPlan));

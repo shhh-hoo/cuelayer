@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { EffectPlan } from "../grammar/types";
 import { planEndMs, resolveCaptionTimeline } from "./timing";
 
-const focusPlan: EffectPlan = { operation: { kind: "FOCUS", targets: [{ tokenIds: ["t1"], exactText: "target" }] }, display: { treatmentId: "marker-sweep", intensity: "strong", startMs: 100, durationMs: 400, holdMs: 300, decay: "fade" } };
+const focusPlan: EffectPlan = { operation: { kind: "FOCUS", targets: [{ fragmentId: "f1", startOffset: 0, endOffset: 6, exactText: "target" }] }, display: { treatmentId: "marker-sweep", intensity: "strong", startMs: 100, durationMs: 400, holdMs: 300, decay: "fade" } };
 
 describe("EffectPlan timing", () => {
   it("keeps NONE as the default plain-caption behavior", () => {

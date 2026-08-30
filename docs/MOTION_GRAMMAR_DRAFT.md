@@ -18,7 +18,7 @@ These are representation operations, not animation styles. Each operation may ha
 5. `RELATE` may reveal its source spans simultaneously or progressively. The previous `BUILD` treatment maps to progressive `RELATE`; the previous `COMPARE` maps to simultaneous contrast `RELATE`.
 6. `HOLD` is a display policy: `holdMs` and `decay` apply after any operation.
 7. `TRACE` is on the roadmap, not in the active V0 grammar, until visual-referent grounding exists.
-8. The AI planner outputs source-grounded operation + spans + relation + display policy. The renderer owns timing curves, CSS, layout and accessibility.
+8. The AI planner outputs an operation over source-traceable grounded-caption spans, relation, and display policy. The renderer owns timing curves, CSS, layout and accessibility.
 
 ## Effect plan sketch
 
@@ -37,3 +37,7 @@ type EffectPlan = {
 ```
 
 This schema will evolve only after the FX Lab reveals which distinctions are actually useful in rendering.
+
+## Composer boundary
+
+Before planning motion, the Grounded Caption Composer can make bounded, provenance-bearing caption edits from raw speech and trusted lesson sources. It is not a summariser. Effect targets use `CaptionSpanRef` offsets within composed fragments, never raw-token ids alone.
