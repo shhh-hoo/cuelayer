@@ -15,3 +15,10 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run build
+      - name: Upload visual-review build
+        uses: actions/upload-artifact@v4
+        with:
+          name: cuelayer-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
