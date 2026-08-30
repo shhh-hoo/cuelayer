@@ -4,12 +4,10 @@ These are representation operations, not animation styles. Each operation may ha
 
 | Operation | Learning function | Typical teaching moment | Example treatments |
 |---|---|---|---|
+| `NONE` | Preserve normal caption reading | ordinary speech | plain caption |
 | `FOCUS` | Select relevant information | key variable, phrase, formula term | spotlight, marker sweep, subtle scale |
-| `BUILD` | Externalize emerging structure | cause-effect chain, sequence, mechanism | progressive chain, staged reveal |
-| `COMPARE` | Make relational structure visible | contrast, same/different, paired concepts | split layout, aligned attributes |
-| `TRANSFORM` | Show change from one state to another | graph shift, equation derivation, state change | morph, move, replace |
-| `TRACE` | Bind speech to a visual referent | diagram region, equation term, graph point | pointer, path trace, local highlight |
-| `HOLD` | Counter transient information | completed formula, relation, diagram | settle and persist briefly |
+| `RELATE` | Make an explicitly stated relationship legible | cause, sequence, contrast, equivalence, hierarchy | inline relation, progressive chain, aligned sequence |
+| `TRANSFORM` | Show one spoken span developing into another spoken span | replacement, derivation, state change | replace, shift and reveal, derive inline |
 
 ## Rules
 
@@ -17,21 +15,24 @@ These are representation operations, not animation styles. Each operation may ha
 2. `NONE` is the default state; effects are exceptions.
 3. One strong effect should dominate at a time.
 4. If the source visual is already moving, prefer lower-motion cues to avoid redundant motion.
-5. `TRACE` must point to a specific referent, not broadly illuminate an entire slide.
-6. Completed `BUILD` / `COMPARE` / `TRANSFORM` structures may transition into `HOLD` to reduce transience.
-7. The AI planner outputs operation + targets + relation + intensity. The renderer owns timing curves, CSS, layout and accessibility.
+5. `RELATE` may reveal its source spans simultaneously or progressively. The previous `BUILD` treatment maps to progressive `RELATE`; the previous `COMPARE` maps to simultaneous contrast `RELATE`.
+6. `HOLD` is a display policy: `holdMs` and `decay` apply after any operation.
+7. `TRACE` is on the roadmap, not in the active V0 grammar, until visual-referent grounding exists.
+8. The AI planner outputs source-grounded operation + spans + relation + display policy. The renderer owns timing curves, CSS, layout and accessibility.
 
 ## Effect plan sketch
 
 ```ts
-type MotionOperation = "NONE" | "FOCUS" | "BUILD" | "COMPARE" | "TRANSFORM" | "TRACE" | "HOLD";
-
 type EffectPlan = {
-  operation: MotionOperation;
-  targets: string[];
-  relation?: "cause" | "sequence" | "contrast" | "equivalence" | "transformation" | "spatial";
-  intensity?: "subtle" | "normal" | "strong";
-  durationMs?: number;
+  operation: CaptionOperation;
+  display: {
+    treatmentId: string;
+    intensity: "subtle" | "normal" | "strong";
+    startMs: number;
+    durationMs: number;
+    holdMs: number;
+    decay: "restore-caption" | "fade" | "remain";
+  };
 };
 ```
 

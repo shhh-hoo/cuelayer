@@ -1,13 +1,15 @@
 # CueLayer product contract — V0
 
 ## Operative claim
-CueLayer turns teaching intent into restrained, meaningful motion in captions and on-screen text. It reduces the mechanical effort of following a lesson without replacing the learner's cognitive work.
+CueLayer applies restrained, meaningful motion to exact spans in an existing teacher transcript. It reduces the mechanical effort of following a lesson without replacing the learner's cognitive work.
 
 ## Foreground product
 Only AI special-effect captions / pedagogical motion captions.
 
 ## Core pipeline
-Teaching knowledge → pedagogical understanding → effect plan → deterministic motion renderer.
+Teacher transcript → semantic effect plan → deterministic caption renderer.
+
+The planner and renderer are separate layers: AI may choose a constrained, source-grounded plan; the renderer owns visual implementation and never generates teaching content.
 
 ## V0 development order
 1. Teaching Caption FX Lab
@@ -20,6 +22,7 @@ Teaching knowledge → pedagogical understanding → effect plan → determinist
 
 ## Explicit non-goals
 - AI notes or automatic summaries
+- diagrams, standard formulae, or rewritten teaching content
 - AI tutor or chat
 - quizzes or student interaction flows
 - teacher dashboard / cueboard
@@ -29,6 +32,10 @@ Teaching knowledge → pedagogical understanding → effect plan → determinist
 
 ## Design constraints
 - Most speech remains visually quiet.
+- All substantive learner-visible text must be traceable to exact teacher transcript spans.
+- `NONE` is the default operation; `FOCUS`, `RELATE`, and `TRANSFORM` are exceptions.
+- `HOLD` is a display policy (`holdMs` and `decay`), not a semantic operation.
+- `TRACE` is deferred until visual-referent grounding exists.
 - Motion must encode teaching meaning, not decorate speech.
 - The model selects a constrained semantic operation; it does not generate CSS or arbitrary animation code.
 - Effects must degrade cleanly to plain captions.
