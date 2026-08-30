@@ -29,6 +29,7 @@ h2 { margin-top: 7px; font-size: 24px; letter-spacing: -.025em; }
 .comparison-toggle button.selected { color: #fff; background: #25352a; }
 .stage-shell { position: relative; display: grid; min-height: 330px; padding: 60px 46px 48px; place-items: center; overflow: hidden; border-radius: 21px; color: #f8faf6; background: linear-gradient(135deg, #243329, #101712); isolation: isolate; }
 .stage-shell::before { content: ""; position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(#ffffff08 1px, transparent 1px), linear-gradient(90deg, #ffffff08 1px, transparent 1px); background-size: 32px 32px; }
+.showcase-shell { min-height: 100vh; display: grid; place-items: center; padding: 28px; background: #101712; }.showcase-stage { width: min(1080px, 100%); min-height: min(62vh, 560px); border-radius: 28px; }.showcase-stage .caption-line { max-width: 980px; }
 .stage-label { position: absolute; top: 17px; left: 19px; color: #bcc8bb; }
 .caption-line { max-width: 900px; text-align: center; font-size: clamp(27px, 4vw, 51px); line-height: 1.22; letter-spacing: -.035em; font-weight: 590; text-wrap: balance; }
 .caption-token { display: inline-block; position: relative; border-radius: .16em; }
