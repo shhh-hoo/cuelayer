@@ -1,13 +1,17 @@
 import type { EffectCue } from "../types";
 
 export type CaptionTimelineState = {
-  phase: "plain" | "trigger" | "hold" | "decay" | "settled";
+  phase: "plain" | "trigger" | "effect" | "hold" | "settled";
   emphasis: number;
   itemProgress: number;
 };
 
 export function cueEndMs(cue?: EffectCue): number {
   return cue ? cue.startMs + cue.durationMs + cue.holdMs : 0;
+}
+
+export function playbackEndMs(cue?: EffectCue): number {
+  return cueEndMs(cue) + 700;
 }
 
 export function resolveCaptionTimeline(cue: EffectCue | undefined, currentMs: number, mode: "plain" | "fx", reducedMotion: boolean): CaptionTimelineState {
@@ -18,7 +22,7 @@ export function resolveCaptionTimeline(cue: EffectCue | undefined, currentMs: nu
   if (currentMs < startMs) return applyIntensity({ phase: "plain", emphasis: 0, itemProgress: 0 });
   if (currentMs < startMs + durationMs) {
     const progress = durationMs === 0 ? 1 : (currentMs - startMs) / durationMs;
-    return applyIntensity({ phase: "trigger", emphasis: progress, itemProgress: progress });
+    return applyIntensity({ phase: progress < 0.2 ? "trigger" : "effect", emphasis: progress, itemProgress: progress });
   }
   if (currentMs < startMs + durationMs + holdMs) return applyIntensity({ phase: "hold", emphasis: 1, itemProgress: 1 });
   return applyIntensity({ phase: "settled", emphasis: 0, itemProgress: 1 });
