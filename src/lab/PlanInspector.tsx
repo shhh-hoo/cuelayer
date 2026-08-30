@@ -1,18 +1,18 @@
-import type { CaptionSpanRef, EffectPlan } from "../grammar/types";
+import type { CaptionClip, EffectCue } from "../types";
 
-function spansForPlan(plan: EffectPlan): CaptionSpanRef[] {
-  if (plan.operation.kind === "FOCUS") return plan.operation.targets;
-  if (plan.operation.kind === "RELATE") return plan.operation.items;
-  if (plan.operation.kind === "TRANSFORM") return [plan.operation.from, plan.operation.to];
-  return [];
+function targetGroups(cue?: EffectCue): string[][] {
+  if (!cue) return [];
+  if (cue.kind === "FOCUS") return [cue.targetWordIds];
+  if (cue.kind === "RELATE") return cue.targetGroups;
+  return [cue.fromWordIds, cue.toWordIds];
 }
 
-export function PlanInspector({ plan }: { plan: EffectPlan }) {
-  const spans = spansForPlan(plan);
+export function PlanInspector({ clip, cue }: { clip: CaptionClip; cue?: EffectCue }) {
+  const groups = targetGroups(cue);
+  const wordText = new Map(clip.words.map((word) => [word.id, word.text]));
   return <aside className="inspector-panel"><div className="panel-label">Current effect plan</div><dl>
-    <div><dt>Operation</dt><dd>{plan.operation.kind}</dd></div>
-    {plan.operation.kind === "RELATE" ? <><div><dt>Relation</dt><dd>{plan.operation.relation}</dd></div><div><dt>Reveal</dt><dd>{plan.operation.reveal}</dd></div></> : null}
-    {plan.operation.kind === "TRANSFORM" ? <div><dt>Mode</dt><dd>{plan.operation.mode}</dd></div> : null}
-    <div><dt>Treatment</dt><dd>{plan.display.treatmentId}</dd></div><div><dt>Intensity</dt><dd>{plan.display.intensity}</dd></div><div><dt>Timing</dt><dd>{plan.display.startMs} / {plan.display.durationMs} / {plan.display.holdMs} ms</dd></div><div><dt>Decay</dt><dd>{plan.display.decay}</dd></div>
-  </dl><div className="span-list"><span className="panel-label">Grounded caption spans</span>{spans.length ? spans.map((span) => <code key={`${span.fragmentId}-${span.startOffset}`}>{span.exactText}</code>) : <p>None — plain caption is the default.</p>}</div></aside>;
+    <div><dt>Caption</dt><dd>{clip.captionText}</dd></div><div><dt>Operation</dt><dd>{cue?.kind ?? "NONE"}</dd></div>
+    {cue?.kind === "RELATE" ? <div><dt>Relation</dt><dd>{cue.relation}</dd></div> : null}
+    <div><dt>Treatment</dt><dd>{cue?.treatment ?? "plain"}</dd></div>{cue ? <><div><dt>Intensity</dt><dd>{cue.intensity}</dd></div><div><dt>Timing</dt><dd>{cue.startMs} / {cue.durationMs} / {cue.holdMs} ms</dd></div></> : null}
+  </dl><div className="span-list"><span className="panel-label">Target words</span>{groups.length ? groups.map((group, index) => <code key={index}>{group.map((id) => wordText.get(id) ?? id).join(" · ")}</code>) : <p>None — plain caption is the default.</p>}</div></aside>;
 }

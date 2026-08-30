@@ -1,5 +1,5 @@
-import type { OperationRendererProps, TokenPresentation } from "./shared";
+import type { TokenPresentation } from "./shared";
 
-export function nonePresentation(_: OperationRendererProps): TokenPresentation {
+export function nonePresentation(): TokenPresentation {
   return { className: "caption-token", opacity: 1, scale: 1 };
 }
