@@ -5,6 +5,13 @@ export type TimedWord = {
   endMs: number;
 };
 
+export type CueTarget = {
+  id: string;
+  wordIds: string[];
+  displayText?: string;
+  keepTogether?: boolean;
+};
+
 type CueTiming = {
   startMs: number;
   durationMs: number;
@@ -13,9 +20,9 @@ type CueTiming = {
 };
 
 export type EffectCue =
-  | (CueTiming & { kind: "FOCUS"; targetWordIds: string[]; treatment: "marker" | "spotlight" | "scale" | "dim-surrounding" })
-  | (CueTiming & { kind: "RELATE"; targetGroups: string[][]; relation: "cause" | "sequence" | "contrast"; treatment: "chain" | "ordered-steps" | "split-contrast" })
-  | (CueTiming & { kind: "TRANSFORM"; fromWordIds: string[]; toWordIds: string[]; treatment: "replace" | "derive" | "state-change" });
+  | (CueTiming & { kind: "FOCUS"; target: CueTarget; treatment: "marker" | "spotlight" | "scale" | "dim-surrounding" })
+  | (CueTiming & { kind: "RELATE"; targets: CueTarget[]; relation: "cause" | "sequence" | "contrast"; treatment: "chain" | "ordered-steps" | "split-contrast" })
+  | (CueTiming & { kind: "TRANSFORM"; from: CueTarget; to: CueTarget; treatment: "replace" | "derive" | "state-change" });
 
 export type CaptionClip = {
   id: string;
