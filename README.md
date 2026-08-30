@@ -15,7 +15,12 @@ type CaptionClip = {
 };
 ```
 
-Plain and FX always render the identical `captionText`; FX changes presentation only. Future systems can provide caption text and timed words, while an effect planner can provide cues, without changing the renderer.
+`captionText` is the canonical Plain surface. FX preserves its meaning, but a phrase target may use semantically equivalent `displayText` notation such as `↑`, `↓`, or `÷ 3`. Future systems can provide caption text and timed words, while an effect planner can provide cues, without changing the renderer.
+
+## Architecture
+
+- **Speech-first Caption Engine — current:** manually authored captions, timed words, phrase-level targets, symbolic notation, semantic layouts and progression.
+- **Slide-linked Overlay Engine — deferred:** requires visual grounding before it can point to or trace slide objects, graphs, diagrams or existing animations.
 
 ## Current scope
 
