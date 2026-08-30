@@ -3,12 +3,13 @@ import type { CSSProperties } from "react";
 import type { CaptionClip, CueTarget, EffectCue } from "../types";
 import { captionSegments } from "./caption-segments";
 import { cueTargets, phraseSegments, targetDisplayText, targetText } from "./cue-targets";
+import { connectorState, relationTargetStates, transformTargetStates, type TargetState } from "./progression";
 import { resolveCaptionTimeline } from "./timing";
 
 type RendererProps = { clip: CaptionClip; cue?: EffectCue; currentMs: number; mode: "plain" | "fx"; reducedMotion: boolean; showcase?: boolean };
 
-function PhraseUnit({ clip, target, className }: { clip: CaptionClip; target: CueTarget; className: string }) {
-  return <span className={`${className} ${target.keepTogether === false ? "may-wrap" : "keep-together"}`} aria-label={targetText(clip, target)}>{targetDisplayText(clip, target)}</span>;
+function PhraseUnit({ clip, target, className, state }: { clip: CaptionClip; target: CueTarget; className: string; state?: TargetState }) {
+  return <span className={`${className} ${state ? `target-${state}` : ""} ${target.keepTogether === false ? "may-wrap" : "keep-together"}`} aria-label={targetText(clip, target)}>{targetDisplayText(clip, target)}</span>;
 }
 
 function TransformContext({ clip, target }: { clip: CaptionClip; target: CueTarget }) {
@@ -18,10 +19,14 @@ function TransformContext({ clip, target }: { clip: CaptionClip; target: CueTarg
   return text ? <span className="semantic-context"> {text}</span> : null;
 }
 
-function SemanticLayout({ clip, cue }: { clip: CaptionClip; cue: Exclude<EffectCue, { kind: "FOCUS" }> }) {
-  if (cue.kind === "TRANSFORM") return <div className="semantic-layout transform-layout" aria-label={clip.captionText}><PhraseUnit clip={clip} target={cue.from} className="phrase-unit transform-phrase previous-state" /><span className="semantic-connector" aria-hidden="true">→</span><PhraseUnit clip={clip} target={cue.to} className="phrase-unit transform-phrase current-state" /><TransformContext clip={clip} target={cue.to} /></div>;
+function SemanticLayout({ clip, cue, timeline }: { clip: CaptionClip; cue: Exclude<EffectCue, { kind: "FOCUS" }> ; timeline: ReturnType<typeof resolveCaptionTimeline> }) {
+  if (cue.kind === "TRANSFORM") {
+    const [fromState, toState] = transformTargetStates(clip, cue, timeline);
+    return <div className="semantic-layout transform-layout" aria-label={clip.captionText}><PhraseUnit clip={clip} target={cue.from} state={fromState} className="phrase-unit transform-phrase previous-state" /><span className={`semantic-connector connector-${connectorState(fromState, toState)}`} aria-hidden="true">→</span><PhraseUnit clip={clip} target={cue.to} state={toState} className="phrase-unit transform-phrase current-state" /><TransformContext clip={clip} target={cue.to} /></div>;
+  }
   const relationClass = cue.relation === "contrast" ? "contrast-layout" : cue.relation === "sequence" ? "sequence-layout" : "cause-layout";
-  return <div className={`semantic-layout relation-layout ${relationClass}`} aria-label={clip.captionText}>{cue.targets.map((target, index) => <span className="semantic-relation-entry" key={target.id}><PhraseUnit clip={clip} target={target} className={`phrase-unit relation-phrase relation-phrase-${index + 1}`} />{index < cue.targets.length - 1 ? <span className="semantic-connector" aria-hidden="true">{cue.relation === "sequence" ? `${index + 2}` : "→"}</span> : null}</span>)}</div>;
+  const states = relationTargetStates(clip, cue, timeline);
+  return <div className={`semantic-layout relation-layout ${relationClass}`} aria-label={clip.captionText}>{cue.targets.map((target, index) => <span className="semantic-relation-entry" key={target.id}>{cue.relation === "sequence" ? <span className="sequence-index" aria-hidden="true">{index + 1}</span> : null}<PhraseUnit clip={clip} target={target} state={states[index]} className={`phrase-unit relation-phrase relation-phrase-${index + 1}`} />{cue.relation === "cause" && index < cue.targets.length - 1 ? <span className={`semantic-connector connector-${connectorState(states[index], states[index + 1])}`} aria-hidden="true">↓</span> : null}</span>)}</div>;
 }
 
 function InlineCaption({ clip, cue, transition }: { clip: CaptionClip; cue?: EffectCue; transition: { duration: number; ease: "easeOut" } }) {
@@ -35,5 +40,5 @@ export function CaptionRenderer({ clip, cue, currentMs, mode, reducedMotion, sho
   const transition = { duration: reducedMotion ? 0 : Math.max(0.12, (cue?.durationMs ?? 0) / 1000), ease: "easeOut" as const };
   const stageStyle = { "--cue-duration": `${cue?.durationMs ?? 0}ms` } as CSSProperties;
   const semanticCue = activeCue?.kind === "RELATE" || activeCue?.kind === "TRANSFORM" ? activeCue : undefined;
-  return <section style={stageStyle} className={`stage-shell ${showcase ? "showcase-stage" : ""} operation-${cue?.kind.toLowerCase() ?? "none"} intensity-${cue?.intensity ?? "subtle"} phase-${timeline.phase}`} aria-label="Learner-visible caption stage">{showcase ? null : <div className="stage-label">Learner-visible caption stage · {mode === "plain" ? "plain captions" : timeline.phase}</div>}{semanticCue ? <SemanticLayout clip={clip} cue={semanticCue} /> : <p className="caption-line"><InlineCaption clip={clip} cue={activeCue} transition={transition} /></p>}</section>;
+  return <section style={stageStyle} className={`stage-shell ${showcase ? "showcase-stage" : ""} operation-${cue?.kind.toLowerCase() ?? "none"} intensity-${cue?.intensity ?? "subtle"} phase-${timeline.phase}`} aria-label="Learner-visible caption stage">{showcase ? null : <div className="stage-label">Learner-visible caption stage · {mode === "plain" ? "plain captions" : timeline.phase}</div>}{semanticCue ? <SemanticLayout clip={clip} cue={semanticCue} timeline={timeline} /> : <p className="caption-line"><InlineCaption clip={clip} cue={activeCue} transition={transition} /></p>}</section>;
 }
