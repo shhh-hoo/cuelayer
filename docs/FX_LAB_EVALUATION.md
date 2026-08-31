@@ -1,6 +1,6 @@
 # FX Lab evaluation
 
-Compare Plain and FX using the same caption text.
+Compare Plain and FX using the same canonical spoken/caption content. Plain displays canonical `captionText`; FX may use semantically equivalent `CueTarget.displayText` notation.
 
 - Is the teaching meaning immediately easier to follow?
 - Is the effect more useful than plain captions?

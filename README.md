@@ -1,6 +1,6 @@
 # CueLayer FX Engine v0
 
-CueLayer FX Engine v0 renders restrained, pedagogically meaningful motion over manually authored captions. It is a visual experiment engine: given caption text, timed words, and effect cues, it lets us compare ordinary captions with the same captions enhanced by motion.
+CueLayer FX Engine v0 renders restrained, pedagogically meaningful motion over manually authored captions. It is a visual experiment engine: given canonical caption content, timed words, and effect cues, it lets us compare ordinary captions with semantically equivalent FX representations.
 
 It is not currently a Caption Composer, knowledge base, AI planner, or realtime ASR system.
 

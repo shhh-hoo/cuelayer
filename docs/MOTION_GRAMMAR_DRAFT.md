@@ -12,6 +12,6 @@ Semantic phrases are atomic visual units: a continuous phrase is wrapped and tre
 
 `CueTarget.displayText` is part of the representation grammar. FX may render conventional, semantically equivalent notation such as `↑`, `↓`, `=`, `≈`, `÷`, `→`, or `⇌`; Plain remains the canonical authored-caption surface.
 
-For processual `RELATE` and `TRANSFORM` cues, targets progress through `pending`, `active`, and `completed`. Normally only one target is active; completed targets remain as lower-emphasis context until the settled hold ends and ordinary captions return. Contrast is normally simultaneous rather than a simulated process.
+For processual `RELATE` and `TRANSFORM` cues, targets progress through `pending`, `active`, and `completed`. Normally only one target is active; completed targets remain as lower-emphasis context until the settled hold ends and ordinary captions return. Cause and sequence accumulation are derived by the renderer from the relation and timed words, not authored as an `EffectCue` field. Contrast is normally simultaneous rather than a simulated process.
 
 Layout and progression take priority over broad highlight backgrounds. FOCUS is sparse; RELATE and TRANSFORM prefer grouping, alignment, line breaks, connectors, symbolic notation, weight and restrained opacity.

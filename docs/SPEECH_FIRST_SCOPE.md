@@ -20,7 +20,7 @@ This layer does not require access to the teacher's PPT.
 
 ### B. Slide-linked Overlay Engine — deferred
 
-Input: teacher speech; current slide, board, graph, diagram, equation, molecule or spectrum; visual-object locations; and current slide state.
+Input: teacher speech; current slide, board, graph, diagram, existing slide equation requiring spatial grounding, molecule or spectrum; visual-object locations; and current slide state.
 
 Output: pointing, tracing, graph or diagram overlays, spatial highlighting, and animation tied to an existing visual referent.
 
@@ -38,6 +38,8 @@ type CaptionClip = {
 ```
 
 `captionText` is the canonical plain-caption surface. Plain mode always displays `captionText`.
+
+`CueTarget.wordIds` MUST be non-empty, ordered, contiguous within one `CaptionClip`, and refer only to existing `TimedWord` ids.
 
 FX mode may use a phrase target's `displayText` to show shorter, semantically equivalent notation: `increases` → `↑`; `decreases` → `↓`; `approximately constant` → `≈ constant`; `equals` → `=`; and `divided by three` → `÷ 3`.
 
@@ -71,7 +73,7 @@ Contrast example: `defining clause / non-defining clause`, `essential informatio
 
 Show the same object, expression or state changing from A to B.
 
-Valid examples: `reactants → products`, `solid iodine → liquid iodine`, spoken expression → canonical formula, initial equation → derived equation, and monomer → repeat unit.
+Current valid examples: `reactants → products`, `solid iodine → liquid iodine`, and monomer → repeat unit. A spoken expression → canonical formula or initial equation → derived equation needs the next renderer capability: a same-span representation transform, where one semantic target changes from prose representation to symbolic representation. The current `from` / `to` contract does not yet support that same-span handoff.
 
 An event causing a separate outcome is not automatically TRANSFORM. `stomata close → water loss decreases` is a causal RELATE operation, not a state transformation.
 
@@ -79,7 +81,7 @@ An event causing a separate outcome is not automatically TRANSFORM. `stomata clo
 
 Processual content must show progress; do not render it only as a completed static structure.
 
-Each semantic target is `pending`, `active`, or `completed`.
+Each target in a processual `RELATE` or `TRANSFORM` cue is `pending`, `active`, or `completed`.
 
 - **Pending:** not yet introduced; hidden or visually subordinate.
 - **Active:** currently explained; the primary visual focus. Normally only one target is active.
@@ -93,7 +95,7 @@ The first domain pack is Chemistry. The goal is to prove that a small reusable g
 
 ### 7.1 Causal build
 
-Semantic implementation: `RELATE`, `relation = cause`, `progression = accumulate`.
+Semantic implementation: `RELATE`, `relation = cause`. Progression behavior: **accumulate** (derived by the renderer from relation and timed words; not an `EffectCue` field).
 
 Collision theory: `temperature ↑ → kinetic energy ↑ → fraction with E ≥ Eₐ ↑ → successful collisions ↑ → rate ↑`.
 
@@ -101,7 +103,7 @@ Reuse: Period 3 trends, Group 1 reactivity, equilibrium changes and intermolecul
 
 ### 7.2 Step progress
 
-Semantic implementation: `RELATE`, `relation = sequence`, `progression = accumulate`.
+Semantic implementation: `RELATE`, `relation = sequence`. Progression behavior: **accumulate** (derived by the renderer from relation and timed words; not an `EffectCue` field).
 
 Stoichiometry: `mass → n = m / Mᵣ → coefficient ratio → required quantity`.
 
@@ -135,7 +137,7 @@ The change represents the same object or expression moving between states.
 
 Semantic implementation: `RELATE`, `relation = contrast`.
 
-Examples: oxidation versus reduction, endothermic versus exothermic, strong acid versus weak acid, electrophile versus nucleophile, and two standard electrode potentials. Comparison uses aligned dimensions, not two unrelated coloured cards.
+Examples: oxidation versus reduction, endothermic versus exothermic, strong acid versus weak acid, electrophile versus nucleophile, and two standard electrode potentials. Current V0 supports an aligned two-sided comparison, not a multi-dimension comparison table; paired dimension rows remain a later grammar extension.
 
 ## 8. Caption-native acceptance boundary
 
@@ -183,7 +185,7 @@ Do not build during Speech-first V0: PPT parsing; slide-object recognition; grap
 
 These are not rejected product directions; they are outside the current validation scope.
 
-## 11. Current development deliverables
+## 11. Next validation deliverables
 
 ### A. FX Lab
 
@@ -191,7 +193,9 @@ The FX Lab compares Plain and FX, tunes phrase grouping, inspects symbolic notat
 
 ### B. Chemistry Speech Showcase
 
-A continuous 45–60 second simulated Chemistry explanation with no authoring controls, debug metadata, PPT or audio requirement. It keeps at least 70% ordinary-caption time and includes at least one causal build, step progression, comparison or evidence chain, symbolic formula or state transformation, visible intermediate progress states, and a clean return to ordinary captions.
+The next target is a continuous 45–60 second simulated Chemistry explanation with no authoring controls, debug metadata, PPT or audio requirement. It keeps at least 70% ordinary-caption time and includes at least one causal build, step progression, comparison or evidence chain, symbolic formula or state transformation, visible intermediate progress states, and a clean return to ordinary captions.
+
+The current branch contains a 40-second cross-topic Showcase with a mathematical sequence; it is the prototype, not yet this Chemistry validation deliverable.
 
 ## 12. Product review method
 

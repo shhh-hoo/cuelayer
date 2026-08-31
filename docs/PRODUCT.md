@@ -14,7 +14,7 @@ Input: manually authored `captionText`, timed words, phrase-level `CueTarget` ob
 
 The active product is the Speech-first Caption Engine: it uses phrase-level semantic typesetting, symbolic notation, sparse emphasis and process progression without requiring access to a teacher's PPT. The FX Lab is an authoring/debugging surface; the Continuous Showcase is a separate, control-free viewing experience. The active grammar is `FOCUS`, `RELATE`, and `TRANSFORM`; a clip with no cue is normal captions.
 
-The Slide-linked Overlay Engine is a separate, deferred product layer. It will require visual grounding for slide objects before it can point, trace, or coordinate overlays with graphs, diagrams, equations or existing slide animation.
+The Slide-linked Overlay Engine is a separate, deferred product layer. It will require visual grounding for slide objects before it can point, trace, or coordinate overlays with graphs, diagrams, existing slide equations requiring spatial grounding, or existing slide animation. Reconstructing a standard formula from speech remains a Speech-first capability.
 
 ## Deferred
 
