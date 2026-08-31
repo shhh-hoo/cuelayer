@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "9701 CueCaption LLM semantic evaluation result",
+  "type": "object",
+  "required": ["runId", "modelLabel", "mode", "results"],
+  "properties": {
+    "runId": { "type": "string", "description": "Human-assigned evaluation run identifier." },
+    "modelLabel": { "type": "string", "description": "Model/version label supplied by evaluator." },
+    "mode": { "type": "string", "enum": ["baseline", "skill"] },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["caseId", "canonicalText", "protectedPhrases", "symbolicRewrites", "chemistryTokens", "renderHints", "warnings"],
+        "properties": {
+          "caseId": { "type": "string" },
+          "canonicalText": { "type": "string" },
+          "protectedPhrases": { "type": "array", "items": { "type": "object", "required": ["text", "reason"], "properties": { "text": { "type": "string" }, "reason": { "type": "string" } } } },
+          "symbolicRewrites": { "type": "array", "items": { "type": "object", "required": ["plainText", "displayText", "reason"], "properties": { "plainText": { "type": "string" }, "displayText": { "type": "string" }, "reason": { "type": "string" } } } },
+          "chemistryTokens": { "type": "array", "items": { "type": "object", "required": ["text", "kind"], "properties": { "text": { "type": "string" }, "kind": { "type": "string" } } } },
+          "renderHints": { "type": "array", "items": { "type": "object", "required": ["target", "kind"], "properties": { "target": { "type": "string" }, "kind": { "type": "string" } } } },
+          "warnings": { "type": "array", "items": { "type": "object", "required": ["code", "message"], "properties": { "code": { "type": "string" }, "message": { "type": "string" } } } },
+          "review": {
+            "type": "object",
+            "required": ["verdict", "findingClass", "findings"],
+            "properties": {
+              "verdict": { "type": "string", "enum": ["ACCEPT", "REVISE", "REJECT"] },
+              "findingClass": { "type": "string", "enum": ["none", "skill_gap", "model_execution_failure", "source_ambiguity"] },
+              "findings": { "type": "array", "items": { "type": "object", "required": ["severity", "dimension", "note"], "properties": { "severity": { "type": "string", "enum": ["Critical", "Major", "Minor"] }, "dimension": { "type": "string" }, "note": { "type": "string" } } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
