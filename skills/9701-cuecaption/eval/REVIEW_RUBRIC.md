@@ -1,6 +1,6 @@
 # Semantic review rubric
 
-Review the model result against a case’s semantic contract, not an exact target string. A concise valid paraphrase is acceptable when it preserves the contract.
+Performer evaluation is blind: the performer receives only `caseId`, `transcript`, and `approvedContext`. The master semantic contracts are private reviewer evidence and must be consulted only after outputs are produced. Review the model result against that evidence, not an exact target string. A concise valid paraphrase is acceptable when it preserves the contract.
 
 ## Dimensions
 
@@ -38,4 +38,4 @@ Record dimensions assessed, findings with severity, verdict, and one classificat
 
 Use 12–15 representative cases: C002, C004, C006, C007, C010, C013, C019, C024, C029, C034, C040, C048, C054, C056, and C058. Run the same model with a neutral caption-record prompt (baseline) and then with the assembled skill prompt. Blind-review outputs using this rubric. Compare only semantic outcomes: grounded facts retained, ungrounded facts added, warnings supplied, and optional FX equivalence. Do not score literal wording overlap.
 
-This evaluation is a qualitative development workflow, not a CI pass/fail gate. CI may only check that YAML, JSON, and JSONL inputs parse and that required fields are present.
+This evaluation is a qualitative development workflow, not a CI pass/fail gate. Outputs are never exact-match graded. CI may only check that YAML, JSON, and JSONL inputs parse and that required fields are present.

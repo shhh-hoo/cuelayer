@@ -1,4 +1,5 @@
 node_modules/
 dist/
 artifacts/
+skills/9701-cuecaption/eval/generated/
 *.tsbuildinfo

@@ -12,6 +12,7 @@ Use the least committal representation compatible with the speech.
 
 - `ASR_AMBIGUITY`: competing transcriptions could change chemistry (for example, “chloride” / “chlorate”).
 - `MISSING_STRUCTURE`: name, isomer, locant, or stereochemistry cannot be fixed from the supplied evidence.
+- `MISSING_REFERENCE`: a deictic reference needs a structure, diagram, board item, or other supplied source that is absent.
 - `MISSING_REACTION_FACT`: a reagent, condition, product, charge, state symbol, or coefficient was not supplied.
 - `POSSIBLE_TEACHER_ERROR`: the statement appears chemically questionable; preserve it for review.
 - `CONTEXT_CONFLICT`: approved context conflicts with the speech; do not select one silently.

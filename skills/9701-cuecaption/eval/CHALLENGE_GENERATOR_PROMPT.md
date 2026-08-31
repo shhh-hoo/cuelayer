@@ -31,3 +31,5 @@ Reject your own candidate if it:
 - normalises away a teacher’s explicit common-versus-systematic naming discussion.
 
 Prefer short, reviewable utterances with one or two genuine semantic traps. Approved context, when used, must directly resolve a named ambiguity and must not be hidden background knowledge.
+
+When a generated case needs a warning expectation, use only `ASR_AMBIGUITY`, `MISSING_STRUCTURE`, `MISSING_REFERENCE`, `MISSING_REACTION_FACT`, `POSSIBLE_TEACHER_ERROR`, or `CONTEXT_CONFLICT`; do not create a new warning category.

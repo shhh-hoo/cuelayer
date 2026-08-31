@@ -11,15 +11,16 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["caseId", "canonicalText", "protectedPhrases", "symbolicRewrites", "chemistryTokens", "renderHints", "warnings"],
+        "required": ["caseId", "canonicalText", "decisions", "protectedPhrases", "symbolicRewrites", "chemistryTokens", "renderHints", "warnings"],
         "properties": {
           "caseId": { "type": "string" },
           "canonicalText": { "type": "string" },
+          "decisions": { "type": "array", "items": { "type": "object", "required": ["label", "target", "reason"], "properties": { "label": { "type": "string", "enum": ["CANONICALIZE", "FX_ONLY", "PRESERVE", "BLOCK_INFERENCE"] }, "target": { "type": "string" }, "reason": { "type": "string" } } } },
           "protectedPhrases": { "type": "array", "items": { "type": "object", "required": ["text", "reason"], "properties": { "text": { "type": "string" }, "reason": { "type": "string" } } } },
           "symbolicRewrites": { "type": "array", "items": { "type": "object", "required": ["plainText", "displayText", "reason"], "properties": { "plainText": { "type": "string" }, "displayText": { "type": "string" }, "reason": { "type": "string" } } } },
           "chemistryTokens": { "type": "array", "items": { "type": "object", "required": ["text", "kind"], "properties": { "text": { "type": "string" }, "kind": { "type": "string" } } } },
-          "renderHints": { "type": "array", "items": { "type": "object", "required": ["target", "kind"], "properties": { "target": { "type": "string" }, "kind": { "type": "string" } } } },
-          "warnings": { "type": "array", "items": { "type": "object", "required": ["code", "message"], "properties": { "code": { "type": "string" }, "message": { "type": "string" } } } },
+          "renderHints": { "type": "array", "items": { "type": "object", "required": ["target", "kind"], "properties": { "target": { "type": "string" }, "kind": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "maxLength": 48, "description": "Controlled kebab-case non-semantic hint. Prefer existing vocabulary; introduce one only when no existing hint has the same function." } } } },
+          "warnings": { "type": "array", "items": { "type": "object", "required": ["code", "message"], "properties": { "code": { "type": "string", "enum": ["ASR_AMBIGUITY", "MISSING_STRUCTURE", "MISSING_REFERENCE", "MISSING_REACTION_FACT", "POSSIBLE_TEACHER_ERROR", "CONTEXT_CONFLICT"] }, "message": { "type": "string" } } } },
           "review": {
             "type": "object",
             "required": ["verdict", "findingClass", "findings"],
