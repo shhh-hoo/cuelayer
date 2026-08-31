@@ -1,111 +1,107 @@
 # CueLayer Product Charter
 
-## 1. Product definition
+## Product definition
 
 CueLayer is an AI-native presentation layer for teaching.
 
-It listens to teaching as it unfolds, maintains a speech-faithful semantic source of truth, and selectively decides what learners should see and when a learner-facing cue is useful. The product should reduce tracking and transcription effort without taking over the learner's work of understanding, organising, and reflecting.
+It listens to teaching as it unfolds, maintains a speech-faithful semantic source of truth, and adaptively decides what learners should see and when a learner-facing cue is useful. The product aims to reduce tracking and transcription effort while preserving the learner's work of understanding, organising, and reflecting.
 
-CueLayer is not defined by continuous subtitles. The canonical speech representation is required internally; learner-visible rendering is adaptive.
+The canonical speech representation is a grounding layer. Learner-visible output is adaptive rather than synonymous with a continuous transcript.
 
-## 2. Primary user and learner outcome
+## Primary experience
 
-The primary operator is a teacher presenting live. The learner-visible surface may combine a presentation proxy, selective text, semantic visual structure, and sparse learning cues.
+The teacher teaches naturally. CueLayer interprets the live explanation and turns useful structure into a restrained learner-visible surface.
 
-The product should help learners answer two implicit questions with less friction:
+The learner experience is organised around two questions:
 
 1. What should I notice right now?
 2. What should I do right now?
 
-The initial dogfood domain is Chemistry, but the product architecture must not depend on Chemistry-only visual logic.
+The learner-visible surface can combine presentation content, selective text, semantic visual structure, and sparse learning cues.
 
-## 3. AI-native thesis
+## AI-native operating model
 
-Natural teaching is the primary interface. The teacher should not need to prompt an assistant, manually mark every important phrase, or select an animation type while teaching.
+Natural teaching is the primary interface.
 
-AI is responsible for uncertain interpretation: understanding the current teaching meaning, deciding whether a learner-visible intervention is useful, and identifying semantic or pedagogical intent.
+AI handles interpretation where meaning or pedagogical intent is uncertain: what the teacher is expressing, whether a visible intervention is useful, how current speech relates to recent teaching context, and whether the learner has reached a meaningful note-taking or reflection moment.
 
-Deterministic software is responsible for predictable execution: layout grammar, animation treatment, timing policy, state transitions, validation, fallback, and rendering.
+Deterministic software handles predictable execution: validation, bounded visual grammar, layout, animation treatment, timing policy, state transitions, fallback, and rendering.
 
-Removing AI should remove CueLayer's autonomous interpretation and adaptive representation behaviour, not merely a decorative feature.
-
-## 4. Core runtime loop
+The resulting system follows this division:
 
 ```text
-teacher speech + recent teaching context
-                    ↓
-          canonical speech state
-                    ↓
-          AI interpretation layer
-             ↙              ↘
-      display intent      learner intent
-             ↓              ↓
- QUIET / TEXT / FOCUS   NONE / NOTE /
- RELATE / TRANSFORM       REFLECT
-             ↘              ↙
-        deterministic runtime
-                    ↓
-          learner-visible surface
+teacher speech + teaching context
+               ↓
+      canonical speech state
+               ↓
+       AI interpretation
+          ↙           ↘
+ display intent    learner intent
+          ↘           ↙
+      deterministic runtime
+               ↓
+     learner-visible surface
 ```
 
-Future Teaching State may accumulate meaning across utterances, but current implementation must remain useful before that system is complete.
+## Adaptive representation
 
-## 5. Product invariants
+CueLayer treats representation as a policy decision rather than assuming every spoken word should remain visible.
 
-1. **Natural teaching is the primary control surface.** Product value must not depend on teachers continuously operating an AI interface while speaking.
-2. **Canonical speech is always recoverable.** Raw ASR and canonical speech state ground learner-visible representations, debugging, replay, correction handling, and effect decisions.
-3. **Canonical speech does not imply continuous visible subtitles.** Plain text is one representation and fallback, not the permanent product surface.
-4. **Adaptive representation is the default direction.** Ordinary connective speech may remain visually quiet; exact wording, semantic structure, or learning-state changes may justify a visible representation.
-5. **QUIET / NONE are first-class decisions.** Most teaching should remain visually restrained.
-6. **AI interprets; deterministic code executes.** Models must not freely choose arbitrary colours, animation curves, durations, layouts, or unbounded visual treatments.
-7. **Learner-visible semantics must be grounded.** CueLayer may compress or spatially represent meaning already supported by speech and approved context; it must not silently invent missing instructional or domain meaning.
-8. **Teacher corrections, uncertainty, and deliberate wording are preserved.** A visually cleaner result must not erase what the teacher actually asserted.
-9. **Learning cues are sparse.** NOTE and REFLECT should support timing of learner attention without becoming an always-on tutor or over-scaffolding layer.
-10. **Probabilistic enhancement must degrade gracefully.** AI failure may remove adaptive representation, but it must not corrupt the presentation transport or canonical speech pipeline.
-11. **Presentation Proxy is transport, not slide understanding.** Capturing a PowerPoint, Keynote, browser tab, or other presentation window does not imply slide parsing, object grounding, or automatic slide semantics.
-12. **Prefer complete usable vertical slices over horizontal infrastructure.** New infrastructure is justified only when it directly supports a current user-facing requirement.
+The current display grammar is:
 
-## 6. Bounded visual grammar
-
-The current semantic grammar is intentionally small:
-
-- `QUIET`: no learner-visible addition is warranted.
+- `QUIET`: the best learner-visible state is visual quiet.
 - `TEXT`: readable speech-derived text is the useful representation.
 - `FOCUS`: direct attention to one minimal semantic anchor.
-- `RELATE`: show an explicitly grounded cause, sequence, or contrast.
+- `RELATE`: expose an explicitly grounded cause, sequence, or contrast.
 - `TRANSFORM`: show the same object, expression, or state changing representation or state.
 
-The current learner-intent grammar is also intentionally small:
+`QUIET` is a successful decision. A useful CueLayer session should contain substantial visually quiet time.
 
-- `NONE`: no learner-state intervention.
-- `NOTE`: a stable structure or exact formulation is worth recording.
-- `REFLECT`: the teacher has created a genuine moment for learner thinking rather than immediate answer display.
+Every learner-visible representation remains grounded in the teacher's speech and approved context. Symbolic or spatial compression may make stated meaning easier to follow while preserving the teacher's asserted meaning, corrections, uncertainty, and deliberate wording.
 
-New grammar should be added only when repeated real teaching cases cannot be represented cleanly by the existing vocabulary.
+## Learning cues
 
-## 7. Architecture boundary
+Content representation and learner-action timing are separate channels.
 
-The desired dependency direction is:
+The initial learner-intent grammar is:
 
-```text
-presentation transport ─────────────── works independently
-speech / canonical state ──────────── works without AI enhancement
-AI interpretation ────────────────── may fail without blocking the base experience
-deterministic compiler / renderer ── bounded and testable
-learner cues ──────────────────────── optional enhancement
-```
+- `NONE`: the learner continues naturally without an additional cue.
+- `NOTE`: a stable structure or exact formulation has reached a useful recording point.
+- `REFLECT`: the teacher has created a genuine handoff of cognitive work to the learner.
 
-Do not put LLM inference on the critical path for presentation capture or canonical speech acquisition.
+Learning cues are intentionally sparse. Their role is to clarify timing of attention, note-taking, and reflection rather than supply the learner's reasoning.
 
-## 8. Product review questions
+A `NOTE` opportunity can often emerge from deterministic runtime state after a meaningful structure settles. A `REFLECT` cue is grounded in pedagogical evidence such as a teacher question, prediction request, comparison prompt, or deliberate invitation to think.
 
-For any proposed feature or implementation, ask:
+## Teaching State
 
-1. Does this help the current teacher teach naturally rather than operate software?
-2. Does it improve what the learner sees or when the learner should act?
-3. Is AI necessary because interpretation is uncertain, or could deterministic logic do the job better?
-4. Does the feature preserve a quiet majority rather than increasing visual noise?
-5. Does failure degrade cleanly?
-6. Is this required for the current usable vertical slice, or is it infrastructure/speculation that can wait?
+CueLayer should increasingly understand explanations as evolving structures rather than isolated utterances.
 
-If the answer to the final question is "it can wait," defer it.
+Teaching State may accumulate semantic relationships, current topic, recently established concepts, unresolved references, and pedagogical phase across speech turns. This allows a causal chain, comparison, derivation, or other explanation to grow as the teacher develops it.
+
+The architecture should preserve this direction while allowing useful bounded decisions from shorter context windows.
+
+## Runtime principles
+
+1. **Natural teaching is the control surface.** The teacher's normal explanation drives the system.
+2. **Canonical speech is recoverable.** Raw and canonical speech state ground interpretation, correction handling, replay, debugging, and learner-visible representation.
+3. **Adaptive representation is the default product model.** The system selects among quiet, text, semantic structure, and learning cues according to the teaching moment.
+4. **Selective intervention is a feature.** `QUIET` and `NONE` are first-class outcomes.
+5. **AI interprets; deterministic code executes.** Semantic and pedagogical intent compile into a bounded, testable visual runtime.
+6. **Learner-visible meaning is grounded.** Visual compression preserves the teacher's actual assertions and context.
+7. **Presentation transport remains independent from interpretation.** A presentation can provide the visual background while semantic slide understanding remains a separate capability.
+8. **Probabilistic enhancement degrades gracefully.** Presentation transport and canonical speech remain usable while adaptive AI behaviour is delayed or unavailable.
+9. **Usable vertical slices drive development.** Each implementation step should improve an end-to-end teaching experience that can be dogfooded.
+
+## Product review test
+
+A proposed feature or implementation is aligned when it strengthens one or more of these outcomes:
+
+- the teacher can continue teaching naturally;
+- the learner receives a clearer representation of the explanation;
+- the learner receives a well-timed cue to note or reflect;
+- AI is used where interpretation materially benefits from context and uncertainty;
+- deterministic behaviour remains bounded and testable;
+- the experience stays visually restrained;
+- failure preserves the usable teaching flow;
+- the implementation advances an end-to-end experience that can be tested in real teaching.
