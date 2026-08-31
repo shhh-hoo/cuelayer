@@ -53,8 +53,8 @@ export function useSpeechmaticsSession({ onEvent, onReady }: SpeechmaticsSession
   const { startTranscription, stopTranscription, sendAudio, socketState } = useRealtimeTranscription();
   const { startRecording, stopRecording, mute, unmute, isRecording } = usePCMAudioRecorderContext();
 
-  // This is Speechmatics' documented React audio handoff. AudioWorklet PCM buffers are ArrayBuffers.
-  usePCMAudioListener((audio) => sendAudio(audio.buffer as ArrayBuffer));
+  // This is Speechmatics' documented React audio handoff.
+  usePCMAudioListener(sendAudio);
 
   const failRun = useCallback((runId: number, code: string, message: string) => {
     if (activeRunIdRef.current !== runId) return;
