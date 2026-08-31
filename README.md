@@ -1,21 +1,34 @@
-# CueLayer
+# CueLayer FX Engine v0
 
-**AI-powered pedagogical motion captions.**
+CueLayer FX Engine v0 renders restrained, pedagogically meaningful motion over manually authored captions. It is a visual experiment engine: given canonical caption content, timed words, and effect cues, it lets us compare ordinary captions with semantically equivalent FX representations.
 
-CueLayer explores how AI can translate teaching intent into restrained, meaningful motion in captions and on-screen text. The goal is to reduce the mechanical effort of following a lesson without replacing the learner's work of selecting, organizing, integrating, and taking notes.
+It is not currently a Caption Composer, knowledge base, AI planner, or realtime ASR system.
 
-## Product thesis
+## Contract
 
-- The foreground product is only **AI special-effect captions**.
-- Motion should represent teaching meaning, not decorate speech.
-- Most classroom speech should remain visually quiet.
-- Course and lesson knowledge provide grounding for later AI effect planning.
-- The first development milestone is a **Teaching Caption FX Lab**, before realtime ASR or a full AI planner.
+```ts
+type CaptionClip = {
+  id: string;
+  captionText: string;
+  words: TimedWord[];
+  cues: EffectCue[];
+};
+```
 
-## Initial motion grammar
+`captionText` is the canonical Plain surface. FX preserves its meaning, but a phrase target may use semantically equivalent `displayText` notation such as `↑`, `↓`, or `÷ 3`. Future systems can provide caption text and timed words, while an effect planner can provide cues, without changing the renderer.
 
-`FOCUS` · `BUILD` · `COMPARE` · `TRANSFORM` · `TRACE` · `HOLD`
+## Architecture
 
-## Explicit non-goals for V0
+- **Speech-first Caption Engine — current:** manually authored captions, timed words, phrase-level targets, symbolic notation, semantic layouts and progression.
+- **Slide-linked Overlay Engine — deferred:** requires visual grounding before it can point to or trace slide objects, graphs, diagrams or existing animations.
 
-AI notes, summaries, tutors, quizzes, student interaction flows, teacher dashboards, cueboards, post-class recap, LMS features, and realtime ASR.
+## Current scope
+
+- `NONE` (no cue), `FOCUS`, `RELATE`, and `TRANSFORM`
+- Plain / FX comparison, timeline scrubbing, treatment and timing controls
+- Reduced-motion preview
+- Visual fixtures for testing effects, not production teaching content
+
+## Deliberate non-goals
+
+Caption composition, provenance enforcement, a knowledge base, AI planning, automatic summaries, notes, diagrams, teacher/student workflows, and realtime ASR.
