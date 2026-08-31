@@ -1,0 +1,23 @@
+aliases:
+  - spoken: acetic acid
+    systematic: ethanoic acid
+    status: recognised-common-name
+  - spoken: acetone
+    systematic: propanone
+    status: recognised-common-name
+  - spoken: toluene
+    systematic: methylbenzene
+    status: recognised-common-name
+  - spoken: isopropyl alcohol
+    systematic: propan-2-ol
+    status: recognised-common-name
+surfaceVariants:
+  - spoken: two methyl propane
+    canonical: 2-methylpropane
+    requires: unambiguous-name-context
+  - spoken: two bromo propane
+    canonical: 2-bromopropane
+    requires: unambiguous-name-context
+rules:
+  - Do not replace an alias during a common-versus-systematic naming discussion.
+  - Do not create locants or a structure from a formula alone.

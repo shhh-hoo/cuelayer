@@ -1,0 +1,14 @@
+symbolicRewrites:
+  - plain: carbon dioxide
+    displayText: CO₂
+  - plain: water
+    displayText: H₂O
+  - plain: delta H
+    displayText: ΔH
+  - plain: mole per decimetre cubed
+    displayText: mol dm⁻³
+  - plain: equilibrium
+    displayText: ⇌
+rules:
+  - Symbolic rewrites are FX-only and must retain the stated chemical meaning.
+  - Do not add coefficients, charges, state symbols, arrows, or conditions not grounded in evidence.
