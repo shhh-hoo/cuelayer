@@ -16,7 +16,7 @@ Return a record with these independent layers:
 - `symbolicRewrites`: semantically equivalent `displayText` for FX only. This is an optional visual form, never a replacement for `canonicalText`.
 - `chemistryTokens`: grounded entities using only `substance`, `ion`, `formula`, `symbol`, `quantity`, `unit`, `process`, `concept`, `condition`, or `observation`. This is a small caption taxonomy, not a chemical ontology.
 - `renderHints`: non-semantic emphasis hints such as `comparison`, `negation`, `equation`, `formula`, `quantity`, `mechanism-term`, or `teacher-correction`.
-- `warnings`: ambiguity, probable ASR confusion, speaker uncertainty, possible chemistry error, and every blocked inference.
+- `warnings`: active ambiguity, observable ASR confusion, speaker uncertainty, possible chemistry error, and blocked inferences only when the warning-activation criteria are met.
 
 Do not create a drawing, slide, reaction plan, knowledge-base answer, caption composition system, ASR system, AI effect plan, or a full chemical parser.
 
@@ -37,7 +37,7 @@ Classify each proposed transformation separately; a case may carry more than one
 2. Canonicalise only surface conventions that are unambiguous in the available evidence. The Plain caption is the source of truth. Do not canonicalise a name that is explicitly negated, quoted as an incorrect alternative, being corrected, or being compared metalinguistically. A positively asserted name may be canonicalised separately when grounded.
 3. Treat familiar names (for example, ethanoic acid/acetic acid, propanone/acetone, methylbenzene/toluene) as recognised aliases. Do not silently rewrite a name merely because another name is more systematic.
 4. When the teacher is discussing a common name **versus** a systematic name, preserve both exact terms and their contrast. Do not canonicalise either side away.
-5. Put formulae, equations, charges, isotopes, state symbols, arrows, subscripts, superscripts, Greek letters, and units in `chemistryTokens` when explicitly spoken or approved. An FX equivalent may use Unicode or markup, but must not change chemistry.
+5. When a formula itself is explicitly dictated or supplied as approved transcription context, `CANONICALIZE` may normalise its typography in `canonicalText` (for example, “NH four plus” → `NH₄⁺`). A chemical name or prose phrase remains Plain text; its formula is `FX_ONLY`. Never add an unspoken charge, coefficient, state symbol, isotope, stoichiometry, or species identity. Put grounded formulae, equations, charges, isotopes, state symbols, arrows, subscripts, superscripts, Greek letters, and units in `chemistryTokens`.
 6. Mark semantic focal points as minimal `protectedPhrases`; do not turn short words into effects without a semantic reason. For example, protect “Acetic acid”, “common name”, “ethanoic acid”, and “systematic name” separately, then use a comparison hint for their relationship. Likewise, “same molecular formula” and “different structural formulae” are normally separate units.
 7. Preserve code-switched connective and copular language in `canonicalText`. Do not translate it merely for stylistic uniformity unless the input includes a correction or an approved transcription replacement.
 8. A warning is information, not a correction. If a teacher statement may be wrong, preserve the spoken claim and flag it; never quietly substitute the presumed right chemistry.

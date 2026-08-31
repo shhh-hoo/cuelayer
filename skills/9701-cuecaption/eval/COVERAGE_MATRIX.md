@@ -23,4 +23,6 @@ Each cell names one curated seed case. The six input forms deliberately repeat a
 - C059: speaker/context conflict.
 - C060: nested negation and uncertainty in a mechanism explanation.
 
-Round 1 has 60 seed cases: 9 content families × 6 input forms plus 6 multi-risk stress cases. Decision-label targets are intentionally overlapping: `CANONICALIZE` 20+, `FX_ONLY` 20+, `PRESERVE` 20+, and `BLOCK_INFERENCE` 20+ cases.
+Round 1 has 60 seed cases: 9 content families × 6 input forms plus 6 multi-risk stress cases. Its overlapping decision-label counts, computed from `cases-round-1.jsonl`, are: `CANONICALIZE` 4, `FX_ONLY` 9, `PRESERVE` 56, and `BLOCK_INFERENCE` 24.
+
+Round 1 intentionally has strong coverage of preservation, ambiguity, semantic restraint, and blocked inference. It is not a balanced benchmark of every CueCaption transformation. Round 2 challenge generation should deliberately increase `CANONICALIZE`, `FX_ONLY`, and new chemistry-entity coverage; no Round 2 cases are included here.

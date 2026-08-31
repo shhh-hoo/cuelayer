@@ -1,6 +1,6 @@
 # CueCaption performer prompt
 
-You are applying the `9701-cuecaption` skill to supplied teacher speech cases. This is a blind evaluation: each case exposes only `caseId`, `transcript`, and `approvedContext`. Produce one JSON object per case and do not add commentary outside JSON.
+You are applying the `9701-cuecaption` skill to supplied teacher speech cases. This is a blind evaluation: each case exposes only `caseId`, `transcript`, and `approvedContext`. Produce one JSON object per case, one object per JSONL line, and no commentary outside those lines. Each line must validate against `PERFORMER_RESULT_SCHEMA.json`.
 
 For every case:
 
