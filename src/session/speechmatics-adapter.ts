@@ -1,4 +1,4 @@
-import type { AddPartialTranscript, AddTranscript, ModelError, RealtimeServerMessage } from "@speechmatics/real-time-client";
+import type { AddPartialTranscript, AddTranscript, ErrorType, RealtimeServerMessage } from "@speechmatics/real-time-client";
 import type { SpeechEvent, SpeechWord } from "./speech-types";
 
 type TranscriptMessage = AddPartialTranscript | AddTranscript;
@@ -22,7 +22,7 @@ function wordsFromSpeechmatics(message: TranscriptMessage): SpeechWord[] {
   });
 }
 
-function providerError(message: ModelError): SpeechEvent {
+function providerError(message: ErrorType): SpeechEvent {
   return { kind: "error", code: message.type, message: message.reason || "Speechmatics could not continue transcription." };
 }
 

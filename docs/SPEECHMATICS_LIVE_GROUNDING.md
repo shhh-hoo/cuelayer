@@ -12,7 +12,9 @@ This slice adds a live speech subsystem to `/session` without coupling it to Pre
 - Transcript delivery: `enable_partials: true`
 - Vocabulary: `additional_vocab` fixture for nine representative Chemistry terms
 
-The temporary token endpoint uses `SPEECHMATICS_API_KEY` only on the server to mint 60-second Realtime JWTs. It is implemented for Vercel at `api/speechmatics/token.ts`, with equivalent Vite development middleware. No `VITE_` credential is used.
+The temporary token endpoint uses `SPEECHMATICS_API_KEY` only on the server to mint 60-second Realtime JWTs. It is implemented for Vercel at `api/speechmatics/token.ts`, with equivalent Vite development middleware. Vite explicitly loads `.env*` through `loadEnv`; no `VITE_` credential is used. `.env*` is ignored while `.env.example` remains committed.
+
+For Alpha, deploy behind private-preview or deployment-level access protection. The endpoint deliberately does not introduce accounts, rate limits, or a wider authentication system, so a public deployment could otherwise be used to mint temporary keys and consume ASR credit.
 
 ## Canonical speech contract
 
@@ -34,7 +36,8 @@ Speechmatics `AddPartialTranscript` replaces `provisional`; `AddTranscript` appe
 
 ### Speechmatics capabilities reused
 
-- Realtime recognition and WebSocket lifecycle via the official JS client
+- Realtime recognition, socket lifecycle, and provider cleanup via `@speechmatics/real-time-client-react`
+- recorder lifecycle, `isRecording` / `isMuted` state, mute controls, and AudioWorklet microphone capture via `@speechmatics/browser-audio-input-react`
 - server-defined partial/final transcript semantics
 - server word timings and confidence
 - `cmn_en` bilingual recognition
@@ -51,4 +54,4 @@ Speechmatics `AddPartialTranscript` replaces `provisional`; `AddTranscript` appe
 
 ### Custom commodity logic
 
-None. CueLayer does not implement VAD, endpointing, generic reconciliation, audio conversion, or WebSocket protocol handling. A 500 ms recorder liveness check is only used because the current browser recorder does not expose its microphone tracks; it releases local resources if the underlying stream is no longer active.
+None. CueLayer does not implement VAD, endpointing, generic reconciliation, generic audio lifecycle, or WebSocket protocol handling. The one-line official `usePCMAudioListener` → `sendAudio` handoff passes the AudioWorklet's raw PCM buffer to the official realtime hook; it is not a CueLayer transport implementation.

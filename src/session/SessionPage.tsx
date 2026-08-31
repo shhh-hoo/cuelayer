@@ -3,7 +3,7 @@ import { PresentationStage } from "./PresentationStage";
 import { requestPresentationStream, stopPresentationStream } from "./presentation-capture";
 import { SessionControls } from "./SessionControls";
 import { createInitialSessionState, sessionReducer } from "./session-state";
-import { SpeechmaticsLiveRun } from "./speechmatics-live";
+import { useSpeechmaticsSession } from "./use-speechmatics-session";
 
 export function SessionPage() {
   const [state, dispatch] = useReducer(sessionReducer, undefined, createInitialSessionState);
@@ -12,8 +12,12 @@ export function SessionPage() {
   const stageRef = useRef<HTMLElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const endedListenerRef = useRef<(() => void) | null>(null);
-  const speechRunRef = useRef<SpeechmaticsLiveRun | null>(null);
   const speechRunIdRef = useRef(0);
+
+  const { start: startSpeechmatics, stop: stopSpeechmatics, pause: pauseSpeechmatics, resume: resumeSpeechmatics } = useSpeechmaticsSession({
+    onEvent: (runId, event) => dispatch({ type: "speech-event", runId, event }),
+    onReady: (runId) => dispatch({ type: "speech-ready", runId }),
+  });
 
   const releasePresentation = useCallback((stopTracks: boolean) => {
     const stream = streamRef.current;
@@ -25,10 +29,8 @@ export function SessionPage() {
   }, []);
 
   const stopSpeech = useCallback(async () => {
-    const run = speechRunRef.current;
-    speechRunRef.current = null;
-    if (run) await run.stop();
-  }, []);
+    await stopSpeechmatics();
+  }, [stopSpeechmatics]);
 
   useEffect(() => () => { releasePresentation(true); void stopSpeech(); }, [releasePresentation, stopSpeech]);
 
@@ -72,15 +74,8 @@ export function SessionPage() {
   const startSpeech = async () => {
     const runId = ++speechRunIdRef.current;
     dispatch({ type: "begin-speech", runId });
-    const run = new SpeechmaticsLiveRun({
-      onEvent: (event) => dispatch({ type: "speech-event", runId, event }),
-      onReady: () => dispatch({ type: "speech-ready", runId }),
-      onUnexpectedClose: () => { speechRunRef.current = null; },
-    });
-    speechRunRef.current = run;
-    try { await run.start(); }
+    try { await startSpeechmatics(runId); }
     catch (error) {
-      speechRunRef.current = null;
       const message = error instanceof Error && error.message === "microphone-unsupported" ? "Microphone capture is not available in this browser." : "CueLayer could not enable live speech. Check microphone permission and Speechmatics setup, then try again.";
       dispatch({ type: "speech-event", runId, event: { kind: "error", code: error instanceof Error ? error.message : "speech-start-failed", message } });
     }
@@ -89,17 +84,17 @@ export function SessionPage() {
   const toggleSpeech = async () => {
     if (state.status !== "active") return;
     if (state.speech.status === "ready") {
-      speechRunRef.current?.pause();
+      pauseSpeechmatics();
       dispatch({ type: "speech-paused", runId: state.speech.debug.runId });
     } else if (state.speech.status === "paused") {
-      speechRunRef.current?.resume();
+      resumeSpeechmatics();
       dispatch({ type: "speech-resumed", runId: state.speech.debug.runId });
     } else await startSpeech();
   };
 
   const toggleSessionPause = () => {
-    if (state.status === "active") speechRunRef.current?.pause();
-    else if (state.speech.status === "paused") speechRunRef.current?.resume();
+    if (state.status === "active") pauseSpeechmatics();
+    else if (state.speech.status === "paused") resumeSpeechmatics();
     dispatch({ type: state.status === "paused" ? "resume" : "pause" });
   };
 

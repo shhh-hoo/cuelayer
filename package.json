@@ -13,7 +13,9 @@
   "dependencies": {
     "@speechmatics/auth": "^0.1.0",
     "@speechmatics/browser-audio-input": "^2.0.4",
-    "@speechmatics/real-time-client": "^5.0.1",
+    "@speechmatics/browser-audio-input-react": "^2.0.4",
+    "@speechmatics/real-time-client": "^8.5.1",
+    "@speechmatics/real-time-client-react": "^3.5.1",
     "motion": "13.1.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
