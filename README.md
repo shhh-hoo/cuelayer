@@ -1,10 +1,16 @@
-# CueLayer FX Engine v0
+# CueLayer
 
-CueLayer FX Engine v0 renders restrained, pedagogically meaningful motion over manually authored captions. It is a visual experiment engine: given canonical caption content, timed words, and effect cues, it lets us compare ordinary captions with semantically equivalent FX representations.
+CueLayer is an AI-native presentation layer for teaching. See [docs/PRODUCT_CHARTER.md](docs/PRODUCT_CHARTER.md) for the durable product model.
 
-It is not currently a Caption Composer, knowledge base, AI planner, or realtime ASR system.
+This repository currently implements a bounded semantic-renderer vertical slice: phrase-level targeting, timing, progression, and deterministic `FOCUS`, `RELATE`, and `TRANSFORM` effects. See [docs/SPEECH_FIRST_SCOPE.md](docs/SPEECH_FIRST_SCOPE.md) for the phase-specific renderer validation scaffold.
 
-## Contract
+## Product and renderer contracts
+
+Product-level planning can choose:
+
+`QUIET | TEXT | FOCUS | RELATE | TRANSFORM`
+
+These are planner-level display intents. They compile into renderer state and bounded effect cues; they are not necessarily renderer cue kinds. The current renderer contract covers `FOCUS`, `RELATE`, and `TRANSFORM`, while `QUIET` and `TEXT` can resolve through ordinary renderer state.
 
 ```ts
 type CaptionClip = {
@@ -15,20 +21,14 @@ type CaptionClip = {
 };
 ```
 
-`captionText` is the canonical Plain surface. FX preserves its meaning, but a phrase target may use semantically equivalent `displayText` notation such as `↑`, `↓`, or `÷ 3`. Future systems can provide caption text and timed words, while an effect planner can provide cues, without changing the renderer.
+Within the renderer scaffold, `captionText` remains the canonical authored comparison surface. FX may use semantically equivalent notation while preserving grounded meaning.
 
-## Architecture
+## Current implementation
 
-- **Speech-first Caption Engine — current:** manually authored captions, timed words, phrase-level targets, symbolic notation, semantic layouts and progression.
-- **Slide-linked Overlay Engine — deferred:** requires visual grounding before it can point to or trace slide objects, graphs, diagrams or existing animations.
+- FX Lab and continuous renderer fixtures
+- phrase-level caption segmentation and target grounding
+- `FOCUS`, `RELATE`, and `TRANSFORM` renderers
+- timing and process progression
+- 9701 CueCaption semantic skill and evaluation assets
 
-## Current scope
-
-- `NONE` (no cue), `FOCUS`, `RELATE`, and `TRANSFORM`
-- Plain / FX comparison, timeline scrubbing, treatment and timing controls
-- Reduced-motion preview
-- Visual fixtures for testing effects, not production teaching content
-
-## Deliberate non-goals
-
-Caption composition, provenance enforcement, a knowledge base, AI planning, automatic summaries, notes, diagrams, teacher/student workflows, and realtime ASR.
+The renderer is designed to become the deterministic execution layer beneath live speech, Teaching State, adaptive display planning, learner cues, and presentation transport.

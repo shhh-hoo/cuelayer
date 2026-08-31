@@ -1,32 +1,16 @@
-# CueLayer v0 Scope — Speech-first Caption Engine
+# Speech-first Renderer Validation Scaffold
 
-## 1. Operative definition
+> Product authority: [PRODUCT_CHARTER.md](./PRODUCT_CHARTER.md). This document describes a phase-specific implementation and validation scaffold. Where its narrower assumptions differ from the Charter's adaptive product model, the Charter governs.
 
-CueLayer v0 is a speech-first pedagogical caption engine.
+## Purpose
 
-It turns a teacher's spoken explanation into a continuous caption experience: plain caption → semantically meaningful visual transformation → visible progression where content is processual → brief settled state → return to ordinary caption flow.
+This scaffold validates whether a small, bounded visual grammar can represent teaching meaning clearly and quietly before the live planner/runtime is fully connected.
 
-Most teaching remains plain and visually quiet. CueLayer uses phrase-level typesetting, symbolic notation, spatial arrangement and progression to make structure already expressed by the teacher easier to follow; it does not primarily highlight keywords.
+The current fixtures use authored `captionText`, timed words, semantic targets, and effect cues so renderer behaviour can be inspected deterministically. Continuous caption rendering in these fixtures is a comparison and validation surface, not the default CueLayer product model.
 
-## 2. Product split
+The product-level planner may later choose `QUIET`, `TEXT`, `FOCUS`, `RELATE`, or `TRANSFORM`. This renderer scaffold currently implements bounded effect cues for `FOCUS`, `RELATE`, and `TRANSFORM`; `QUIET` and `TEXT` resolve through ordinary renderer state rather than requiring new effect-cue kinds.
 
-### A. Speech-first Caption Engine — active V0 scope
-
-Input: teacher speech (manually authored caption text in V0), timed words, phrase-level semantic targets, and manually authored effect cues.
-
-Output: learner-visible captions, phrase-level motion, symbolic notation, process progression, and restrained semantic layout.
-
-This layer does not require access to the teacher's PPT.
-
-### B. Slide-linked Overlay Engine — deferred
-
-Input: teacher speech; current slide, board, graph, diagram, existing slide equation requiring spatial grounding, molecule or spectrum; visual-object locations; and current slide state.
-
-Output: pointing, tracing, graph or diagram overlays, spatial highlighting, and animation tied to an existing visual referent.
-
-This layer is deferred until CueLayer has visual grounding for slide objects. The two layers must not be mixed during V0 development.
-
-## 3. Current V0 contract
+## Renderer contract
 
 ```ts
 type CaptionClip = {
@@ -37,180 +21,121 @@ type CaptionClip = {
 };
 ```
 
-`captionText` is the canonical plain-caption surface. Plain mode always displays `captionText`.
+Within this scaffold, `captionText` is the canonical authored comparison surface. `CueTarget.wordIds` MUST be non-empty, ordered, contiguous within one `CaptionClip`, and refer only to existing `TimedWord` ids.
 
-`CueTarget.wordIds` MUST be non-empty, ordered, contiguous within one `CaptionClip`, and refer only to existing `TimedWord` ids.
+FX rendering may use a target's semantically equivalent `displayText`, for example `increases` → `↑`, `decreases` → `↓`, `approximately constant` → `≈ constant`, or `divided by three` → `÷ 3`.
 
-FX mode may use a phrase target's `displayText` to show shorter, semantically equivalent notation: `increases` → `↑`; `decreases` → `↓`; `approximately constant` → `≈ constant`; `equals` → `=`; and `divided by three` → `÷ 3`.
+The renderer preserves grounded meaning while changing representation.
 
-FX may compress an expression into standard notation, but it must not add a new explanation, conclusion or causal relationship.
+## Semantic unit
 
-## 4. Semantic unit
+The minimum visual unit is a meaningful phrase rather than an arbitrary individual word.
 
-The minimum visual unit is a meaningful phrase, not an individual word.
+Examples include `nuclear charge ↑`, `successful collisions ↑`, `atomic radius ↓`, `light blue precipitate`, `insoluble in excess`, and `rate = k[A]²[B]`.
 
-Examples: `nuclear charge ↑`, `successful collisions ↑`, `atomic radius ↓`, `light blue precipitate`, `insoluble in excess`, and `rate = k[A]²[B]`.
+A phrase behaves as one visual object. Short phrases remain together where space allows, and any wrapping preserves a visually continuous treatment.
 
-A phrase is one visual object. Its treatment must not restart around every word in a continuous phrase. Short phrases should remain together where space allows. On smaller screens, a phrase may wrap, but its treatment must remain visually continuous.
-
-## 5. Active semantic grammar
+## Bounded effect grammar
 
 ### FOCUS
 
-Temporarily direct attention to one minimal semantic anchor: one variable, concept, formula term, or short phrase, normally one to three content words. FOCUS is sparse. It must not colour or highlight entire explanatory clauses. It is a modifier, not the main representation mechanism.
+Direct attention briefly to one minimal semantic anchor: a variable, concept, formula term, or short phrase. FOCUS is a modifier rather than the main representation mechanism.
 
 ### RELATE
 
-Make a relationship already stated by the teacher easier to follow. Supported relations are `cause`, `sequence`, and `contrast`. RELATE primarily uses grouping, alignment, connectors, line breaks, symbolic notation and progression rather than broad highlight backgrounds.
+Expose a relationship already grounded in the teaching context. Current relations are `cause`, `sequence`, and `contrast`.
 
-Cause example: `temperature ↑ → kinetic energy ↑ → successful collisions ↑ → reaction rate ↑`.
+Examples:
 
-Sequence example: `1 calculate moles`, `2 use coefficient ratio`, `3 calculate required quantity`.
+- Cause: `temperature ↑ → kinetic energy ↑ → successful collisions ↑ → reaction rate ↑`
+- Sequence: `1 calculate moles → 2 use coefficient ratio → 3 calculate required quantity`
+- Contrast: aligned paired concepts such as `essential information / extra information`
 
-Contrast example: `defining clause / non-defining clause`, `essential information / extra information`, `no commas / commas`.
+RELATE primarily uses grouping, alignment, connectors, line breaks, symbolic notation, and progression.
 
 ### TRANSFORM
 
-Show the same object, expression or state changing from A to B.
+Show the same object, expression, or state changing representation or state.
 
-Current valid examples: `reactants → products`, `solid iodine → liquid iodine`, and monomer → repeat unit. A spoken expression → canonical formula or initial equation → derived equation needs the next renderer capability: a same-span representation transform, where one semantic target changes from prose representation to symbolic representation. The current `from` / `to` contract does not yet support that same-span handoff.
+Examples include `reactants → products`, `solid iodine → liquid iodine`, and monomer → repeat unit.
 
-An event causing a separate outcome is not automatically TRANSFORM. `stomata close → water loss decreases` is a causal RELATE operation, not a state transformation.
+A same-span representation handoff such as spoken prose → canonical formula is a useful extension of this semantic category even where the current `from` / `to` renderer contract still needs adaptation.
 
-## 6. Progression
+## Progression
 
-Processual content must show progress; do not render it only as a completed static structure.
+Processual RELATE and TRANSFORM representations progress through content states:
 
-Each target in a processual `RELATE` or `TRANSFORM` cue is `pending`, `active`, or `completed`.
+- `pending`: not yet introduced;
+- `active`: currently being explained;
+- `completed`: already established and retained as context.
 
-- **Pending:** not yet introduced; hidden or visually subordinate.
-- **Active:** currently explained; the primary visual focus. Normally only one target is active.
-- **Completed:** already introduced; remains visible as stable, lower-emphasis context.
+After the final target completes, the structure can settle briefly. The progression is embedded in the represented content rather than delegated to a generic progress indicator.
 
-After the final target completes, the structure may settle briefly before returning to ordinary captions. Progress is embedded in the content itself; a generic progress bar is not the main representation.
+## Chemistry validation fixtures
 
-## 7. Chemistry Speech FX Pack v0
+Chemistry is the first domain used to stress the grammar across repeated teaching structures.
 
-The first domain pack is Chemistry. The goal is to prove that a small reusable grammar serves multiple Chemistry teaching situations, not to animate a complete 0620 or 9701 syllabus.
+### Causal build
 
-### 7.1 Causal build
+`RELATE / cause`
 
-Semantic implementation: `RELATE`, `relation = cause`. Progression behavior: **accumulate** (derived by the renderer from relation and timed words; not an `EffectCue` field).
+Example: `temperature ↑ → kinetic energy ↑ → fraction with E ≥ Eₐ ↑ → successful collisions ↑ → rate ↑`.
 
-Collision theory: `temperature ↑ → kinetic energy ↑ → fraction with E ≥ Eₐ ↑ → successful collisions ↑ → rate ↑`.
+### Step progress
 
-Reuse: Period 3 trends, Group 1 reactivity, equilibrium changes and intermolecular-force explanations.
+`RELATE / sequence`
 
-### 7.2 Step progress
+Example: `mass → n = m / Mᵣ → coefficient ratio → required quantity`.
 
-Semantic implementation: `RELATE`, `relation = sequence`. Progression behavior: **accumulate** (derived by the renderer from relation and timed words; not an `EffectCue` field).
+### Evidence chain
 
-Stoichiometry: `mass → n = m / Mᵣ → coefficient ratio → required quantity`.
+`RELATE / sequence` or `RELATE / cause`
 
-Reuse: organic synthesis route, Paper 5 planning, titration calculations and qualitative-analysis procedure.
+Example: `reagent → observation → inference`, with progression preserving the order in which evidence becomes available.
 
-### 7.3 Evidence chain
+### Formula assembly
 
-Semantic implementation: `RELATE`, `relation = sequence or cause`.
+`TRANSFORM`
 
-Primary example: `reagent → observation → inference`. The inference must not appear before the observation.
+Examples include `ΔG = ΔH − TΔS`, `rate = k[A]²[B]`, and `E°cell = E°cathode − E°anode` when the relationship is grounded in the teaching input.
 
-Light semantic framing labels `REAGENT`, `OBSERVATION`, and `INFERENCE` are allowed, but must not turn the caption into an automatically generated answer card.
+### State or representation transformation
 
-### 7.4 Formula assembly
+`TRANSFORM`
 
-Semantic implementation: `TRANSFORM`, with `derive` or canonical notation.
+Examples include `CH₂=CH₂ → [–CH₂–CH₂–]ₙ`, `reactants → products`, and `solid → liquid`.
 
-Examples: `ΔG = ΔH − TΔS`, `rate = k[A]²[B]`, and `E°cell = E°cathode − E°anode`.
+### Split comparison
 
-The teacher must already have stated the variables and relationship. CueLayer may assemble standard notation but may not invent missing scientific reasoning.
+`RELATE / contrast`
 
-### 7.5 State or representation transformation
+Examples include oxidation versus reduction, endothermic versus exothermic, strong acid versus weak acid, and electrophile versus nucleophile.
 
-Semantic implementation: `TRANSFORM`.
+## Visual principles for this renderer
 
-Examples: `CH₂=CH₂ → [–CH₂–CH₂–]ₙ`, `reactants → products`, and `solid → liquid`.
+- **Phrase before word:** group meaning first.
+- **Layout before highlight:** prefer grouping, alignment, spacing, connectors, and symbols before broad emphasis treatments.
+- **Symbol before repeated prose:** use conventional notation when it reduces reading effort without changing meaning.
+- **Progress before final structure:** show how processual meaning forms.
+- **Sparse emphasis:** normally keep one strong visual anchor dominant at a time.
+- **Visual restraint:** authored comparison fixtures should contain substantial ordinary/quiet time so effects can be judged against a calm baseline. Earlier 70% ordinary-caption tests are experimental scaffold criteria, not a product-level requirement for learner-visible captions.
+- **Reversibility:** effect states settle cleanly back into the surrounding presentation flow.
 
-The change represents the same object or expression moving between states.
+## Presentation boundary
 
-### 7.6 Split comparison
+Presentation Proxy may provide a live PowerPoint, Keynote, browser tab, or other presentation surface as the stage background. This transport layer does not itself provide slide semantics.
 
-Semantic implementation: `RELATE`, `relation = contrast`.
+Speech-grounded text, symbols, relations, and transformations can be rendered without slide-object coordinates. Pointing to graph locations, molecule atoms, diagram paths, existing slide equations, or other visual objects requires grounded visual context and belongs to a later slide-aware capability.
 
-Examples: oxidation versus reduction, endothermic versus exothermic, strong acid versus weak acid, electrophile versus nucleophile, and two standard electrode potentials. Current V0 supports an aligned two-sided comparison, not a multi-dimension comparison table; paired dimension rows remain a later grammar extension.
+## Validation exit condition
 
-## 8. Caption-native acceptance boundary
+This renderer scaffold has done its job when:
 
-A Chemistry design belongs in Speech-first V0 when it can be generated from spoken phrases and standard notation; requires no slide coordinates; uses text, simple connectors and CSS/Motion; has a small number of semantic units; fits a caption-oriented area; returns naturally to normal caption flow; and does not require a complete diagram or simulation.
+- semantic phrases remain visually coherent;
+- conventional relations and notation are represented clearly;
+- processual structures visibly progress;
+- emphasis remains restrained across continuous examples;
+- the same bounded grammar works across multiple teaching cases;
+- authored or live upstream decisions can compile into the renderer without changing its semantic contract.
 
-Speech-first examples: causal chains, procedural sequences, comparisons, symbolic trends, formula assembly, state handoffs, and reagent–observation–inference chains.
-
-A design belongs in the deferred Slide-linked Overlay layer when it requires locating a point or path on a graph, identifying atoms or bonds on a displayed molecule, tracing a titration or Boltzmann curve, identifying NMR peaks, pointing to a chromatography spot, following a mechanism arrow, or synchronising with an existing PPT animation.
-
-The Speech-first engine must not redraw those visuals merely to claim it supports them.
-
-## 9. Visual rules
-
-### Phrase before word
-
-Group meaning first. Animate words only when the word itself is the meaningful object.
-
-### Layout before highlight
-
-Prefer grouping, alignment, spacing, line break, connector, symbol and progression before background colour, glow, large scale or broad highlighting.
-
-### Symbol before repeated prose
-
-Use standard scientific and mathematical notation when it reduces mechanical reading effort without changing meaning.
-
-### Progress before final card
-
-For a process, show how the structure forms. Do not jump directly to a polished final summary.
-
-### Sparse emphasis
-
-Only one strong visual anchor should normally dominate at a time.
-
-### Quiet majority
-
-At least approximately 70% of a continuous lesson demonstration should remain ordinary captions.
-
-### Reversibility
-
-Every effect returns cleanly to ordinary captions.
-
-## 10. Explicit V0 exclusions
-
-Do not build during Speech-first V0: PPT parsing; slide-object recognition; graph or molecule coordinate grounding; diagram generation; full Chemistry simulations; complete micro-board authoring; real Caption Composer; production Knowledge Base; AI Effect Planner; realtime ASR; teacher dashboard; student note system; automatic lesson summary; or automated answers.
-
-These are not rejected product directions; they are outside the current validation scope.
-
-## 11. Next validation deliverables
-
-### A. FX Lab
-
-The FX Lab compares Plain and FX, tunes phrase grouping, inspects symbolic notation and progression, compares treatments, and identifies effects to keep, revise or delete.
-
-### B. Chemistry Speech Showcase
-
-The next target is a continuous 45–60 second simulated Chemistry explanation with no authoring controls, debug metadata, PPT or audio requirement. It keeps at least 70% ordinary-caption time and includes at least one causal build, step progression, comparison or evidence chain, symbolic formula or state transformation, visible intermediate progress states, and a clean return to ordinary captions.
-
-The current branch contains a 40-second cross-topic Showcase with a mathematical sequence; it is the prototype, not yet this Chemistry validation deliverable.
-
-## 12. Product review method
-
-Do not create a large scoring system. Review each candidate treatment as `KEEP`, `REVISE`, or `DELETE`.
-
-Ask:
-
-1. Is the teaching meaning visible without reading debug metadata?
-2. Does it reduce tracking or transcription effort compared with Plain?
-3. Does it remain recognisably a caption experience?
-4. Would it remain tolerable across a full lesson?
-5. Does it preserve the learner's responsibility to understand and organise the content?
-
-## 13. Exit condition for Speech-first Phase 1
-
-Speech-first Phase 1 is complete when semantic phrases are never visually fragmented; conventional Chemistry relations use symbols where useful; processual content visibly progresses; highlighting is sparse; the selected grammar works across multiple Chemistry topics; the continuous Showcase communicates CueLayer's value without an explanatory interface; and the experience does not require a PPT.
-
-Only after this point should development move upstream to grounded caption composition, course knowledge context, AI effect planning and realtime speech transcription. Slide-linked overlays remain a separate later phase.
+At that point, further product progress should come primarily from the live speech, Teaching State, planner, learner-cue, and presentation runtime defined by the Product Charter rather than from expanding the renderer grammar for its own sake.
