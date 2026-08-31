@@ -21,7 +21,7 @@ type CaptionClip = {
 };
 ```
 
-Within this scaffold, `captionText` is the canonical authored comparison surface. `CueTarget.wordIds` are ordered, contiguous references to existing timed words.
+Within this scaffold, `captionText` is the canonical authored comparison surface. `CueTarget.wordIds` MUST be non-empty, ordered, contiguous within one `CaptionClip`, and refer only to existing `TimedWord` ids.
 
 FX rendering may use a target's semantically equivalent `displayText`, for example `increases` → `↑`, `decreases` → `↓`, `approximately constant` → `≈ constant`, or `divided by three` → `÷ 3`.
 
