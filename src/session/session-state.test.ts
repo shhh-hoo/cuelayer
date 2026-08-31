@@ -26,4 +26,30 @@ describe("live session state", () => {
     expect(failed).toMatchObject({ status: "active", presentation: { status: "error", stream: null } });
     expect(sessionReducer(failed, { type: "end" })).toMatchObject({ status: "ended", presentation: { status: "ended", stream: null } });
   });
+
+  it("ignores an event from a disposed speech run and retains presentation state after a speech failure", () => {
+    const presentationReady = sessionReducer(sessionReducer(createInitialSessionState(), { type: "begin-capture" }), { type: "capture-ready", stream });
+    const startingSpeech = sessionReducer(presentationReady, { type: "begin-speech", runId: 1 });
+    const readySpeech = sessionReducer(startingSpeech, { type: "speech-ready", runId: 1 });
+    const failedFirstRun = sessionReducer(readySpeech, { type: "speech-event", runId: 1, event: { kind: "error", code: "connection-closed", message: "Disconnected" } });
+    const restarted = sessionReducer(failedFirstRun, { type: "begin-speech", runId: 2 });
+    const ignoredOldEvent = sessionReducer(restarted, { type: "speech-event", runId: 1, event: { kind: "committed", text: "old connection", words: [] } });
+    const failed = sessionReducer(sessionReducer(restarted, { type: "speech-ready", runId: 2 }), { type: "speech-event", runId: 2, event: { kind: "error", code: "connection-closed", message: "Disconnected" } });
+    expect(ignoredOldEvent.speech.canonical.committed).toEqual([]);
+    expect(failed).toMatchObject({ presentation: { status: "ready", stream }, speech: { status: "error", error: { code: "connection-closed" } } });
+  });
+
+  it("blocks speech updates while paused or ended, and starts a clean run later", () => {
+    const active = sessionReducer(createInitialSessionState(), { type: "begin-capture" });
+    const ready = sessionReducer(sessionReducer(active, { type: "begin-speech", runId: 1 }), { type: "speech-ready", runId: 1 });
+    const paused = sessionReducer(ready, { type: "pause" });
+    const afterLatePausedEvent = sessionReducer(paused, { type: "speech-event", runId: 1, event: { kind: "committed", text: "ignored", words: [] } });
+    const ended = sessionReducer(afterLatePausedEvent, { type: "end" });
+    const afterLateEndedEvent = sessionReducer(ended, { type: "speech-event", runId: 1, event: { kind: "committed", text: "also ignored", words: [] } });
+    const secondSession = sessionReducer(afterLateEndedEvent, { type: "begin-capture" });
+    const secondRun = sessionReducer(secondSession, { type: "begin-speech", runId: 2 });
+    expect(afterLatePausedEvent.speech.canonical.committed).toEqual([]);
+    expect(afterLateEndedEvent.speech.canonical.committed).toEqual([]);
+    expect(secondRun.speech).toMatchObject({ status: "starting", canonical: { committed: [] }, debug: { runId: 2 } });
+  });
 });

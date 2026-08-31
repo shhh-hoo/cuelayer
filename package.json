@@ -11,6 +11,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@speechmatics/auth": "^0.1.0",
+    "@speechmatics/browser-audio-input": "^2.0.4",
+    "@speechmatics/real-time-client": "^5.0.1",
     "motion": "13.1.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
