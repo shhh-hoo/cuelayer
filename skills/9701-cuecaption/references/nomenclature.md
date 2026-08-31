@@ -11,9 +11,12 @@ Use school-level, recognisable 9701 conventions, not preferred-IUPAC maximalism.
 
 ## Preserve instead
 
-- “Acetic acid is the common name; ethanoic acid is systematic.” Both strings and the contrast are protected.
+- “Acetic acid is the common name; ethanoic acid is systematic.” Protect each name and its name-status label separately; use a hint for the contrast.
 - A teacher's offered alternative name, even if its status is uncertain, is preserved with a warning rather than silently replaced.
 - “The methyl group is on the second carbon” is not automatically a fully resolved systematic name unless the parent and structure are grounded.
+- Do not canonicalise a name when it is explicitly negated, quoted as an incorrect alternative, being corrected, or being compared as language. In “This is two bromo propane, not two propanol,” `2-bromopropane` may be canonicalised as the positive assertion, while “not two propanol” remains intact. Do not turn the rejected phrase into a different apparently valid name.
+
+Protected phrases must stay minimal. In a name comparison, protect each name and each name-status term; express the relationship with a `comparison` or `teacher-correction` hint rather than protecting the full sentence.
 
 ## Do not infer
 

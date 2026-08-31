@@ -20,6 +20,7 @@ type Batch = { name: string; cases: EvalCase[] };
 
 const seed = '9701-round-1-v1';
 const batchNames = ['a', 'b', 'c', 'd'];
+const targetedRegressionCaseIds = ['C004', 'C006', 'C009', 'C010', 'C013', 'C019', 'C027', 'C031', 'C033', 'C037', 'C054', 'C059'];
 const privateReviewKeys = [
   'contentFamily',
   'inputForm',
@@ -38,6 +39,16 @@ const root = resolve(import.meta.dirname, '..');
 const skillRoot = resolve(root, 'skills/9701-cuecaption');
 const caseFile = resolve(skillRoot, 'eval/cases-round-1.jsonl');
 const generatedRoot = resolve(skillRoot, 'eval/generated');
+
+function parseMode(args: string[]): 'round-one' | 'targeted-regression' {
+  if (args.length === 0) return 'round-one';
+  if (args.length === 1 && args[0] === '--targeted-regression') return 'targeted-regression';
+  if (args.length === 1 && args[0] === '--help') {
+    console.log('Usage: node --experimental-strip-types scripts/build-9701-eval-prompt.ts [--targeted-regression]');
+    process.exit(0);
+  }
+  throw new Error('Use no arguments for all Round 1 batches, or --targeted-regression for the fixed blind regression batch.');
+}
 
 function seededNumber(value: string): number {
   let hash = 2166136261;
@@ -79,6 +90,14 @@ function parseCases(source: string): EvalCase[] {
   if (cases.length !== 60) throw new Error(`Round 1 requires exactly 60 cases; found ${cases.length}`);
   if (new Set(cases.map((item) => item.caseId)).size !== cases.length) throw new Error('Case ids must be unique');
   return cases;
+}
+
+function selectCases(cases: EvalCase[], caseIds: string[]): EvalCase[] {
+  const byId = new Map(cases.map((item) => [item.caseId, item]));
+  const selected = caseIds.map((caseId) => byId.get(caseId));
+  const missing = caseIds.filter((_, index) => !selected[index]);
+  if (missing.length) throw new Error(`Unknown regression case id(s): ${missing.join(', ')}`);
+  return selected as EvalCase[];
 }
 
 function makeBatches(cases: EvalCase[]): Batch[] {
@@ -153,9 +172,19 @@ async function buildPerformerPrompt(batch: Batch): Promise<string> {
 }
 
 async function main(): Promise<void> {
+  const mode = parseMode(process.argv.slice(2));
   const cases = parseCases(await readFile(caseFile, 'utf8'));
-  const batches = makeBatches(cases);
   await mkdir(generatedRoot, { recursive: true });
+
+  if (mode === 'targeted-regression') {
+    const batch = { name: 'targeted-regression', cases: selectCases(cases, targetedRegressionCaseIds) };
+    const prompt = await buildPerformerPrompt(batch);
+    await writeFile(resolve(generatedRoot, 'round-1-targeted-regression.md'), `${prompt}\n`, 'utf8');
+    console.log(`Wrote one blind targeted regression batch of ${batch.cases.length} cases to ${generatedRoot}`);
+    return;
+  }
+
+  const batches = makeBatches(cases);
 
   for (const batch of batches) {
     const prompt = await buildPerformerPrompt(batch);

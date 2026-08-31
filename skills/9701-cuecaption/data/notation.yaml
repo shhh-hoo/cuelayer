@@ -5,10 +5,23 @@ symbolicRewrites:
     displayText: H₂O
   - plain: delta H
     displayText: ΔH
+  - plain: enthalpy change
+    displayText: ΔH
+  - plain: Gibbs free energy change
+    displayText: ΔG
+  - plain: activation energy
+    displayText: Eₐ
+  - plain: standard electrode potential
+    displayText: E°
   - plain: mole per decimetre cubed
     displayText: mol dm⁻³
   - plain: equilibrium
     displayText: ⇌
+relationshipRewrites:
+  - plain: enthalpy change is negative
+    displayText: ΔH < 0
+    renderHint: comparison
 rules:
   - Symbolic rewrites are FX-only and must retain the stated chemical meaning.
+  - A numerical or chemical negative sign is not the linguistic negation render hint.
   - Do not add coefficients, charges, state symbols, arrows, or conditions not grounded in evidence.
