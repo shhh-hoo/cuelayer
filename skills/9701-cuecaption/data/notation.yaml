@@ -1,0 +1,39 @@
+symbolicRewrites:
+  - plain: carbon dioxide
+    displayText: CO₂
+  - plain: water
+    displayText: H₂O
+  - plain: delta H
+    displayText: ΔH
+  - plain: enthalpy change
+    displayText: ΔH
+  - plain: Gibbs free energy change
+    displayText: ΔG
+  - plain: activation energy
+    displayText: E_A
+  - plain: standard electrode potential
+    displayText: E⦵
+  - plain: standard cell potential
+    displayText: E⦵cell
+  - plain: mole per decimetre cubed
+    displayText: mol dm⁻³
+relationshipRewrites:
+  - plain: enthalpy change is negative
+    displayText: ΔH < 0
+    renderHint: comparison
+  - plain: reaction is reversible
+    displayText: ⇌
+    requires: no-conflicting-approved-context
+formulaTypography:
+  - spoken: NH four plus
+    canonicalText: NH₄⁺
+    decision: CANONICALIZE
+    requires: explicitly-dictated-formula
+rules:
+  - Symbolic rewrites are FX-only and must retain the stated chemical meaning.
+  - A numerical or chemical negative sign is not the linguistic negation render hint.
+  - E_A is the semantic activation-energy symbol; a renderer may later typeset A as a subscript.
+  - Use E⦵ and E⦵cell for generated 9701 standard-potential notation; preserve E° only when the teacher discusses that form.
+  - Do not rewrite equilibrium as ⇌ unless speech or approved context explicitly concerns reversible-reaction direction notation.
+  - Formula typography may be canonicalText normalisation only for an explicitly dictated or approved formula; name or prose to formula remains FX-only.
+  - Do not add coefficients, charges, state symbols, arrows, or conditions not grounded in evidence.

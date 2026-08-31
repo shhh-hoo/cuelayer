@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "9701 CueCaption aggregated semantic evaluation run",
+  "description": "Optional evaluator-owned wrapper around performer JSONL records; it is not the performer output protocol.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["runId", "modelLabel", "mode", "results"],
+  "properties": {
+    "runId": { "type": "string", "description": "Human-assigned evaluation run identifier." },
+    "modelLabel": { "type": "string", "description": "Model/version label supplied by evaluator." },
+    "mode": { "type": "string", "enum": ["baseline", "skill"] },
+    "results": { "type": "array", "items": { "$ref": "PERFORMER_RESULT_SCHEMA.json" } }
+  }
+}
