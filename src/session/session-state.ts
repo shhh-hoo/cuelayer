@@ -34,9 +34,9 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       if (state.speech.debug.runId !== action.runId || state.speech.status !== "starting" || state.status !== "active") return state;
       return { ...state, speech: { ...state.speech, status: "ready" } };
     case "speech-event": {
-      if (state.speech.debug.runId !== action.runId || state.status !== "active") return state;
-      if (action.event.kind === "error" && (state.speech.status === "starting" || state.speech.status === "ready")) return { ...state, speech: { ...state.speech, status: "error", error: { code: action.event.code, message: action.event.message }, debug: { ...state.speech.debug, lastError: { code: action.event.code, message: action.event.message } } } };
-      if (state.speech.status !== "ready") return state;
+      if (state.speech.debug.runId !== action.runId || state.status === "idle" || state.status === "ended") return state;
+      if (action.event.kind === "error" && (state.speech.status === "starting" || state.speech.status === "ready" || state.speech.status === "paused")) return { ...state, speech: { ...state.speech, status: "error", error: { code: action.event.code, message: action.event.message }, debug: { ...state.speech.debug, lastError: { code: action.event.code, message: action.event.message } } } };
+      if (state.status !== "active" || state.speech.status !== "ready") return state;
       const eventCount = action.event.kind === "provisional" ? { provisionalEvents: state.speech.debug.provisionalEvents + 1 } : { committedEvents: state.speech.debug.committedEvents + 1 };
       return { ...state, speech: { ...state.speech, canonical: applySpeechEvent(state.speech.canonical, action.event), debug: { ...state.speech.debug, ...eventCount } } };
     }

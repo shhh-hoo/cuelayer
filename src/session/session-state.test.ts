@@ -72,4 +72,13 @@ describe("live session state", () => {
     expect(afterLateEndedEvent.speech.canonical.committed).toEqual([]);
     expect(secondRun.speech).toMatchObject({ status: "starting", canonical: { committed: [] }, debug: { runId: 2 } });
   });
+
+  it("keeps a paused session paused when speech disconnects and requires reconnect", () => {
+    const speechReady = sessionReducer(sessionReducer(createInitialSessionState(), { type: "begin-speech", runId: 1 }), { type: "speech-ready", runId: 1 });
+    const paused = sessionReducer(speechReady, { type: "pause" });
+    const disconnected = sessionReducer(paused, { type: "speech-event", runId: 1, event: { kind: "error", code: "connection-closed", message: "Disconnected" } });
+    const resumed = sessionReducer(disconnected, { type: "resume" });
+    expect(disconnected).toMatchObject({ status: "paused", speech: { status: "error", error: { code: "connection-closed" } } });
+    expect(resumed).toMatchObject({ status: "active", speech: { status: "error", error: { code: "connection-closed" } } });
+  });
 });
