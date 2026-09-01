@@ -15,6 +15,13 @@ function render(text: string, display: RuntimeDecision["display"]) {
   return renderToStaticMarkup(<CaptionRenderer clip={episode.clip} cue={episode.cue} currentMs={1_000} mode="fx" reducedMotion embedded />);
 }
 
+function renderPresentationless(text: string, display: RuntimeDecision["display"]) {
+  const input: PlannerInput = { recentSpeech: [turn("speech-span-0", text)] };
+  const decision: RuntimeDecision = { display, learner: { kind: "NONE" } };
+  const episode = compileCaptionEpisode(input, decision, "episode", 0)!;
+  return renderToStaticMarkup(<CaptionRenderer clip={episode.clip} cue={episode.cue} currentMs={1_000} mode="fx" reducedMotion embedded presentationMode="presentationless" />);
+}
+
 const visibleText = (html: string) => html.replace(/<[^>]+>/g, "");
 
 describe("semantic caption context", () => {
@@ -35,5 +42,27 @@ describe("semantic caption context", () => {
     expect(visibleText(html)).toBe("The alkene is converted into an alcohol under these conditions");
     expect(html).toContain("previous-state");
     expect(html).toContain("current-state");
+  });
+
+  it("uses the primary presentationless operation layout while retaining canonical text for RELATE", () => {
+    const text = "Higher temperature causes particles to move faster in the reaction mixture";
+    const html = renderPresentationless(text, { kind: "RELATE", relation: "cause", targets: [{ segmentId: "speech-span-0", text: "Higher temperature" }, { segmentId: "speech-span-0", text: "particles to move faster" }] });
+    expect(html).toContain("presentationless-operation");
+    expect(html).toContain("semantic-canonical-context");
+    expect(visibleText(html)).toContain(text);
+  });
+
+  it("uses the primary presentationless operation layout while retaining canonical text for TRANSFORM", () => {
+    const text = "The alkene is converted into an alcohol under these conditions";
+    const html = renderPresentationless(text, { kind: "TRANSFORM", from: { segmentId: "speech-span-0", text: "alkene" }, to: { segmentId: "speech-span-0", text: "alcohol" } });
+    expect(html).toContain("presentationless-transform");
+    expect(html).toContain("semantic-canonical-context");
+    expect(visibleText(html)).toContain(text);
+  });
+
+  it("keeps FOCUS inside the canonical presentationless teaching surface", () => {
+    const html = renderPresentationless("The rate-determining step controls the overall rate", { kind: "FOCUS", target: { segmentId: "speech-span-0", text: "rate-determining step" } });
+    expect(html).toContain("focus-target");
+    expect(html).not.toContain("presentationless-operation");
   });
 });

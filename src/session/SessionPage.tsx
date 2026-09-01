@@ -9,6 +9,7 @@ import { useTeachingPlanner } from "./use-teaching-planner";
 import { TeachingTraceDrawer } from "./TeachingTraceDrawer";
 import type { CaptionEpisode } from "../planner/contracts";
 import { createSyntheticSemanticFixture, type SyntheticIntentKind } from "./dev-semantic-fixtures";
+import type { PresentationMode } from "./presentation-mode";
 
 export function speechDebugEnabled(search: string) {
   return new URLSearchParams(search).getAll("debug").includes("speech");
@@ -46,8 +47,8 @@ export function SessionPage() {
     dispatch,
   });
 
-  const onCaptionRendered = useCallback((episode: CaptionEpisode, now: number) => {
-    dispatch({ type: "renderer-activated", episode, now });
+  const onCaptionRendered = useCallback((episode: CaptionEpisode, now: number, presentationMode: PresentationMode) => {
+    dispatch({ type: "renderer-activated", episode, now, presentationMode });
   }, []);
 
   const injectSemanticCue = useCallback((kind: SyntheticIntentKind) => {

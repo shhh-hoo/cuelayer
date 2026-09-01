@@ -280,6 +280,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         cueId: action.episode.id,
         decision: "activated",
         status: "rendered",
+        presentationMode: action.presentationMode,
         reason: action.episode.cue ? "effect_cue_mounted" : "plain_caption_mounted",
         effectCue: action.episode.cue,
         latencyMs: elapsedMs(event.spanId && event.spanRevision !== undefined ? spanRevisionTimestampFor(state.trace, event.spanId, event.spanRevision) : event.timestamp, action.now),

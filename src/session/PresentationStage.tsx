@@ -4,6 +4,7 @@ import type { PresentationStatus, SessionStatus } from "./session-types";
 import type { CanonicalSpeechState, SpeechStatus } from "./speech-types";
 import type { CaptionEpisode, CaptionRuntimeState } from "../planner/contracts";
 import { SemanticCaptionLayer } from "./SemanticCaptionLayer";
+import { presentationModeFor, type PresentationMode } from "./presentation-mode";
 
 type PresentationStageProps = {
   stream: MediaStream | null;
@@ -14,7 +15,7 @@ type PresentationStageProps = {
   speechStatus: SpeechStatus;
   showSpeechDebug: boolean;
   captionRuntime: CaptionRuntimeState;
-  onCaptionRendered?(episode: CaptionEpisode, now: number): void;
+  onCaptionRendered?(episode: CaptionEpisode, now: number, presentationMode: PresentationMode): void;
   onCaptionExpire(episodeId: string): void;
   onLearnerCueExpire(cueId: string): void;
 };
@@ -37,13 +38,14 @@ export const PresentationStage = forwardRef<HTMLElement, PresentationStageProps>
     return () => { video.srcObject = null; };
   }, [stream]);
 
-  const speechOnly = presentationStatus === "empty" && speechStatus !== "off" && speechStatus !== "ended";
-  const emptyCopy = presentationStatus === "ready" ? undefined : sessionStatus === "ended" ? { title: "Session ended", detail: "The presentation connection has been released. You can start another session whenever you are ready." } : speechOnly ? { title: "Listening for live teaching", detail: "Live speech is active. You can add a presentation whenever you are ready." } : emptyStageCopy[presentationStatus];
-  return <section ref={ref} className={`presentation-stage presentation-${presentationStatus} session-${sessionStatus}`} aria-label="Learner presentation stage">
+  const presentationMode = presentationModeFor({ status: presentationStatus, stream });
+  const teachingSurfaceActive = presentationMode === "presentationless" && (speechStatus !== "off" && speechStatus !== "ended" || speech.spans.length > 0 || Boolean(captionRuntime.current));
+  const emptyCopy = presentationStatus === "ready" ? undefined : sessionStatus === "ended" ? { title: "Session ended", detail: "The presentation connection has been released. You can start another session whenever you are ready." } : teachingSurfaceActive ? undefined : emptyStageCopy[presentationStatus];
+  return <section ref={ref} className={`presentation-stage presentation-${presentationStatus} presentation-mode-${presentationMode} session-${sessionStatus}`} data-presentation-mode={presentationMode} aria-label="Learner presentation stage">
     <div className="presentation-background">
       {stream ? <video ref={videoRef} className="presentation-video" autoPlay muted playsInline aria-label="Live shared presentation" /> : null}
     </div>
-    <SemanticCaptionLayer runtime={captionRuntime} onRendered={onCaptionRendered} onExpire={onCaptionExpire} onLearnerCueExpire={onLearnerCueExpire} />
+    <SemanticCaptionLayer runtime={captionRuntime} speech={speech} presentationMode={presentationMode} onRendered={(episode, now) => onCaptionRendered?.(episode, now, presentationMode)} onExpire={onCaptionExpire} onLearnerCueExpire={onLearnerCueExpire} />
     {showSpeechDebug && speechStatus !== "off" && speechStatus !== "ended" ? <aside className="speech-inspection-surface" aria-label="Live speech debug inspection">
       <span>Live speech · {speechStatus}</span>
       {speech.spans.slice(-3).map((span) => <p key={span.id}>{span.text}</p>)}
