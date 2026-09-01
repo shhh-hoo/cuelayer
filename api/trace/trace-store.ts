@@ -45,7 +45,14 @@ function capability() { return randomBytes(32).toString("base64url"); }
 function contentHash(event: DurableTraceEvent) { return hash(JSON.stringify({ ...event, ingestedAt: undefined })); }
 function db() { const url = process.env.DATABASE_URL; if (!url) throw new Error("trace-store-unavailable"); return neon(url); }
 let schemaReady: Promise<void> | undefined;
-async function ensureSchema(sql: NeonQueryFunction<false, false>) { schemaReady ??= sql.query(SESSION_EVENT_STORE_MIGRATION).then(() => undefined); return schemaReady; }
+async function ensureSchema(sql: NeonQueryFunction<false, false>) {
+  // Neon HTTP executes one prepared statement at a time. Keep the migration
+  // readable as SQL while applying its statements in their required order.
+  schemaReady ??= (async () => {
+    for (const statement of SESSION_EVENT_STORE_MIGRATION.split(";").map((entry) => entry.trim()).filter(Boolean)) await sql.query(statement);
+  })();
+  return schemaReady;
+}
 
 function rowEvent(row: Record<string, unknown>): DurableTraceEvent {
  return { id: String(row.event_id), sessionId: String(row.session_id), schemaVersion: Number(row.schema_version) as 1,
