@@ -13,7 +13,7 @@
     "prebuild": "npm run check:cuecaption-policy",
     "build": "tsc -b && vite build",
     "pretypecheck": "npm run check:cuecaption-policy",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.api.json --noEmit",
     "pretest": "npm run check:cuecaption-policy",
     "test": "vitest run",
     "preview": "vite preview"
