@@ -5,9 +5,13 @@ const mocks = vi.hoisted(() => ({ deepSeek: vi.fn(), openAI: vi.fn() }));
 
 vi.mock("./deepseek-planner.ts", () => ({
   deepSeekPlannerFailureReason: () => "planner-provider-unavailable",
-  requestDeepSeekPlannerDecision: mocks.deepSeek,
+  requestDeepSeekPlannerResult: mocks.deepSeek,
 }));
-vi.mock("./openai-planner.ts", () => ({ requestOpenAIPlannerDecision: mocks.openAI }));
+vi.mock("./openai-planner.ts", () => ({ requestOpenAIPlannerResult: mocks.openAI }));
+vi.mock("../trace/api-trace.ts", () => ({
+  traceHeaders: () => ({ sessionId: "session-api-test", apiRequestId: "api-test", plannerRequestId: "planner-test" }),
+  traceExternalCall: (_options: unknown, call: () => Promise<unknown>) => call(),
+}));
 
 import handler from "./decision";
 
@@ -47,7 +51,7 @@ describe("live planner provider selection", () => {
 
   it("uses OpenAI rather than sending an OpenAI key to DeepSeek", async () => {
     process.env.OPENAI_API_KEY = "openai-key";
-    mocks.openAI.mockResolvedValue(decision);
+    mocks.openAI.mockResolvedValue({ decision });
     const captured = responseCapture();
 
     await handler({ method: "POST", body: input }, captured.response);
@@ -60,7 +64,7 @@ describe("live planner provider selection", () => {
   it("prefers a dedicated DeepSeek key when both providers are configured", async () => {
     process.env.DEEPSEEK_API_KEY = "deepseek-key";
     process.env.OPENAI_API_KEY = "openai-key";
-    mocks.deepSeek.mockResolvedValue(decision);
+    mocks.deepSeek.mockResolvedValue({ decision });
     const captured = responseCapture();
 
     await handler({ method: "POST", body: input }, captured.response);

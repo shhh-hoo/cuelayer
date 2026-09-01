@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { PlannerInput, RuntimeDecision } from "../planner/contracts";
-import { createInitialSessionState, sessionReducer } from "./session-state";
+import { createDurableSessionState, createInitialSessionState, sessionReducer } from "./session-state";
 import { appendTeachingTraceEvents, createTeachingTraceState, spanTraceIdFor, traceIdFor } from "./teaching-trace";
+import { teachingTraceEventToDurable } from "./teaching-trace-persistence";
 
 const words = [
   { text: "temperature", startMs: 0, endMs: 400 },
@@ -48,7 +49,7 @@ describe("development teaching trace", () => {
       "compile:emit",
       "render:activated",
     ]);
-    expect(new Set(state.trace.events.map((event) => event.traceId))).toEqual(new Set([traceIdFor(1, "provider-final-0"), spanTraceIdFor(1, "speech-span-0", 1)]));
+    expect(new Set(state.trace.events.map((event) => event.traceId))).toEqual(new Set([traceIdFor(1, "provider-event-1-0"), spanTraceIdFor(1, "speech-span-0", 1)]));
     expect(state.trace.events.find((event) => event.stage === "planner" && event.decision === "completed")?.latencyMs).toBe(70);
     expect(state.trace.events.find((event) => event.stage === "render")?.latencyMs).toBe(90);
   });
@@ -66,6 +67,42 @@ describe("development teaching trace", () => {
     expect(state.speech.canonical.finals.map((item) => item.id)).toEqual(["provider-final-0", "provider-final-1"]);
     expect(state.trace.events.filter((event) => event.stage === "span").map((event) => event.decision)).toEqual(["opened", "appended", "closed"]);
     expect(state.trace.events.at(-1)).toMatchObject({ stage: "span", decision: "closed", spanId: "speech-span-0", spanRevision: 3, reason: "meaningful_pause", sourceFinalIds: ["provider-final-0", "provider-final-1"] });
+  });
+
+  it("preserves partial → revision → final ordering and rejects an empty noise-only final", () => {
+    let state = sessionReducer(createInitialSessionState(true), { type: "begin-speech", runId: 4 });
+    state = sessionReducer(state, { type: "speech-ready", runId: 4 });
+    state = sessionReducer(state, { type: "speech-event", runId: 4, event: { kind: "provisional", text: "  activa", words: [], provider: { message: "AddPartialTranscript", resultCount: 1, sequence: 12 } }, now: 10 });
+    state = sessionReducer(state, { type: "speech-event", runId: 4, event: { kind: "provisional", text: "activation ener", words: [], provider: { message: "AddPartialTranscript", resultCount: 2, sequence: 13 } }, now: 20 });
+    state = sessionReducer(state, { type: "speech-event", runId: 4, event: { kind: "committed", text: "activation energy", words, provider: { message: "AddTranscript", resultCount: 2, sequence: 14 } }, now: 30 });
+    state = sessionReducer(state, { type: "speech-event", runId: 4, event: { kind: "committed", text: "   ", words: [], provider: { message: "AddTranscript", resultCount: 0, sequence: 15 } }, now: 40 });
+
+    expect(state.trace.events.filter((event) => event.stage === "asr").map((event) => [event.decision, event.transcript, event.speechEventId])).toEqual([
+      ["partial", "  activa", "provider-event-4-12"],
+      ["partial", "activation ener", "provider-event-4-13"],
+      ["final", "activation energy", "provider-event-4-14"],
+      ["final", "   ", "provider-event-4-15"],
+    ]);
+    expect(state.trace.events.at(-1)).toMatchObject({ stage: "commit", decision: "rejected", reason: "empty_transcript", transcript: "   " });
+    expect(state.speech.canonical.finals).toHaveLength(1);
+  });
+
+  it("keeps durable correlation from provider final through commit, span, planner, cue, and render", () => {
+    let state = committedState();
+    const input = plannerInput(state);
+    const focus = decision(input, { kind: "FOCUS", target: { segmentId: "speech-span-0", text: "temperature" } });
+    state = sessionReducer(state, { type: "planner-requested", runId: 1, requestId: 9, ...checkpoint, input, now: 110 });
+    state = sessionReducer(state, { type: "planner-decision", runId: 1, requestId: 9, ...checkpoint, input, decision: focus, startedAt: 110, now: 180 });
+    state = sessionReducer(state, { type: "renderer-activated", episode: state.planner.runtime.current!, now: 190, presentationMode: "presentationless", surfaceSource: "semantic", rendererState: { captionText: "temperature increases" } });
+    const durable = state.trace.events.map((event) => teachingTraceEventToDurable(event, "page-correlation"));
+
+    expect(durable.find((event) => event.type === "asr.final")?.correlation).toMatchObject({ speechEventId: "provider-event-1-0", finalId: "provider-final-0" });
+    expect(durable.find((event) => event.type === "commit.committed")?.correlation).toMatchObject({ commitId: "provider-final-0", finalId: "provider-final-0" });
+    expect(durable.find((event) => event.type === "span.opened")?.correlation).toMatchObject({ finalId: "provider-final-0", spanId: "speech-span-0", spanRevision: 1 });
+    expect(durable.find((event) => event.type === "planner.started")?.correlation).toMatchObject({ spanId: "speech-span-0", plannerRequestId: "9" });
+    const cueId = durable.find((event) => event.type === "compile.emit")?.correlation?.cueId;
+    expect(cueId).toBe("caption-1-9");
+    expect(durable.find((event) => event.type === "render.activated")?.correlation).toMatchObject({ spanId: "speech-span-0", plannerRequestId: "9", cueId });
   });
 
   it("explains a planner QUIET result as compile no_emit", () => {
@@ -117,6 +154,15 @@ describe("development teaching trace", () => {
     }
     expect(trace.events.map((event) => event.traceId)).toEqual(["trace-2", "trace-3", "trace-4"]);
     expect(trace.nextEventId).toBe(6);
+  });
+
+  it("does not drop forwarding events at the former 160-event boundary", () => {
+    let state = sessionReducer(createDurableSessionState(), { type: "begin-speech", runId: 8 });
+    state = sessionReducer(state, { type: "speech-ready", runId: 8 });
+    for (let index = 0; index < 205; index += 1) {
+      state = sessionReducer(state, { type: "speech-event", runId: 8, event: { kind: "provisional", text: `revision ${index}`, words: [], provider: { message: "AddPartialTranscript", resultCount: 1, sequence: index } }, now: index });
+    }
+    expect(state.trace.events).toHaveLength(205);
   });
 
   it("does not change live-session product state when tracing is enabled", () => {

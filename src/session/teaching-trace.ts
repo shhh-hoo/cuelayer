@@ -12,6 +12,7 @@ type TraceBase = {
   stage: TeachingTraceStage;
   timestamp: number;
   segmentId?: string;
+  speechEventId?: string;
   commitId?: string;
   finalId?: string;
   spanId?: string;
@@ -21,6 +22,7 @@ type TraceBase = {
   reason?: string;
   latencyMs?: number;
   source?: "live" | "synthetic";
+  provider?: unknown;
 };
 
 export type PlannerInputSummary = {
@@ -36,7 +38,7 @@ export type TeachingTraceEvent =
   | TraceBase & { stage: "planner_gate"; decision: "run" | "skip"; input?: PlannerInputSummary }
   | TraceBase & { stage: "planner"; decision: "started" | "completed" | "failed" | "aborted" | "stale" | "structured_output_invalid" | "validation_degraded"; input?: PlannerInputSummary; output?: RuntimeDecision }
   | TraceBase & { stage: "compile"; decision: "emit" | "no_emit" | "failed"; displayIntent?: DisplayIntent; learnerIntent?: LearnerIntent; effectCue?: EffectCue }
-  | TraceBase & { stage: "render"; decision: "activated"; status: "rendered"; presentationMode?: PresentationMode; effectCue?: EffectCue };
+  | TraceBase & { stage: "render"; decision: "activated" | "replaced" | "expired" | "stale_suppressed"; status: "rendered" | "expired" | "suppressed"; presentationMode?: PresentationMode; effectCue?: EffectCue; rendererState?: unknown };
 
 type WithoutId<T> = T extends unknown ? Omit<T, "id"> : never;
 export type TeachingTraceEventDraft = WithoutId<TeachingTraceEvent>;

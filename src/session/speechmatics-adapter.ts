@@ -4,9 +4,21 @@ import type { SpeechEvent, SpeechWord } from "./speech-types";
 type TranscriptMessage = AddPartialTranscript | AddTranscript;
 
 function transcriptEvent(message: TranscriptMessage, kind: "provisional" | "committed"): SpeechEvent | undefined {
-  const text = message.metadata?.transcript?.trim();
-  if (!text) return undefined;
-  return { kind, text, words: wordsFromSpeechmatics(message) };
+  if (typeof message.metadata?.transcript !== "string") return undefined;
+  const timestamps = message.results.flatMap((result) => [result.start_time, result.end_time]).filter(Number.isFinite);
+  return {
+    kind,
+    text: message.metadata.transcript,
+    words: wordsFromSpeechmatics(message),
+    provider: {
+      message: message.message,
+      format: message.format,
+      channel: message.channel,
+      resultCount: message.results.length,
+      startMs: timestamps.length ? Math.round(Math.min(...timestamps) * 1000) : undefined,
+      endMs: timestamps.length ? Math.round(Math.max(...timestamps) * 1000) : undefined,
+    },
+  };
 }
 
 function wordsFromSpeechmatics(message: TranscriptMessage): SpeechWord[] {

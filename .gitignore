@@ -3,6 +3,7 @@ dist/
 .env*
 !.env.example
 artifacts/
+.cuelayer/
 skills/9701-cuecaption/eval/generated/
 *.tsbuildinfo
 .DS_Store

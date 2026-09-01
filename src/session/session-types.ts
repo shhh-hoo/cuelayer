@@ -49,8 +49,8 @@ export type SessionAction =
   | { type: "planner-decision"; requestId: number; runId: number; spanId: string; spanRevision: number; input: PlannerInput; decision: unknown; now: number; startedAt?: number; segmentIds?: string[] }
   | { type: "planner-failed"; requestId: number; runId: number; spanId: string; spanRevision: number; input: PlannerInput; message: string; now?: number; startedAt?: number; segmentIds?: string[] }
   | { type: "debug-inject-decision"; traceId: string; episodeId: string; input: PlannerInput; decision: RuntimeDecision; now: number }
-  | { type: "renderer-activated"; episode: CaptionEpisode; now: number; presentationMode?: PresentationMode }
-  | { type: "caption-expired"; episodeId: string }
+  | { type: "renderer-activated"; episode: CaptionEpisode; now: number; presentationMode?: PresentationMode; surfaceSource?: "semantic" | "canonical_fallback"; previousEpisodeId?: string; suppressedEpisodeId?: string; rendererState?: unknown }
+  | { type: "caption-expired"; episodeId: string; now?: number; presentationMode?: PresentationMode }
   | { type: "learner-cue-expired"; cueId: string }
   | { type: "toggle-caption-lock" }
   | { type: "pause" }

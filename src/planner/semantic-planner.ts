@@ -1,7 +1,7 @@
 import type { PlannerInput } from "./contracts";
 
 export type SemanticPlanner = {
-  decide(input: PlannerInput, options?: { signal?: AbortSignal }): Promise<unknown>;
+  decide(input: PlannerInput, options?: { signal?: AbortSignal; traceSessionId?: string; apiRequestId?: string; plannerRequestId?: number }): Promise<unknown>;
 };
 
 type PlannerResponse = { decision?: unknown; error?: string };
@@ -12,7 +12,13 @@ export function createHttpSemanticPlanner(endpoint = "/api/planner/decision"): S
     async decide(input, options) {
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          ...(options?.traceSessionId ? { "X-CueLayer-Session-Id": options.traceSessionId } : {}),
+          ...(options?.apiRequestId ? { "X-CueLayer-Api-Request-Id": options.apiRequestId } : {}),
+          ...(options?.plannerRequestId === undefined ? {} : { "X-CueLayer-Planner-Request-Id": String(options.plannerRequestId) }),
+        },
         body: JSON.stringify(input),
         signal: options?.signal,
       });

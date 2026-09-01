@@ -47,4 +47,12 @@ The permanent Speechmatics key stays server-side. Set `SPEECHMATICS_API_KEY` fro
 
 The browser uses Speechmatics' current official React realtime and PCM AudioWorklet integrations. Provider messages terminate in [`speechmatics-adapter.ts`](src/session/speechmatics-adapter.ts), then CueLayer stores speech-faithful `CanonicalSpeechState` as planner provenance. Presentation capture stays independent if speech cannot start or disconnects.
 
-Live verification requires a configured Speechmatics key and a browser microphone permission. Keep an Alpha deployment behind private-preview or deployment-level access protection: its temporary-token endpoint is intentionally not an account or rate-limit system. Normal `/session` never shows the continuous ASR transcript. In local development, `/session?debug=speech` explicitly enables committed/provisional inspection, planner diagnostics, and a bounded in-memory ASR → commit → planner gate → planner → compile → render trace. The trace is not persisted or sent anywhere and disappears on refresh.
+Live verification requires a configured Speechmatics key and browser microphone permission. Keep an Alpha deployment behind private-preview or deployment-level access protection: its temporary-token endpoint is intentionally not an account or rate-limit system. Normal `/session` never shows the continuous ASR transcript.
+
+## Durable teaching-session trace
+
+Every `/session` URL receives a `sessionId`. The live path writes one sanitized, append-only execution trace that connects Speechmatics text events to canonical commits, planner/API calls, validation, compiler output, and the final renderer state. `/session?debug=speech` loads that persisted trace, can switch to recent sessions, and exports the complete session as JSONL.
+
+Local development stores event files under `.cuelayer/traces/`; browser refresh and browser restart do not remove them. Alpha deployments use a private Vercel Blob store configured through `BLOB_READ_WRITE_TOKEN` (or Vercel OIDC plus `BLOB_STORE_ID`). A deployment without durable storage rejects traced provider calls instead of creating an untraceable AI interaction.
+
+Trace sanitization removes credentials and all audio-shaped or binary values. Speechmatics PCM/audio frames remain transient and are never submitted to the trace endpoint. Only transcript text and connection lifecycle metadata are persisted.

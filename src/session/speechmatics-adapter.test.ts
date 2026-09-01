@@ -14,6 +14,7 @@ describe("Speechmatics adapter", () => {
     expect(event).toEqual({
       kind: "committed",
       text: "activation energy",
+      provider: { message: "AddTranscript", format: undefined, channel: undefined, resultCount: 2, startMs: 120, endMs: 1400 },
       words: [
         { text: "activation", startMs: 120, endMs: 660, confidence: 0.98 },
         { text: "energy", startMs: 700, endMs: 1400, confidence: 0.97 },
@@ -24,5 +25,10 @@ describe("Speechmatics adapter", () => {
   it("keeps Speechmatics partials provider-shaped until the product boundary", () => {
     const event = speechEventFromSpeechmatics({ message: "AddPartialTranscript", metadata: { transcript: "所以这里是 rate determining", start_time: 0, end_time: 1 }, results: [] } as never);
     expect(event).toMatchObject({ kind: "provisional", text: "所以这里是 rate determining" });
+  });
+
+  it("preserves transcript whitespace exactly as received for durable diagnosis", () => {
+    const event = speechEventFromSpeechmatics({ message: "AddPartialTranscript", metadata: { transcript: "  noise fragment  " }, results: [] } as never);
+    expect(event).toMatchObject({ kind: "provisional", text: "  noise fragment  ", provider: { message: "AddPartialTranscript", resultCount: 0 } });
   });
 });

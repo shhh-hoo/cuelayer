@@ -5,9 +5,19 @@ export type SpeechWord = {
   confidence?: number;
 };
 
+export type SpeechProviderMetadata = {
+  message: "AddPartialTranscript" | "AddTranscript";
+  format?: string;
+  channel?: string;
+  resultCount: number;
+  startMs?: number;
+  endMs?: number;
+  sequence?: number;
+};
+
 export type SpeechEvent =
-  | { kind: "provisional"; text: string; words: SpeechWord[] }
-  | { kind: "committed"; text: string; words: SpeechWord[] }
+  | { kind: "provisional"; text: string; words: SpeechWord[]; provider?: SpeechProviderMetadata }
+  | { kind: "committed"; text: string; words: SpeechWord[]; provider?: SpeechProviderMetadata }
   | { kind: "error"; code: string; message: string };
 
 export type ProviderFinal = {
@@ -48,6 +58,7 @@ export type SpeechError = {
 
 export type SpeechDebugState = {
   runId: number;
+  providerEvents: number;
   provisionalEvents: number;
   committedEvents: number;
   lastError?: SpeechError;

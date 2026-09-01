@@ -42,20 +42,22 @@ function LearnerCue({ cue, onExpire }: { cue: TransientLearnerCue; onExpire(cueI
   return <div className="learner-cue-layer" aria-live="polite"><span className="semantic-caption-cue">{cue.kind === "NOTE" ? "Note" : "Reflect"}</span></div>;
 }
 
-export function SemanticCaptionLayer({ runtime, speech, presentationMode, onRendered, onExpire, onLearnerCueExpire }: { runtime: CaptionRuntimeState; speech: CanonicalSpeechState; presentationMode: PresentationMode; onRendered?(episode: CaptionEpisode, now: number): void; onExpire(episodeId: string): void; onLearnerCueExpire(cueId: string): void }) {
-  const renderedEpisodeIds = useRef(new Set<string>());
-  useEffect(() => {
-    const episode = runtime.current;
-    if (!episode || renderedEpisodeIds.current.has(episode.id)) return;
-    renderedEpisodeIds.current.add(episode.id);
-    onRendered?.(episode, Date.now());
-  }, [onRendered, runtime.current]);
+type RenderObservation = {
+  surfaceSource: "semantic" | "canonical_fallback";
+  previousEpisodeId?: string;
+  suppressedEpisodeId?: string;
+  rendererState: unknown;
+};
+
+export function SemanticCaptionLayer({ runtime, speech, presentationMode, onRendered, onExpire, onLearnerCueExpire }: { runtime: CaptionRuntimeState; speech: CanonicalSpeechState; presentationMode: PresentationMode; onRendered?(episode: CaptionEpisode, now: number, observation: RenderObservation): void; onExpire(episodeId: string, now: number, presentationMode: PresentationMode): void; onLearnerCueExpire(cueId: string): void }) {
+  const previousSurfaceKey = useRef<string | undefined>(undefined);
+  const previousEpisodeId = useRef<string | undefined>(undefined);
   useEffect(() => {
     const expiresAt = runtime.current?.expiresAt;
     if (!runtime.current || !expiresAt) return;
-    const timeout = window.setTimeout(() => onExpire(runtime.current!.id), Math.max(0, expiresAt - Date.now()));
+    const timeout = window.setTimeout(() => onExpire(runtime.current!.id, Date.now(), presentationMode), Math.max(0, expiresAt - Date.now()));
     return () => window.clearTimeout(timeout);
-  }, [onExpire, runtime.current]);
+  }, [onExpire, presentationMode, runtime.current]);
   const latestSpan = speech.spans.at(-1);
   const currentMatchesCanonicalSpeech = Boolean(runtime.current && (!latestSpan || (
     runtime.current.sourceSegmentIds.includes(latestSpan.id)
@@ -67,6 +69,32 @@ export function SemanticCaptionLayer({ runtime, speech, presentationMode, onRend
     : currentMatchesCanonicalSpeech
       ? runtime.current
       : latestCanonicalEpisode;
+  const surfaceSource = primaryEpisode === runtime.current ? "semantic" : "canonical_fallback";
+  const suppressedEpisodeId = runtime.current && primaryEpisode !== runtime.current ? runtime.current.id : undefined;
+  useEffect(() => {
+    if (!primaryEpisode) {
+      previousSurfaceKey.current = undefined;
+      previousEpisodeId.current = undefined;
+      return;
+    }
+    const surfaceKey = `${presentationMode}:${primaryEpisode.id}:${suppressedEpisodeId ?? "none"}:${runtime.locked?.id ?? "none"}`;
+    if (previousSurfaceKey.current === surfaceKey) return;
+    previousSurfaceKey.current = surfaceKey;
+    onRendered?.(primaryEpisode, Date.now(), {
+      surfaceSource,
+      previousEpisodeId: previousEpisodeId.current,
+      suppressedEpisodeId,
+      rendererState: {
+        presentationMode,
+        episodeId: primaryEpisode.id,
+        captionText: primaryEpisode.clip.captionText,
+        cue: primaryEpisode.cue,
+        lockedEpisodeId: runtime.locked?.id,
+        lockedCaptionText: runtime.locked?.clip.captionText,
+      },
+    });
+    previousEpisodeId.current = primaryEpisode.id;
+  }, [onRendered, presentationMode, primaryEpisode, runtime.locked, suppressedEpisodeId, surfaceSource]);
   return <>
     <div className={`adaptive-semantic-layer ${presentationMode}-semantic-layer`} aria-live="polite">
       {runtime.locked ? <EpisodeCaption episode={runtime.locked} presentationMode={presentationMode} locked /> : null}

@@ -4,7 +4,7 @@ import { createInitialCaptionRuntime } from "../planner/caption-runtime";
 import { PresentationStage } from "./PresentationStage";
 import { developmentSpeechDebugEnabled, speechDebugEnabled } from "./SessionPage";
 import { TeachingTraceDrawer } from "./TeachingTraceDrawer";
-import { appendTeachingTraceEvents, createTeachingTraceState } from "./teaching-trace";
+import { prepareDurableTraceEvent } from "../trace/durable-trace";
 
 const speech = {
   finals: [{ id: "provider-final-0", text: "temperature increases", words: [], committedAtMs: 1 }],
@@ -64,14 +64,15 @@ describe("session debug visibility", () => {
   });
 
   it("renders a compact expandable structured trace", () => {
-    const trace = appendTeachingTraceEvents(createTeachingTraceState(true), [{ traceId: "speech-1:committed-0", stage: "asr", timestamp: 1, segmentId: "committed-0", commitId: "committed-0", decision: "final", transcript: "temperature increases", isFinal: true }]);
-    const html = renderToStaticMarkup(<TeachingTraceDrawer trace={trace} />);
-    expect(html).toContain("Trace · 1/160 events");
-    expect(html).toContain("ASR FINAL");
+    const event = prepareDurableTraceEvent("session-test-0001", { id: "test-event", timestamp: new Date(1).toISOString(), stage: "speechmatics", type: "asr.final", correlation: { speechEventId: "provider-event-1", commitId: "committed-0" }, payload: { transcript: "temperature increases" }, source: "browser" });
+    const props = { sessionId: "session-test-0001", events: [event], status: "ready" as const, recentSessionIds: [], exportUrl: "/trace.jsonl", onReload: () => undefined };
+    const html = renderToStaticMarkup(<TeachingTraceDrawer {...props} />);
+    expect(html).toContain("Persistent trace · 1 events");
+    expect(html).toContain("ASR.FINAL");
     expect(html).toContain("temperature increases");
     expect(html).not.toContain("Inject downstream");
 
-    const developmentHtml = renderToStaticMarkup(<TeachingTraceDrawer trace={trace} onInject={() => undefined} />);
+    const developmentHtml = renderToStaticMarkup(<TeachingTraceDrawer {...props} onInject={() => undefined} />);
     expect(developmentHtml).toContain("Inject downstream");
     expect(developmentHtml).toContain("FOCUS");
     expect(developmentHtml).toContain("TRANSFORM");

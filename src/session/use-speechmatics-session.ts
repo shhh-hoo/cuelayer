@@ -4,6 +4,7 @@ import { useRealtimeEventListener, useRealtimeTranscription } from "@speechmatic
 import { getAudioDevicesStore, useAudioDevices, usePCMAudioListener, usePCMAudioRecorderContext } from "@speechmatics/browser-audio-input-react";
 import { speechEventFromSpeechmatics } from "./speechmatics-adapter";
 import type { SpeechEvent } from "./speech-types";
+import type { DurableTraceEventDraft } from "../trace/durable-trace";
 
 const TOKEN_ENDPOINT = "/api/speechmatics/token";
 
@@ -91,10 +92,10 @@ export function speechStartFailureFrom(error: unknown): SpeechStartFailure {
   return { code: "realtime-connection-failed", message: "CueLayer could not connect to Speechmatics realtime. You can reconnect speech without ending the session." };
 }
 
-async function requestRealtimeToken(): Promise<string> {
+async function requestRealtimeToken(sessionId: string, apiRequestId: string): Promise<string> {
   let response: Response;
   try {
-    response = await fetch(TOKEN_ENDPOINT, { method: "POST", headers: { Accept: "application/json" } });
+    response = await fetch(TOKEN_ENDPOINT, { method: "POST", headers: { Accept: "application/json", "X-CueLayer-Session-Id": sessionId, "X-CueLayer-Api-Request-Id": apiRequestId } });
   } catch {
     throw failure("speech-token-failed", "CueLayer could not request a short-lived Speechmatics access token. Check the server connection and try again.");
   }
@@ -107,19 +108,23 @@ async function requestRealtimeToken(): Promise<string> {
 }
 
 type SpeechmaticsSessionCallbacks = {
+  traceSessionId: string;
   onEvent: (runId: number, event: SpeechEvent) => void;
   onReady: (runId: number) => void;
+  onTrace: (event: Omit<DurableTraceEventDraft, "id" | "timestamp" | "source">) => void;
 };
 
 /**
  * Product glue only: official React providers own the recorder, WebSocket, audio
  * forwarding and cleanup; CueLayer supplies run identity and canonical events.
  */
-export function useSpeechmaticsSession({ onEvent, onReady }: SpeechmaticsSessionCallbacks) {
+export function useSpeechmaticsSession({ traceSessionId, onEvent, onReady, onTrace }: SpeechmaticsSessionCallbacks) {
   const activeRunIdRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
   const sawRecordingRef = useRef(false);
+  const providerSequenceRef = useRef(0);
   const { startTranscription, stopTranscription, sendAudio, socketState } = useRealtimeTranscription();
+  const previousSocketStateRef = useRef<typeof socketState>(undefined);
   const { startRecording, stopRecording, mute, unmute, isRecording, audioContext } = usePCMAudioRecorderContext();
   const audioDevices = useAudioDevices();
 
@@ -131,8 +136,9 @@ export function useSpeechmaticsSession({ onEvent, onReady }: SpeechmaticsSession
     activeRunIdRef.current = null;
     stopRecording();
     void stopTranscription().catch(() => undefined);
+    onTrace({ stage: "speechmatics", type: "speechmatics.connection_failed", payload: { runId, code, message } });
     onEvent(runId, { kind: "error", code, message });
-  }, [onEvent, stopRecording, stopTranscription]);
+  }, [onEvent, onTrace, stopRecording, stopTranscription]);
 
   const onProviderMessage = useCallback(({ data }: { data: Parameters<typeof speechEventFromSpeechmatics>[0] }) => {
     const runId = activeRunIdRef.current;
@@ -143,17 +149,22 @@ export function useSpeechmaticsSession({ onEvent, onReady }: SpeechmaticsSession
       failRun(runId, event.code, event.message);
       return;
     }
-    onEvent(runId, event);
+    const sequence = providerSequenceRef.current++;
+    onEvent(runId, event.provider ? { ...event, provider: { ...event.provider, sequence } } : event);
   }, [failRun, onEvent]);
 
   useRealtimeEventListener("receiveMessage", onProviderMessage);
 
   useEffect(() => {
     const runId = activeRunIdRef.current;
+    if (runId !== null && previousSocketStateRef.current !== socketState) {
+      onTrace({ stage: "speechmatics", type: "speechmatics.socket_state_changed", payload: { runId, previousState: previousSocketStateRef.current, socketState } });
+    }
+    previousSocketStateRef.current = socketState;
     if (runId !== null && socketState === "closed" && !stoppingRef.current) {
       failRun(runId, "connection-closed", "Speechmatics disconnected. You can reconnect speech without ending the presentation.");
     }
-  }, [failRun, socketState]);
+  }, [failRun, onTrace, socketState]);
 
   useEffect(() => {
     if (isRecording) {
@@ -170,6 +181,8 @@ export function useSpeechmaticsSession({ onEvent, onReady }: SpeechmaticsSession
     activeRunIdRef.current = runId;
     stoppingRef.current = false;
     sawRecordingRef.current = false;
+    providerSequenceRef.current = 0;
+    onTrace({ stage: "speechmatics", type: "speechmatics.connection_starting", payload: { runId } });
     try {
       const browserAudioContext = audioContext;
       if (!browserAudioContext) throw failure("audio-context-failed", "CueLayer could not create browser audio. Reload the page and try again.");
@@ -179,34 +192,52 @@ export function useSpeechmaticsSession({ onEvent, onReady }: SpeechmaticsSession
         promptPermissions: "promptPermissions" in audioDevices ? audioDevices.promptPermissions : undefined,
         getPermissionState: () => getAudioDevicesStore().permissionState,
       });
-      const token = await requestRealtimeToken();
+      onTrace({ stage: "speechmatics", type: "speechmatics.browser_audio_ready", payload: { runId, sampleRate: browserAudioContext.sampleRate } });
+      const token = await requestRealtimeToken(traceSessionId, `speechmatics-token-${runId}`);
+      onTrace({ stage: "speechmatics", type: "speechmatics.temporary_token_received", payload: { runId, tokenReceived: true } });
       try {
         await startTranscription(token, createSpeechmaticsConfig(browserAudioContext.sampleRate));
       } catch (error) {
         if (import.meta.env.DEV) console.warn("Speechmatics realtime startup failed", error);
         throw failure("realtime-connection-failed", "CueLayer could not connect to Speechmatics realtime. You can reconnect speech without ending the session.");
       }
+      onTrace({ stage: "speechmatics", type: "speechmatics.transcription_started", payload: { runId, language: "cmn_en", model: "enhanced" } });
       try {
         await startRecording({});
       } catch (error) {
         throw new SpeechStartError(speechStartFailureFrom(error));
       }
-      if (activeRunIdRef.current === runId) onReady(runId);
+      onTrace({ stage: "speechmatics", type: "speechmatics.capture_started", payload: { runId } });
+      if (activeRunIdRef.current === runId) {
+        onReady(runId);
+        onTrace({ stage: "speechmatics", type: "speechmatics.ready", payload: { runId } });
+      }
     } catch (error) {
       activeRunIdRef.current = null;
       stopRecording();
       void stopTranscription().catch(() => undefined);
       throw error;
     }
-  }, [audioContext, audioDevices, onReady, startRecording, startTranscription, stopRecording, stopTranscription]);
+  }, [audioContext, audioDevices, onReady, onTrace, startRecording, startTranscription, stopRecording, stopTranscription, traceSessionId]);
 
   const stop = useCallback(async () => {
+    const runId = activeRunIdRef.current;
     activeRunIdRef.current = null;
     stoppingRef.current = true;
     stopRecording();
     try { await stopTranscription(); } catch { /* Official client already closed the socket. */ }
     stoppingRef.current = false;
-  }, [stopRecording, stopTranscription]);
+    if (runId !== null) onTrace({ stage: "speechmatics", type: "speechmatics.stopped", payload: { runId } });
+  }, [onTrace, stopRecording, stopTranscription]);
 
-  return { start, stop, pause: mute, resume: unmute };
+  const pause = useCallback(() => {
+    mute();
+    onTrace({ stage: "speechmatics", type: "speechmatics.capture_paused", payload: { runId: activeRunIdRef.current } });
+  }, [mute, onTrace]);
+  const resume = useCallback(() => {
+    unmute();
+    onTrace({ stage: "speechmatics", type: "speechmatics.capture_resumed", payload: { runId: activeRunIdRef.current } });
+  }, [onTrace, unmute]);
+
+  return { start, stop, pause, resume };
 }

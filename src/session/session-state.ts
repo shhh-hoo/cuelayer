@@ -10,8 +10,13 @@ function initialPlanner() {
   return { status: "idle" as const, requestId: 0, runtime: createInitialCaptionRuntime() };
 }
 
-export function createInitialSessionState(traceEnabled = false): SessionState {
-  return { status: "idle", presentation: { status: "empty", stream: null }, speech: { status: "off", canonical: createInitialCanonicalSpeechState(), debug: { runId: 0, provisionalEvents: 0, committedEvents: 0 } }, planner: initialPlanner(), trace: createTeachingTraceState(traceEnabled) };
+export function createInitialSessionState(traceEnabled = false, traceForwardingLimit?: number): SessionState {
+  return { status: "idle", presentation: { status: "empty", stream: null }, speech: { status: "off", canonical: createInitialCanonicalSpeechState(), debug: { runId: 0, providerEvents: 0, provisionalEvents: 0, committedEvents: 0 } }, planner: initialPlanner(), trace: createTeachingTraceState(traceEnabled, traceForwardingLimit) };
+}
+
+/** The browser-side trace is only a forwarding queue; durable storage owns retention. */
+export function createDurableSessionState(): SessionState {
+  return createInitialSessionState(true, Number.MAX_SAFE_INTEGER);
 }
 
 function withTrace(state: SessionState, events: TeachingTraceEventDraft[]): SessionState {
@@ -48,7 +53,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       return {
         ...state,
         status: "active",
-        speech: { status: "starting", canonical: createInitialCanonicalSpeechState(), debug: { runId: action.runId, provisionalEvents: 0, committedEvents: 0 } },
+        speech: { status: "starting", canonical: createInitialCanonicalSpeechState(), debug: { runId: action.runId, providerEvents: 0, provisionalEvents: 0, committedEvents: 0 } },
         planner: initialPlanner(),
       };
     case "speech-ready":
@@ -57,10 +62,12 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     case "speech-event": {
       const now = action.now ?? 0;
       const finalId = `provider-final-${state.speech.canonical.finals.length}`;
-      const traceId = traceIdFor(action.runId, finalId);
+      const providerSequence = action.event.kind === "error" ? state.speech.debug.providerEvents : action.event.provider?.sequence ?? state.speech.debug.providerEvents;
+      const speechEventId = `provider-event-${action.runId}-${providerSequence}`;
+      const traceId = traceIdFor(action.runId, speechEventId);
       const asrEvent: TeachingTraceEventDraft = action.event.kind === "error"
-        ? { traceId, stage: "asr", timestamp: now, segmentId: finalId, commitId: finalId, finalId, decision: "error", isFinal: false, reason: action.event.message, errorCode: action.event.code }
-        : { traceId, stage: "asr", timestamp: now, segmentId: finalId, commitId: finalId, finalId, decision: action.event.kind === "committed" ? "final" : "partial", transcript: action.event.text, isFinal: action.event.kind === "committed" };
+        ? { traceId, stage: "asr", timestamp: now, speechEventId, decision: "error", isFinal: false, reason: action.event.message, errorCode: action.event.code }
+        : { traceId, stage: "asr", timestamp: now, speechEventId, finalId: action.event.kind === "committed" ? finalId : undefined, decision: action.event.kind === "committed" ? "final" : "partial", transcript: action.event.text, isFinal: action.event.kind === "committed", provider: { ...action.event.provider, sequence: providerSequence } };
       let nextState = withTrace(state, [asrEvent]);
       if (action.event.kind === "error") {
         if (state.speech.debug.runId !== action.runId || state.status === "idle" || state.status === "ended") return nextState;
@@ -81,8 +88,15 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
           ? withTrace(nextState, [{ traceId, stage: "commit", timestamp: now, segmentId: finalId, commitId: finalId, finalId, decision: "rejected", reason: rejectionReason, transcript: action.event.text }])
           : nextState;
       }
-      const eventCount = action.event.kind === "provisional" ? { provisionalEvents: state.speech.debug.provisionalEvents + 1 } : { committedEvents: state.speech.debug.committedEvents + 1 };
-      const update = applySpeechEvent(state.speech.canonical, action.event, now);
+      const eventCount = action.event.kind === "provisional"
+        ? { providerEvents: state.speech.debug.providerEvents + 1, provisionalEvents: state.speech.debug.provisionalEvents + 1 }
+        : { providerEvents: state.speech.debug.providerEvents + 1, committedEvents: state.speech.debug.committedEvents + 1 };
+      const normalizedText = action.event.text.trim();
+      if (!normalizedText) {
+        const emptyState = { ...nextState, speech: { ...state.speech, debug: { ...state.speech.debug, ...eventCount } } };
+        return action.event.kind === "committed" ? withTrace(emptyState, [{ traceId, stage: "commit", timestamp: now, speechEventId, commitId: finalId, finalId, decision: "rejected", reason: "empty_transcript", transcript: action.event.text }]) : emptyState;
+      }
+      const update = applySpeechEvent(state.speech.canonical, { ...action.event, text: normalizedText }, now);
       if (action.event.kind === "committed") {
         nextState = withTrace(nextState, [
           { traceId, stage: "commit", timestamp: now, segmentId: finalId, commitId: finalId, finalId, decision: "committed", reason: "speechmatics_final_provenance", transcript: action.event.text, latencyMs: 0 },
@@ -268,7 +282,16 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     }
     case "renderer-activated": {
       const compileEvents = state.trace.events.filter((event) => event.stage === "compile" && event.decision === "emit" && event.cueId === action.episode.id);
-      return withTrace(state, compileEvents.map((event) => ({
+      const fallbackSpan = state.speech.canonical.spans.find((span) => action.episode.sourceSegmentIds.includes(span.id));
+      const correlations = compileEvents.length ? compileEvents : [{
+        traceId: fallbackSpan ? spanTraceIdFor(state.speech.debug.runId, fallbackSpan.id, fallbackSpan.revision) : traceIdFor(state.speech.debug.runId, action.episode.id),
+        source: "live" as const,
+        segmentId: fallbackSpan?.id ?? action.episode.sourceSegmentIds[0],
+        spanId: fallbackSpan?.id,
+        spanRevision: fallbackSpan?.revision,
+        requestId: undefined,
+      }];
+      const activated: TeachingTraceEventDraft[] = correlations.map((event) => ({
         traceId: event.traceId,
         source: event.source,
         stage: "render",
@@ -281,13 +304,67 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         decision: "activated",
         status: "rendered",
         presentationMode: action.presentationMode,
-        reason: action.episode.cue ? "effect_cue_mounted" : "plain_caption_mounted",
+        reason: action.surfaceSource === "canonical_fallback" ? "canonical_speech_mounted" : action.episode.cue ? "effect_cue_mounted" : "plain_caption_mounted",
         effectCue: action.episode.cue,
-        latencyMs: elapsedMs(event.spanId && event.spanRevision !== undefined ? spanRevisionTimestampFor(state.trace, event.spanId, event.spanRevision) : event.timestamp, action.now),
-      })));
+        rendererState: action.rendererState,
+        latencyMs: elapsedMs(event.spanId && event.spanRevision !== undefined ? spanRevisionTimestampFor(state.trace, event.spanId, event.spanRevision) : "timestamp" in event ? event.timestamp : undefined, action.now),
+      }));
+      const replacement: TeachingTraceEventDraft[] = action.previousEpisodeId && action.previousEpisodeId !== action.episode.id ? correlations.map((event) => ({
+        traceId: event.traceId,
+        source: event.source,
+        stage: "render",
+        timestamp: action.now,
+        segmentId: event.segmentId,
+        spanId: event.spanId,
+        spanRevision: event.spanRevision,
+        requestId: event.requestId,
+        cueId: action.episode.id,
+        decision: "replaced",
+        status: "rendered",
+        presentationMode: action.presentationMode,
+        reason: `replaced:${action.previousEpisodeId}`,
+        effectCue: action.episode.cue,
+        rendererState: action.rendererState,
+      })) : [];
+      const suppressed: TeachingTraceEventDraft[] = action.suppressedEpisodeId ? correlations.map((event) => ({
+        traceId: event.traceId,
+        source: event.source,
+        stage: "render",
+        timestamp: action.now,
+        segmentId: event.segmentId,
+        spanId: event.spanId,
+        spanRevision: event.spanRevision,
+        requestId: event.requestId,
+        cueId: action.suppressedEpisodeId,
+        decision: "stale_suppressed",
+        status: "suppressed",
+        presentationMode: action.presentationMode,
+        reason: "semantic_episode_older_than_latest_canonical_revision",
+        rendererState: action.rendererState,
+      })) : [];
+      return withTrace(state, [...activated, ...replacement, ...suppressed]);
     }
-    case "caption-expired":
-      return { ...state, planner: { ...state.planner, runtime: expireCaption(state.planner.runtime, action.episodeId) } };
+    case "caption-expired": {
+      const episode = state.planner.runtime.current?.id === action.episodeId ? state.planner.runtime.current : undefined;
+      const next = { ...state, planner: { ...state.planner, runtime: expireCaption(state.planner.runtime, action.episodeId) } };
+      if (!episode) return next;
+      const span = state.speech.canonical.spans.find((item) => episode.sourceSegmentIds.includes(item.id));
+      return withTrace(next, [{
+        traceId: span ? spanTraceIdFor(state.speech.debug.runId, span.id, span.revision) : traceIdFor(state.speech.debug.runId, episode.id),
+        stage: "render",
+        timestamp: action.now ?? 0,
+        segmentId: span?.id ?? episode.sourceSegmentIds[0],
+        spanId: span?.id,
+        spanRevision: span?.revision,
+        cueId: episode.id,
+        decision: "expired",
+        status: "expired",
+        presentationMode: action.presentationMode,
+        reason: "episode_ttl_elapsed",
+        effectCue: episode.cue,
+        rendererState: { presentationMode: action.presentationMode, episodeId: episode.id, captionText: episode.clip.captionText },
+      }]);
+    }
     case "learner-cue-expired":
       return { ...state, planner: { ...state.planner, runtime: expireLearnerCue(state.planner.runtime, action.cueId) } };
     case "toggle-caption-lock":

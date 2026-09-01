@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useRef } from "react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import type { PresentationStatus, SessionStatus } from "./session-types";
 import type { CanonicalSpeechState, SpeechStatus } from "./speech-types";
 import type { CaptionEpisode, CaptionRuntimeState } from "../planner/contracts";
@@ -15,8 +15,8 @@ type PresentationStageProps = {
   speechStatus: SpeechStatus;
   showSpeechDebug: boolean;
   captionRuntime: CaptionRuntimeState;
-  onCaptionRendered?(episode: CaptionEpisode, now: number, presentationMode: PresentationMode): void;
-  onCaptionExpire(episodeId: string): void;
+  onCaptionRendered?(episode: CaptionEpisode, now: number, presentationMode: PresentationMode, observation: Parameters<NonNullable<ComponentProps<typeof SemanticCaptionLayer>["onRendered"]>>[2]): void;
+  onCaptionExpire(episodeId: string, now: number, presentationMode: PresentationMode): void;
   onLearnerCueExpire(cueId: string): void;
 };
 
@@ -45,7 +45,7 @@ export const PresentationStage = forwardRef<HTMLElement, PresentationStageProps>
     <div className="presentation-background">
       {stream ? <video ref={videoRef} className="presentation-video" autoPlay muted playsInline aria-label="Live shared presentation" /> : null}
     </div>
-    <SemanticCaptionLayer runtime={captionRuntime} speech={speech} presentationMode={presentationMode} onRendered={(episode, now) => onCaptionRendered?.(episode, now, presentationMode)} onExpire={onCaptionExpire} onLearnerCueExpire={onLearnerCueExpire} />
+    <SemanticCaptionLayer runtime={captionRuntime} speech={speech} presentationMode={presentationMode} onRendered={(episode, now, observation) => onCaptionRendered?.(episode, now, presentationMode, observation)} onExpire={onCaptionExpire} onLearnerCueExpire={onLearnerCueExpire} />
     {showSpeechDebug && speechStatus !== "off" && speechStatus !== "ended" ? <aside className="speech-inspection-surface" aria-label="Live speech debug inspection">
       <span>Live speech · {speechStatus}</span>
       {speech.spans.slice(-3).map((span) => <p key={span.id}>{span.text}</p>)}
