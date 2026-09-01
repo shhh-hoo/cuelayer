@@ -1,20 +1,21 @@
 import type { DurableTraceEvent, DurableTraceEventDraft } from "./durable-trace";
 
 export type TraceCapabilities = { writeCapability: string; readCapability: string };
+export type TraceProvisioning = { created: boolean };
 export type TracePage = { events: DurableTraceEvent[]; nextCursor?: string };
 export type TraceTransport = {
-  createSession(sessionId: string, metadata: unknown): Promise<TraceCapabilities>;
+  createSession(sessionId: string, capabilities: TraceCapabilities, metadata: unknown): Promise<TraceProvisioning>;
   append(sessionId: string, writeCapability: string, events: DurableTraceEventDraft[]): Promise<DurableTraceEvent[]>;
   load(sessionId: string, readCapability: string, after?: string): Promise<TracePage>;
 };
 
 export function createHttpTraceTransport(endpoint = "/api/trace"): TraceTransport {
   return {
-    async createSession(sessionId, metadata) {
-      const response = await fetch(`${endpoint}/session`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ sessionId, ...(metadata as object) }) });
-      const body = await response.json().catch(() => ({})) as Partial<TraceCapabilities> & { error?: string };
-      if (!response.ok || !body.writeCapability || !body.readCapability) throw new Error(body.error ?? "trace-session-create-failed");
-      return { writeCapability: body.writeCapability, readCapability: body.readCapability };
+    async createSession(sessionId, capabilities, metadata) {
+      const response = await fetch(`${endpoint}/session`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ sessionId, ...capabilities, ...(metadata as object) }) });
+      const body = await response.json().catch(() => ({})) as Partial<TraceProvisioning> & { error?: string };
+      if (!response.ok || typeof body.created !== "boolean") throw new Error(body.error ?? "trace-session-create-failed");
+      return { created: body.created };
     },
     async append(sessionId, writeCapability, events) {
       if (!events.length) return [];

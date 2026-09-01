@@ -38,8 +38,8 @@ export default defineConfig(({ mode }) => {
       server.middlewares.use("/api/trace/session", async (request, response) => {
         response.setHeader("Cache-Control", "no-store");
         if (request.method === "POST") {
-          try { const body = await requestBody(request) as { sessionId?: string; appVersion?: string; buildVersion?: string; environment?: string; metadata?: unknown }; if (!body.sessionId) { response.statusCode = 400; response.end(JSON.stringify({ error: "invalid-session-id" })); return; } const created = await createTraceSession(body.sessionId, body); response.setHeader("Content-Type", "application/json"); response.statusCode = 201; response.end(JSON.stringify(created)); }
-          catch (error) { response.statusCode = error instanceof Error && error.message === "trace-session-exists" ? 409 : 503; response.end(JSON.stringify({ error: error instanceof Error ? error.message : "trace-store-unavailable" })); }
+          try { const body = await requestBody(request) as { sessionId?: string; writeCapability?: string; readCapability?: string; appVersion?: string; buildVersion?: string; environment?: string; metadata?: unknown }; if (!body.sessionId || !body.writeCapability || !body.readCapability) { response.statusCode = 400; response.end(JSON.stringify({ error: "invalid-session-provisioning" })); return; } const provisioned = await createTraceSession(body.sessionId, { writeCapability: body.writeCapability, readCapability: body.readCapability }, body); response.setHeader("Content-Type", "application/json"); response.statusCode = provisioned.created ? 201 : 200; response.end(JSON.stringify(provisioned)); }
+          catch (error) { const message = error instanceof Error ? error.message : "trace-store-unavailable"; response.statusCode = message === "trace-session-capability-conflict" ? 409 : message.startsWith("invalid-") ? 400 : 503; response.end(JSON.stringify({ error: message })); }
           return;
         }
         if (request.method !== "GET") { response.statusCode = 405; response.end(JSON.stringify({ error: "method-not-allowed" })); return; }

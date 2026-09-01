@@ -6,7 +6,7 @@ vi.mock("./trace-store.ts", () => ({ appendTraceEvents: append }));
 import { traceExternalCall } from "./api-trace";
 
 describe("external API trace boundary", () => {
-  beforeEach(() => { append.mockReset(); append.mockImplementation(async (sessionId, drafts) => drafts.map((draft: object) => ({ ...draft, sessionId, schemaVersion: 1 }))); });
+  beforeEach(() => { append.mockReset(); append.mockImplementation(async (sessionId, _capability, drafts) => drafts.map((draft: object) => ({ ...draft, sessionId, schemaVersion: 1 }))); });
 
   it("persists start and normalized completion with usage", async () => {
     const result = await traceExternalCall({ sessionId: "session-api-trace", apiRequestId: "api-request-1", provider: "openai", model: "gpt-test", operation: "planner", requestPayload: { recentSpeech: [{ text: "exact canonical" }] }, responsePayload: (value) => value }, async () => ({ decision: { display: { kind: "QUIET" } }, usage: { inputTokens: 10, outputTokens: 2 } }));
@@ -26,14 +26,18 @@ describe("external API trace boundary", () => {
     expect(append.mock.calls.flatMap((call) => call[2]).map((event) => event.type)).toEqual(["api_call.started", "api_call.failed", "api_call.started", "api_call.timed_out"]);
   });
 
-  it("does not turn a provider success into api_call.failed when tracing is unavailable", async () => {
-    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  it("does not invoke a provider when api_call.started cannot persist", async () => {
     append.mockRejectedValueOnce(new Error("trace-storage-not-configured"));
     const providerCall = vi.fn();
-    await traceExternalCall({ sessionId: "session-api-trace", provider: "openai", operation: "planner", requestPayload: {}, responsePayload: () => ({}) }, providerCall);
-    expect(providerCall).toHaveBeenCalled();
+    await expect(traceExternalCall({ sessionId: "session-api-trace", provider: "openai", operation: "planner", requestPayload: {}, responsePayload: () => ({}) }, providerCall)).rejects.toThrow("trace-unavailable-before-provider-call");
+    expect(providerCall).not.toHaveBeenCalled();
     expect(append.mock.calls.flatMap((call) => call[2] ?? []).some((event) => event.type === "api_call.failed")).toBe(false);
-    expect(warning).toHaveBeenCalledWith("cuelayer-trace-server-degraded", expect.objectContaining({ eventType: "api_call.started" }));
-    warning.mockRestore();
+  });
+
+  it("withholds a provider success when the completed fact cannot persist", async () => {
+    append.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("database-down"));
+    const providerCall = vi.fn(async () => ({ decision: { display: { kind: "QUIET" } } }));
+    await expect(traceExternalCall({ sessionId: "session-api-trace", provider: "openai", operation: "planner", requestPayload: {}, responsePayload: (value) => value }, providerCall)).rejects.toThrow("trace-persistence-after-provider-success");
+    expect(providerCall).toHaveBeenCalledOnce();
   });
 });

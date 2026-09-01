@@ -1,5 +1,5 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { neon } from "@neondatabase/serverless";
 import { compareTraceEvents, prepareDurableTraceEvent, type DurableTraceEvent, type DurableTraceEventDraft } from "../../src/trace/durable-trace.ts";
 
 declare const process: { env: Record<string, string | undefined> };
@@ -8,24 +8,8 @@ const SESSION_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{7,127}$/;
 const EVENT_ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{7,191}$/;
 const CAPABILITY = /^[a-zA-Z0-9_-]{32,256}$/;
 
-export const SESSION_EVENT_STORE_MIGRATION = `
-CREATE TABLE IF NOT EXISTS teaching_sessions (
- id TEXT PRIMARY KEY, started_at TIMESTAMPTZ NOT NULL DEFAULT now(), ended_at TIMESTAMPTZ,
- app_version TEXT, build_version TEXT, trace_schema_version INTEGER NOT NULL, environment TEXT NOT NULL,
- metadata JSONB NOT NULL DEFAULT '{}'::jsonb, write_capability_hash TEXT NOT NULL, read_capability_hash TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS trace_events (
- ingest_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, event_id TEXT NOT NULL UNIQUE,
- session_id TEXT NOT NULL REFERENCES teaching_sessions(id) ON DELETE CASCADE, occurred_at TIMESTAMPTZ NOT NULL,
- ingested_at TIMESTAMPTZ NOT NULL DEFAULT now(), source TEXT NOT NULL, source_instance_id TEXT NOT NULL,
- source_seq BIGINT NOT NULL, stage TEXT NOT NULL, event_type TEXT NOT NULL, causation_event_id TEXT,
- correlation JSONB NOT NULL DEFAULT '{}'::jsonb, payload JSONB NOT NULL, schema_version INTEGER NOT NULL, content_hash TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS trace_events_session_occurred_idx ON trace_events(session_id, occurred_at, ingest_id);
-CREATE INDEX IF NOT EXISTS trace_events_session_stage_idx ON trace_events(session_id, stage);
-CREATE INDEX IF NOT EXISTS trace_events_session_type_idx ON trace_events(session_id, event_type);`;
-
 export type TraceCapability = { writeCapability: string; readCapability: string };
+export type TraceSessionProvisioning = { created: boolean };
 export type TraceQuery = { after?: string; limit?: number; stage?: string; eventType?: string; apiRequestId?: string; plannerRequestId?: string; commitId?: string; cueId?: string; errorsOnly?: boolean };
 export type TracePage = { events: DurableTraceEvent[]; nextCursor?: string };
 
@@ -41,18 +25,8 @@ function parseCursor(value: string): TraceCursor {
 
 function validate(value: string, pattern: RegExp, label: string) { if (!pattern.test(value)) throw new Error(`invalid-${label}`); return value; }
 function hash(value: string) { return createHash("sha256").update(value).digest("hex"); }
-function capability() { return randomBytes(32).toString("base64url"); }
 function contentHash(event: DurableTraceEvent) { return hash(JSON.stringify({ ...event, ingestedAt: undefined })); }
 function db() { const url = process.env.DATABASE_URL; if (!url) throw new Error("trace-store-unavailable"); return neon(url); }
-let schemaReady: Promise<void> | undefined;
-async function ensureSchema(sql: NeonQueryFunction<false, false>) {
-  // Neon HTTP executes one prepared statement at a time. Keep the migration
-  // readable as SQL while applying its statements in their required order.
-  schemaReady ??= (async () => {
-    for (const statement of SESSION_EVENT_STORE_MIGRATION.split(";").map((entry) => entry.trim()).filter(Boolean)) await sql.query(statement);
-  })();
-  return schemaReady;
-}
 
 function rowEvent(row: Record<string, unknown>): DurableTraceEvent {
  return { id: String(row.event_id), sessionId: String(row.session_id), schemaVersion: Number(row.schema_version) as 1,
@@ -70,20 +44,25 @@ async function verifyCapability(sql: NeonQueryFunction<false, false>, sessionId:
  if (typeof stored !== "string" || !timingSafeEqual(Buffer.from(stored), Buffer.from(expected))) throw new Error("trace-capability-invalid");
 }
 
-export async function createTraceSession(sessionId: string, metadata: { appVersion?: string; buildVersion?: string; environment?: string; metadata?: unknown }): Promise<TraceCapability> {
- validate(sessionId, SESSION_ID, "session-id"); const sql = db(); await ensureSchema(sql);
- const writeCapability = capability(); const readCapability = capability();
+export async function createTraceSession(sessionId: string, capabilities: TraceCapability, metadata: { appVersion?: string; buildVersion?: string; environment?: string; metadata?: unknown }): Promise<TraceSessionProvisioning> {
+ validate(sessionId, SESSION_ID, "session-id"); validate(capabilities.writeCapability, CAPABILITY, "write-capability"); validate(capabilities.readCapability, CAPABILITY, "read-capability"); const sql = db();
+ const writeHash = hash(capabilities.writeCapability); const readHash = hash(capabilities.readCapability);
  const rows = await sql.query(`INSERT INTO teaching_sessions (id, app_version, build_version, trace_schema_version, environment, metadata, write_capability_hash, read_capability_hash)
  VALUES ($1,$2,$3,1,$4,$5::jsonb,$6,$7) ON CONFLICT (id) DO NOTHING RETURNING id`,
- [sessionId, metadata.appVersion ?? null, metadata.buildVersion ?? null, metadata.environment ?? "unknown", JSON.stringify(metadata.metadata ?? {}), hash(writeCapability), hash(readCapability)]);
- if (!rows.length) throw new Error("trace-session-exists"); return { writeCapability, readCapability };
+ [sessionId, metadata.appVersion ?? null, metadata.buildVersion ?? null, metadata.environment ?? "unknown", JSON.stringify(metadata.metadata ?? {}), writeHash, readHash]);
+ if (rows.length) return { created: true };
+ const existing = await sql.query("SELECT write_capability_hash, read_capability_hash FROM teaching_sessions WHERE id = $1", [sessionId]) as Array<Record<string, unknown>>;
+ const row = existing[0];
+ if (typeof row?.write_capability_hash !== "string" || typeof row.read_capability_hash !== "string") throw new Error("trace-store-unavailable");
+ if (!timingSafeEqual(Buffer.from(row.write_capability_hash), Buffer.from(writeHash)) || !timingSafeEqual(Buffer.from(row.read_capability_hash), Buffer.from(readHash))) throw new Error("trace-session-capability-conflict");
+ return { created: false };
 }
 
 export async function appendTraceEvents(sessionId: string, writeCapability: string | undefined, drafts: DurableTraceEventDraft[]): Promise<DurableTraceEvent[]> {
   validate(sessionId, SESSION_ID, "session-id");
   const events = drafts.map((draft) => prepareDurableTraceEvent(sessionId, { ...draft, id: validate(draft.id, EVENT_ID, "event-id") }));
   if (!events.length) return [];
- const sql = db(); await ensureSchema(sql); await verifyCapability(sql, sessionId, writeCapability, "write");
+ const sql = db(); await verifyCapability(sql, sessionId, writeCapability, "write");
  await sql.transaction(events.map((event) => sql.query(`INSERT INTO trace_events (event_id,session_id,occurred_at,source,source_instance_id,source_seq,stage,event_type,causation_event_id,correlation,payload,schema_version,content_hash)
  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13) ON CONFLICT (event_id) DO NOTHING RETURNING event_id`,
  [event.id,event.sessionId,event.occurredAt,event.source,event.sourceInstanceId,event.sourceSeq,event.stage,event.type,event.causationEventId ?? null,JSON.stringify(event.correlation ?? {}),JSON.stringify(event.payload),event.schemaVersion,contentHash(event)])));
@@ -94,7 +73,7 @@ export async function appendTraceEvents(sessionId: string, writeCapability: stri
 }
 
 export async function readTraceEvents(sessionId: string, readCapability: string | undefined, query: TraceQuery = {}): Promise<TracePage> {
- validate(sessionId, SESSION_ID, "session-id"); const sql = db(); await ensureSchema(sql); await verifyCapability(sql, sessionId, readCapability, "read");
+ validate(sessionId, SESSION_ID, "session-id"); const sql = db(); await verifyCapability(sql, sessionId, readCapability, "read");
  const limit = Math.min(250, Math.max(1, query.limit ?? 100)); const clauses = ["session_id = $1"]; const values: unknown[] = [sessionId];
  const add = (clause: string, value: unknown) => { values.push(value); clauses.push(clause.replace("?", `$${values.length}`)); };
  if (query.after) {
@@ -113,5 +92,5 @@ export async function readTraceEvents(sessionId: string, readCapability: string 
 }
 
 export async function endTraceSession(sessionId: string, writeCapability: string | undefined) {
- const sql = db(); await ensureSchema(sql); await verifyCapability(sql, sessionId, writeCapability, "write"); await sql.query("UPDATE teaching_sessions SET ended_at = now() WHERE id = $1", [sessionId]);
+ const sql = db(); await verifyCapability(sql, sessionId, writeCapability, "write"); await sql.query("UPDATE teaching_sessions SET ended_at = now() WHERE id = $1", [sessionId]);
 }

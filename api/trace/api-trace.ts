@@ -47,33 +47,32 @@ export async function traceExternalCall<Result>(options: ExternalCallOptions<Res
   const apiRequestId = options.apiRequestId || randomUUID();
   const correlation = { ...options.correlation, apiRequestId };
   const startedAt = Date.now();
-  // A Vercel Function has no durable local disk/queue. Preserve provider truth
-  // and surface this distinct degradation in runtime diagnostics instead of
-  // relabelling it as an API failure or blocking the teaching path.
-  const record = (draft: Parameters<typeof appendTraceEvents>[2][number]) => appendTraceEvents(options.sessionId, options.writeCapability, [draft]).catch((error) => {
-    console.warn("cuelayer-trace-server-degraded", { sessionId: options.sessionId, apiRequestId, eventType: draft.type, error: error instanceof Error ? error.message : "trace-ingestion-unavailable" });
-  });
-  void record({
-    id: eventId(apiRequestId, "started"),
-    timestamp: new Date(startedAt).toISOString(),
-    stage: "api",
-    type: "api_call.started",
-    correlation,
-    payload: { provider: options.provider, model: options.model, operation: options.operation, request: options.requestPayload, retries: options.retries ?? 0 },
-    source: "server",
-  });
+  const record = (draft: Parameters<typeof appendTraceEvents>[2][number]) => appendTraceEvents(options.sessionId, options.writeCapability, [draft]);
+  try {
+    await record({
+      id: eventId(apiRequestId, "started"),
+      timestamp: new Date(startedAt).toISOString(),
+      stage: "api",
+      type: "api_call.started",
+      correlation,
+      payload: { provider: options.provider, model: options.model, operation: options.operation, request: options.requestPayload, retries: options.retries ?? 0 },
+      source: "server",
+    });
+  } catch { throw new Error("trace-unavailable-before-provider-call"); }
   try {
     const result = await call();
     const finishedAt = Date.now();
-    void record({
-      id: eventId(apiRequestId, "completed"),
-      timestamp: new Date(finishedAt).toISOString(),
-      stage: "api",
-      type: "api_call.completed",
-      correlation,
-      payload: { provider: options.provider, model: options.model, operation: options.operation, status: "completed", latencyMs: finishedAt - startedAt, retries: options.retries ?? 0, response: options.responsePayload(result) },
-      source: "server",
-    });
+    try {
+      await record({
+        id: eventId(apiRequestId, "completed"),
+        timestamp: new Date(finishedAt).toISOString(),
+        stage: "api",
+        type: "api_call.completed",
+        correlation,
+        payload: { provider: options.provider, model: options.model, operation: options.operation, status: "completed", latencyMs: finishedAt - startedAt, retries: options.retries ?? 0, response: options.responsePayload(result) },
+        source: "server",
+      });
+    } catch { throw new Error("trace-persistence-after-provider-success"); }
     return result;
   } catch (error) {
     const finishedAt = Date.now();
@@ -81,15 +80,17 @@ export async function traceExternalCall<Result>(options: ExternalCallOptions<Res
     const abortReason = aborted ? String(options.signal?.reason ?? "aborted") : undefined;
     const timedOut = aborted && /timeout/i.test(abortReason ?? "");
     const outcome = timedOut ? "timed_out" : aborted ? "aborted" : "failed";
-    void record({
-      id: eventId(apiRequestId, outcome),
-      timestamp: new Date(finishedAt).toISOString(),
-      stage: "api",
-      type: `api_call.${outcome}`,
-      correlation,
-      payload: { provider: options.provider, model: options.model, operation: options.operation, status: outcome, latencyMs: finishedAt - startedAt, retries: options.retries ?? 0, error: safeError(error), abortReason },
-      source: "server",
-    });
+    try {
+      await record({
+        id: eventId(apiRequestId, outcome),
+        timestamp: new Date(finishedAt).toISOString(),
+        stage: "api",
+        type: `api_call.${outcome}`,
+        correlation,
+        payload: { provider: options.provider, model: options.model, operation: options.operation, status: outcome, latencyMs: finishedAt - startedAt, retries: options.retries ?? 0, error: safeError(error), abortReason },
+        source: "server",
+      });
+    } catch { throw new Error("trace-persistence-after-provider-failure"); }
     throw error;
   }
 }
