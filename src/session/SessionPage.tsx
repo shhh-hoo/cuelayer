@@ -3,6 +3,8 @@ import { PresentationStage } from "./PresentationStage";
 import { requestPresentationStream, stopPresentationStream } from "./presentation-capture";
 import { SessionControls } from "./SessionControls";
 import { createInitialSessionState, sessionReducer } from "./session-state";
+import { usePrepareSpeechmaticsAudioContext } from "./SpeechmaticsSessionProvider";
+import { speechStartFailureFrom, useSpeechmaticsSession } from "./use-speechmatics-session";
 
 export function SessionPage() {
   const [state, dispatch] = useReducer(sessionReducer, undefined, createInitialSessionState);
@@ -11,6 +13,13 @@ export function SessionPage() {
   const stageRef = useRef<HTMLElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const endedListenerRef = useRef<(() => void) | null>(null);
+  const speechRunIdRef = useRef(0);
+  const prepareSpeechmaticsAudioContext = usePrepareSpeechmaticsAudioContext();
+
+  const { start: startSpeechmatics, stop: stopSpeechmatics, pause: pauseSpeechmatics, resume: resumeSpeechmatics } = useSpeechmaticsSession({
+    onEvent: (runId, event) => dispatch({ type: "speech-event", runId, event }),
+    onReady: (runId) => dispatch({ type: "speech-ready", runId }),
+  });
 
   const releasePresentation = useCallback((stopTracks: boolean) => {
     const stream = streamRef.current;
@@ -21,7 +30,11 @@ export function SessionPage() {
     if (stopTracks) stopPresentationStream(stream);
   }, []);
 
-  useEffect(() => () => releasePresentation(true), [releasePresentation]);
+  const stopSpeech = useCallback(async () => {
+    await stopSpeechmatics();
+  }, [stopSpeechmatics]);
+
+  useEffect(() => () => { releasePresentation(true); void stopSpeech(); }, [releasePresentation, stopSpeech]);
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === stageRef.current);
@@ -54,9 +67,36 @@ export function SessionPage() {
   };
 
   const endSession = async () => {
+    await stopSpeech();
     releasePresentation(true);
     await exitStageFullscreen();
     dispatch({ type: "end" });
+  };
+
+  const startSpeech = async () => {
+    const runId = ++speechRunIdRef.current;
+    dispatch({ type: "begin-speech", runId });
+    try { await startSpeechmatics(runId); }
+    catch (error) {
+      const startFailure = speechStartFailureFrom(error);
+      dispatch({ type: "speech-event", runId, event: { kind: "error", code: startFailure.code, message: startFailure.message } });
+    }
+  };
+
+  const toggleSpeech = async () => {
+    if (state.speech.status === "ready") {
+      pauseSpeechmatics();
+      dispatch({ type: "speech-paused", runId: state.speech.debug.runId });
+    } else if (state.speech.status === "paused") {
+      resumeSpeechmatics();
+      dispatch({ type: "speech-resumed", runId: state.speech.debug.runId });
+    } else await startSpeech();
+  };
+
+  const toggleSessionPause = () => {
+    if (state.status === "active") pauseSpeechmatics();
+    else if (state.speech.status === "paused") resumeSpeechmatics();
+    dispatch({ type: state.status === "paused" ? "resume" : "pause" });
   };
 
   const toggleFullscreen = async () => {
@@ -84,14 +124,16 @@ export function SessionPage() {
       <a href="/" className="session-brand">CueLayer</a>
       <p>Live session</p>
     </header>
-    <PresentationStage ref={stageRef} stream={state.presentation.stream} presentationStatus={state.presentation.status} sessionStatus={state.status}>
-      {hasPresentation ? <SessionControls paused={state.status === "paused"} isFullscreen={isFullscreen} onPauseToggle={() => dispatch({ type: state.status === "paused" ? "resume" : "pause" })} onFullscreen={toggleFullscreen} onEnd={() => void endSession()} /> : null}
+    <PresentationStage ref={stageRef} stream={state.presentation.stream} presentationStatus={state.presentation.status} sessionStatus={state.status} speech={state.speech.canonical} speechStatus={state.speech.status}>
+      <SessionControls sessionStatus={state.status} isFullscreen={isFullscreen} onPauseToggle={toggleSessionPause} onFullscreen={toggleFullscreen} onEnd={() => void endSession()} speechStatus={state.speech.status} onSpeechToggle={() => void toggleSpeech()} onSpeechPrepare={prepareSpeechmaticsAudioContext} />
     </PresentationStage>
     <section className="session-panel" aria-live="polite">
       {hasPresentation ? <p>{state.status === "paused" ? "The shared presentation remains visible. Pause currently prepares the CueLayer runtime for later speech and AI layers." : "Your presentation is live in CueLayer. Keep controlling the original presentation as usual."}</p> : <>
         <p>{panelMessage}</p>
         <div className="session-panel-actions"><button className="choose-presentation-button" type="button" disabled={state.presentation.status === "starting"} onClick={() => void startPresentation()}>{state.presentation.status === "starting" ? "Choosing presentation…" : state.status === "ended" ? "Start another session" : "Choose presentation"}</button>{sessionIsRunning && state.presentation.status !== "starting" ? <button className="end-session-link" type="button" onClick={() => void endSession()}>End session</button> : null}</div>
       </>}
+      {state.speech.error ? <p className="session-error" role="alert">{state.speech.error.message}</p> : null}
+      {import.meta.env.DEV && state.speech.status !== "off" ? <p className="session-debug">Speech debug · run {state.speech.debug.runId} · partials {state.speech.debug.provisionalEvents} · finals {state.speech.debug.committedEvents}{state.speech.debug.lastError ? ` · last error: ${state.speech.debug.lastError.code}` : ""}</p> : null}
       {fullscreenError ? <p className="session-error" role="alert">{fullscreenError}</p> : null}
     </section>
   </main>;

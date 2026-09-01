@@ -1,5 +1,7 @@
 node_modules/
 dist/
+.env*
+!.env.example
 artifacts/
 skills/9701-cuecaption/eval/generated/
 *.tsbuildinfo
