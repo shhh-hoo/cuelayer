@@ -65,7 +65,7 @@ describe("session debug visibility", () => {
 
   it("renders a compact expandable structured trace", () => {
     const event = prepareDurableTraceEvent("session-test-0001", { id: "test-event", timestamp: new Date(1).toISOString(), stage: "speechmatics", type: "asr.final", correlation: { speechEventId: "provider-event-1", commitId: "committed-0" }, payload: { transcript: "temperature increases" }, source: "browser" });
-    const props = { sessionId: "session-test-0001", events: [event], status: "ready" as const, recentSessionIds: [], exportUrl: "/trace.jsonl", onReload: () => undefined };
+    const props = { sessionId: "session-test-0001", events: [event], status: "healthy" as const, pendingCount: 0, onReload: () => undefined, onExport: () => undefined };
     const html = renderToStaticMarkup(<TeachingTraceDrawer {...props} />);
     expect(html).toContain("Persistent trace · 1 events");
     expect(html).toContain("ASR.FINAL");

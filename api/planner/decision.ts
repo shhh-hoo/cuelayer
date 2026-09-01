@@ -22,7 +22,7 @@ export default async function handler(request: Request, response: Response): Pro
   try {
     const provider = deepSeekApiKey ? "deepseek" : "openai";
     const model = deepSeekApiKey ? process.env.DEEPSEEK_MODEL ?? "deepseek-v4-flash" : process.env.OPENAI_MODEL ?? "gpt-5.6-luna";
-    const result = await traceExternalCall({ sessionId: trace.sessionId, apiRequestId: trace.apiRequestId, provider, model, operation: "teaching_planner.decision", requestPayload: input, signal: request.signal, correlation: { plannerRequestId: trace.plannerRequestId }, responsePayload: (value) => value }, () => deepSeekApiKey
+    const result = await traceExternalCall({ sessionId: trace.sessionId, writeCapability: trace.writeCapability, apiRequestId: trace.apiRequestId, provider, model, operation: "teaching_planner.decision", requestPayload: input, signal: request.signal, correlation: { plannerRequestId: trace.plannerRequestId }, responsePayload: (value) => value }, () => deepSeekApiKey
       ? requestDeepSeekPlannerResult(input, deepSeekApiKey, model, { signal: request.signal })
       : requestOpenAIPlannerResult(input, openAIApiKey!, model, { signal: request.signal }));
     response.status(200).json({ decision: result.decision });

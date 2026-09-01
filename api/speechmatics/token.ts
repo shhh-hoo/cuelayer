@@ -21,7 +21,7 @@ export default async function handler(request: { method?: string; headers?: Reco
   const trace = traceHeaders(request);
   if (!trace.sessionId) { response.status(400).json({ error: "missing-trace-session-id" }); return; }
   try {
-    const token = await traceExternalCall({ sessionId: trace.sessionId, apiRequestId: trace.apiRequestId, provider: "speechmatics", operation: "realtime.temporary_token", requestPayload: { type: "rt", ttlSeconds: 60 }, responsePayload: () => ({ tokenIssued: true, ttlSeconds: 60 }) }, () => createSpeechmaticsJWT({ type: "rt", apiKey, ttl: 60 }));
+    const token = await traceExternalCall({ sessionId: trace.sessionId, writeCapability: trace.writeCapability, apiRequestId: trace.apiRequestId, provider: "speechmatics", operation: "realtime.temporary_token", requestPayload: { type: "rt", ttlSeconds: 60 }, responsePayload: () => ({ tokenIssued: true, ttlSeconds: 60 }) }, () => createSpeechmaticsJWT({ type: "rt", apiKey, ttl: 60 }));
     response.status(200).json({ token });
   } catch (error) {
     const reason = error instanceof Error && error.message.startsWith("trace-") ? error.message : "speech-token-unavailable";

@@ -12,8 +12,9 @@ describe("external API trace boundary", () => {
     const result = await traceExternalCall({ sessionId: "session-api-trace", apiRequestId: "api-request-1", provider: "openai", model: "gpt-test", operation: "planner", requestPayload: { recentSpeech: [{ text: "exact canonical" }] }, responsePayload: (value) => value }, async () => ({ decision: { display: { kind: "QUIET" } }, usage: { inputTokens: 10, outputTokens: 2 } }));
     expect(result.usage.inputTokens).toBe(10);
     expect(append).toHaveBeenCalledTimes(2);
-    expect(append.mock.calls[0]?.[1]?.[0]).toMatchObject({ type: "api_call.started", correlation: { apiRequestId: "api-request-1" }, payload: { provider: "openai", model: "gpt-test", operation: "planner" } });
-    expect(append.mock.calls[1]?.[1]?.[0]).toMatchObject({ type: "api_call.completed", payload: { status: "completed", response: { usage: { inputTokens: 10, outputTokens: 2 } } } });
+    await Promise.resolve();
+    expect(append.mock.calls[0]?.[2]?.[0]).toMatchObject({ type: "api_call.started", correlation: { apiRequestId: "api-request-1" }, payload: { provider: "openai", model: "gpt-test", operation: "planner" } });
+    expect(append.mock.calls[1]?.[2]?.[0]).toMatchObject({ type: "api_call.completed", payload: { status: "completed", response: { usage: { inputTokens: 10, outputTokens: 2 } } } });
   });
 
   it("persists failed and aborted calls", async () => {
@@ -21,13 +22,18 @@ describe("external API trace boundary", () => {
     const controller = new AbortController();
     controller.abort("live_budget_timeout");
     await expect(traceExternalCall({ sessionId: "session-api-trace", apiRequestId: "api-request-abort", provider: "openai", operation: "planner", requestPayload: {}, signal: controller.signal, responsePayload: () => ({}) }, async () => { throw new DOMException("Aborted", "AbortError"); })).rejects.toThrow();
-    expect(append.mock.calls.flatMap((call) => call[1]).map((event) => event.type)).toEqual(["api_call.started", "api_call.failed", "api_call.started", "api_call.timed_out"]);
+    await Promise.resolve();
+    expect(append.mock.calls.flatMap((call) => call[2]).map((event) => event.type)).toEqual(["api_call.started", "api_call.failed", "api_call.started", "api_call.timed_out"]);
   });
 
-  it("does not call a provider when its start event cannot be persisted", async () => {
+  it("does not turn a provider success into api_call.failed when tracing is unavailable", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     append.mockRejectedValueOnce(new Error("trace-storage-not-configured"));
     const providerCall = vi.fn();
-    await expect(traceExternalCall({ sessionId: "session-api-trace", provider: "openai", operation: "planner", requestPayload: {}, responsePayload: () => ({}) }, providerCall)).rejects.toThrow("trace-storage-not-configured");
-    expect(providerCall).not.toHaveBeenCalled();
+    await traceExternalCall({ sessionId: "session-api-trace", provider: "openai", operation: "planner", requestPayload: {}, responsePayload: () => ({}) }, providerCall);
+    expect(providerCall).toHaveBeenCalled();
+    expect(append.mock.calls.flatMap((call) => call[2] ?? []).some((event) => event.type === "api_call.failed")).toBe(false);
+    expect(warning).toHaveBeenCalledWith("cuelayer-trace-server-degraded", expect.objectContaining({ eventType: "api_call.started" }));
+    warning.mockRestore();
   });
 });

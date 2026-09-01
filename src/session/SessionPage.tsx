@@ -55,6 +55,7 @@ export function SessionPage() {
 
   const { start: startSpeechmatics, stop: stopSpeechmatics, pause: pauseSpeechmatics, resume: resumeSpeechmatics } = useSpeechmaticsSession({
     traceSessionId: traceIdentity.sessionId,
+    traceWriteCapability: durableTrace.writeCapability,
     onEvent: onSpeechEvent,
     onReady: onSpeechReady,
     onTrace: onSpeechTrace,
@@ -68,6 +69,7 @@ export function SessionPage() {
     planner: state.planner,
     tracingEnabled: true,
     traceSessionId: traceIdentity.sessionId,
+    traceWriteCapability: durableTrace.writeCapability,
     dispatch,
   });
 
@@ -214,7 +216,7 @@ export function SessionPage() {
       {state.speech.error ? <p className="session-error" role="alert">{state.speech.error.message}</p> : null}
       {showSpeechDebug && state.speech.status !== "off" ? <p className="session-debug">Speech debug · run {state.speech.debug.runId} · partials {state.speech.debug.provisionalEvents} · raw finals {state.speech.canonical.finals.length} · spans {state.speech.canonical.spans.length}{state.speech.debug.lastError ? ` · last error: ${state.speech.debug.lastError.code}` : ""}</p> : null}
       {showSpeechDebug && state.speech.status !== "off" ? <p className="session-debug">Planner debug · {state.planner.status} · request {state.planner.requestId}{state.planner.inFlightRequestId ? ` · in flight ${state.planner.inFlightRequestId}` : ""}{state.planner.latestDecision ? ` · ${state.planner.latestDecision.display.kind}/${state.planner.latestDecision.learner.kind}` : ""}{state.planner.lastValidationError ? ` · validation: ${state.planner.lastValidationError}` : state.planner.lastError ? ` · error: ${state.planner.lastError}` : ""}</p> : null}
-      {showSpeechDebug ? <TeachingTraceDrawer sessionId={durableTrace.sessionId} events={durableTrace.events} status={durableTrace.status} error={durableTrace.error} recentSessionIds={durableTrace.recentSessionIds} exportUrl={durableTrace.exportUrl} onReload={() => void durableTrace.reload()} onInject={developmentDebug ? injectSemanticCue : undefined} /> : null}
+      {showSpeechDebug ? <TeachingTraceDrawer sessionId={durableTrace.sessionId} events={durableTrace.events} status={durableTrace.status} error={durableTrace.error} pendingCount={durableTrace.pendingCount} onReload={() => void durableTrace.reload()} onExport={() => void durableTrace.exportJsonl()} onInject={developmentDebug ? injectSemanticCue : undefined} /> : null}
       {fullscreenError ? <p className="session-error" role="alert">{fullscreenError}</p> : null}
     </section>
   </main>;

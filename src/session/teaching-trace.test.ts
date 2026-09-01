@@ -156,13 +156,23 @@ describe("development teaching trace", () => {
     expect(trace.nextEventId).toBe(6);
   });
 
-  it("does not drop forwarding events at the former 160-event boundary", () => {
+  it("keeps the durable forwarding window bounded", () => {
     let state = sessionReducer(createDurableSessionState(), { type: "begin-speech", runId: 8 });
     state = sessionReducer(state, { type: "speech-ready", runId: 8 });
     for (let index = 0; index < 205; index += 1) {
       state = sessionReducer(state, { type: "speech-event", runId: 8, event: { kind: "provisional", text: `revision ${index}`, words: [], provider: { message: "AddPartialTranscript", resultCount: 1, sequence: index } }, now: index });
     }
     expect(state.trace.events).toHaveLength(205);
+  });
+
+  it("caps a long-lived runtime trace instead of retaining the whole session", () => {
+    let state = sessionReducer(createDurableSessionState(), { type: "begin-speech", runId: 8 });
+    state = sessionReducer(state, { type: "speech-ready", runId: 8 });
+    for (let index = 0; index < 510; index += 1) {
+      state = sessionReducer(state, { type: "speech-event", runId: 8, event: { kind: "provisional", text: `revision ${index}`, words: [], provider: { message: "AddPartialTranscript", resultCount: 1, sequence: index } }, now: index });
+    }
+    expect(state.trace.events).toHaveLength(500);
+    expect(state.trace.events[0]).toMatchObject({ transcript: "revision 10" });
   });
 
   it("does not change live-session product state when tracing is enabled", () => {

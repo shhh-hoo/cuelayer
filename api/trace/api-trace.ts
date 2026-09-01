@@ -5,6 +5,7 @@ import type { TraceCorrelation } from "../../src/trace/durable-trace.ts";
 type ExternalCallOptions<Result> = {
   sessionId: string;
   apiRequestId?: string;
+  writeCapability?: string;
   provider: string;
   model?: string;
   operation: string;
@@ -38,6 +39,7 @@ export function traceHeaders(request: { headers?: Record<string, string | string
     sessionId: header("x-cuelayer-session-id"),
     apiRequestId: header("x-cuelayer-api-request-id"),
     plannerRequestId: header("x-cuelayer-planner-request-id"),
+    writeCapability: header("x-cuelayer-trace-write-capability"),
   };
 }
 
@@ -45,7 +47,13 @@ export async function traceExternalCall<Result>(options: ExternalCallOptions<Res
   const apiRequestId = options.apiRequestId || randomUUID();
   const correlation = { ...options.correlation, apiRequestId };
   const startedAt = Date.now();
-  await appendTraceEvents(options.sessionId, [{
+  // A Vercel Function has no durable local disk/queue. Preserve provider truth
+  // and surface this distinct degradation in runtime diagnostics instead of
+  // relabelling it as an API failure or blocking the teaching path.
+  const record = (draft: Parameters<typeof appendTraceEvents>[2][number]) => appendTraceEvents(options.sessionId, options.writeCapability, [draft]).catch((error) => {
+    console.warn("cuelayer-trace-server-degraded", { sessionId: options.sessionId, apiRequestId, eventType: draft.type, error: error instanceof Error ? error.message : "trace-ingestion-unavailable" });
+  });
+  void record({
     id: eventId(apiRequestId, "started"),
     timestamp: new Date(startedAt).toISOString(),
     stage: "api",
@@ -53,11 +61,11 @@ export async function traceExternalCall<Result>(options: ExternalCallOptions<Res
     correlation,
     payload: { provider: options.provider, model: options.model, operation: options.operation, request: options.requestPayload, retries: options.retries ?? 0 },
     source: "server",
-  }]);
+  });
   try {
     const result = await call();
     const finishedAt = Date.now();
-    await appendTraceEvents(options.sessionId, [{
+    void record({
       id: eventId(apiRequestId, "completed"),
       timestamp: new Date(finishedAt).toISOString(),
       stage: "api",
@@ -65,7 +73,7 @@ export async function traceExternalCall<Result>(options: ExternalCallOptions<Res
       correlation,
       payload: { provider: options.provider, model: options.model, operation: options.operation, status: "completed", latencyMs: finishedAt - startedAt, retries: options.retries ?? 0, response: options.responsePayload(result) },
       source: "server",
-    }]);
+    });
     return result;
   } catch (error) {
     const finishedAt = Date.now();
@@ -73,7 +81,7 @@ export async function traceExternalCall<Result>(options: ExternalCallOptions<Res
     const abortReason = aborted ? String(options.signal?.reason ?? "aborted") : undefined;
     const timedOut = aborted && /timeout/i.test(abortReason ?? "");
     const outcome = timedOut ? "timed_out" : aborted ? "aborted" : "failed";
-    await appendTraceEvents(options.sessionId, [{
+    void record({
       id: eventId(apiRequestId, outcome),
       timestamp: new Date(finishedAt).toISOString(),
       stage: "api",
@@ -81,7 +89,7 @@ export async function traceExternalCall<Result>(options: ExternalCallOptions<Res
       correlation,
       payload: { provider: options.provider, model: options.model, operation: options.operation, status: outcome, latencyMs: finishedAt - startedAt, retries: options.retries ?? 0, error: safeError(error), abortReason },
       source: "server",
-    }]);
+    });
     throw error;
   }
 }

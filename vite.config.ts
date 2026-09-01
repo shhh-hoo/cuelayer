@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { createSpeechmaticsJWT } from "@speechmatics/auth";
 import { deepSeekPlannerFailureReason, requestDeepSeekPlannerResult } from "./api/planner/deepseek-planner.ts";
 import { requestOpenAIPlannerResult } from "./api/planner/openai-planner.ts";
-import { appendTraceEvents, listRecentTraceSessions, readTraceEvents } from "./api/trace/trace-store.ts";
+import { appendTraceEvents, createTraceSession, readTraceEvents } from "./api/trace/trace-store.ts";
 import { traceExternalCall, traceHeaders } from "./api/trace/api-trace.ts";
 import { traceEventsToJsonl } from "./src/trace/durable-trace.ts";
 
@@ -30,24 +30,40 @@ export default defineConfig(({ mode }) => {
         try {
           const body = await requestBody(request) as { sessionId?: unknown; events?: unknown };
           if (typeof body.sessionId !== "string" || !Array.isArray(body.events) || body.events.length > 500) { response.statusCode = 400; response.end(JSON.stringify({ error: "invalid-trace-batch" })); return; }
-          const events = await appendTraceEvents(body.sessionId, body.events as never[]);
+          const capability = request.headers["x-cuelayer-trace-write-capability"];
+          const events = await appendTraceEvents(body.sessionId, Array.isArray(capability) ? capability[0] : capability, body.events as never[]);
           response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ events }));
         } catch (error) { response.statusCode = 503; response.end(JSON.stringify({ error: error instanceof Error ? error.message : "trace-storage-unavailable" })); }
       });
       server.middlewares.use("/api/trace/session", async (request, response) => {
         response.setHeader("Cache-Control", "no-store");
+        if (request.method === "POST") {
+          try { const body = await requestBody(request) as { sessionId?: string; appVersion?: string; buildVersion?: string; environment?: string; metadata?: unknown }; if (!body.sessionId) { response.statusCode = 400; response.end(JSON.stringify({ error: "invalid-session-id" })); return; } const created = await createTraceSession(body.sessionId, body); response.setHeader("Content-Type", "application/json"); response.statusCode = 201; response.end(JSON.stringify(created)); }
+          catch (error) { response.statusCode = error instanceof Error && error.message === "trace-session-exists" ? 409 : 503; response.end(JSON.stringify({ error: error instanceof Error ? error.message : "trace-store-unavailable" })); }
+          return;
+        }
         if (request.method !== "GET") { response.statusCode = 405; response.end(JSON.stringify({ error: "method-not-allowed" })); return; }
         try {
           const url = new URL(request.url ?? "", "http://localhost");
           const sessionId = url.searchParams.get("sessionId");
-          if (!sessionId) { response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ recentSessionIds: await listRecentTraceSessions() })); return; }
-          const events = await readTraceEvents(sessionId);
+          if (!sessionId) { response.statusCode = 400; response.end(JSON.stringify({ error: "session-id-required" })); return; }
+          const capability = request.headers["x-cuelayer-trace-read-capability"];
+          const readCapability = Array.isArray(capability) ? capability[0] : capability;
+          const query = { after: url.searchParams.get("after") ?? undefined, limit: Number(url.searchParams.get("limit") ?? 100), stage: url.searchParams.get("stage") ?? undefined, eventType: url.searchParams.get("eventType") ?? undefined };
           if (url.searchParams.get("format") === "jsonl") {
+            const all = [];
+            let after: string | undefined;
+            do {
+              const page = await readTraceEvents(sessionId, readCapability, { ...query, after, limit: 250 });
+              all.push(...page.events);
+              after = page.nextCursor;
+            } while (after);
             response.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
             response.setHeader("Content-Disposition", `attachment; filename="cuelayer-trace-${sessionId}.jsonl"`);
-            response.end(traceEventsToJsonl(events)); return;
+            response.end(traceEventsToJsonl(all)); return;
           }
-          response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ sessionId, events }));
+          const page = await readTraceEvents(sessionId, readCapability, query);
+          response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ sessionId, ...page }));
         } catch (error) { response.statusCode = 503; response.end(JSON.stringify({ error: error instanceof Error ? error.message : "trace-storage-unavailable" })); }
       });
       server.middlewares.use("/api/speechmatics/token", async (request, response) => {
@@ -57,7 +73,7 @@ export default defineConfig(({ mode }) => {
         const trace = traceHeaders({ headers: request.headers as Record<string, string | string[] | undefined> });
         if (!trace.sessionId) { response.statusCode = 400; response.end(JSON.stringify({ error: "missing-trace-session-id" })); return; }
         try {
-          const token = await traceExternalCall({ sessionId: trace.sessionId, apiRequestId: trace.apiRequestId, provider: "speechmatics", operation: "realtime.temporary_token", requestPayload: { type: "rt", ttlSeconds: 60 }, responsePayload: () => ({ tokenIssued: true, ttlSeconds: 60 }) }, () => createSpeechmaticsJWT({ type: "rt", apiKey, ttl: 60 }));
+          const token = await traceExternalCall({ sessionId: trace.sessionId, writeCapability: trace.writeCapability, apiRequestId: trace.apiRequestId, provider: "speechmatics", operation: "realtime.temporary_token", requestPayload: { type: "rt", ttlSeconds: 60 }, responsePayload: () => ({ tokenIssued: true, ttlSeconds: 60 }) }, () => createSpeechmaticsJWT({ type: "rt", apiKey, ttl: 60 }));
           response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ token }));
         } catch (error) {
           const reason = error instanceof Error && error.message.startsWith("trace-") ? error.message : "speech-token-unavailable";
@@ -76,7 +92,7 @@ export default defineConfig(({ mode }) => {
           const input = await requestBody(request);
           const provider = deepSeekApiKey ? "deepseek" : "openai";
           const model = deepSeekApiKey ? env.DEEPSEEK_MODEL || "deepseek-v4-flash" : env.OPENAI_MODEL || "gpt-5.6-luna";
-          const result = await traceExternalCall({ sessionId: trace.sessionId, apiRequestId: trace.apiRequestId, provider, model, operation: "teaching_planner.decision", requestPayload: input, correlation: { plannerRequestId: trace.plannerRequestId }, responsePayload: (value) => value }, () => deepSeekApiKey
+          const result = await traceExternalCall({ sessionId: trace.sessionId, writeCapability: trace.writeCapability, apiRequestId: trace.apiRequestId, provider, model, operation: "teaching_planner.decision", requestPayload: input, correlation: { plannerRequestId: trace.plannerRequestId }, responsePayload: (value) => value }, () => deepSeekApiKey
             ? requestDeepSeekPlannerResult(input as never, deepSeekApiKey, model)
             : requestOpenAIPlannerResult(input as never, openAIApiKey!, model));
           response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ decision: result.decision }));

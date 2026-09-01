@@ -14,6 +14,7 @@ type TeachingPlannerCallbacks = {
   planner: PlannerDebugState;
   tracingEnabled?: boolean;
   traceSessionId?: string;
+  traceWriteCapability?: string;
   dispatch(action: SessionAction): void;
   semanticPlanner?: SemanticPlanner;
 };
@@ -21,7 +22,7 @@ type TeachingPlannerCallbacks = {
 const captionContext = (episode?: CaptionEpisode): { sourceSegmentIds: string[]; displayKind: DisplayIntent["kind"] } | undefined => episode ? { sourceSegmentIds: episode.sourceSegmentIds, displayKind: episode.cue?.kind ?? "TEXT" } : undefined;
 
 /** Coalesces Speechmatics finals into one bounded planner request at a time. */
-export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, canonicalSpeech, planner, tracingEnabled = false, traceSessionId, dispatch, semanticPlanner }: TeachingPlannerCallbacks) {
+export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, canonicalSpeech, planner, tracingEnabled = false, traceSessionId, traceWriteCapability, dispatch, semanticPlanner }: TeachingPlannerCallbacks) {
   const defaultPlanner = useMemo(() => createHttpSemanticPlanner(), []);
   const scheduler = useRef(new SingleFlightPlanner());
   const observed = useRef({ runId: -1, checkpoints: new Map<string, PlannerCheckpointCursor>() });
@@ -86,7 +87,7 @@ export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, c
     };
     activeRequest.current = { requestId: work.requestId, abort };
     timeout = window.setTimeout(() => abort("live_budget_timeout"), LIVE_PLANNER_BUDGET_MS);
-    void plannerClient.decide(input, { signal: controller.signal, traceSessionId, apiRequestId: `planner-${speechRunId}-${work.requestId}`, plannerRequestId: work.requestId }).then(
+    void plannerClient.decide(input, { signal: controller.signal, traceSessionId, traceWriteCapability, apiRequestId: `planner-${speechRunId}-${work.requestId}`, plannerRequestId: work.requestId }).then(
       (decision) => {
         if (settled) return;
         settled = true;
@@ -104,5 +105,5 @@ export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, c
         dispatch({ type: "planner-failed", requestId: work.requestId, runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, input, message: error instanceof Error ? error.message : "Planner is temporarily unavailable.", now: Date.now(), startedAt, segmentIds: work.segmentIds });
       },
     );
-  }, [canonicalSpeech.spans, dispatch, planner.runtime, planner.status, plannerClient, sessionStatus, speechRunId, speechStatus, traceSessionId, tracingEnabled]);
+  }, [canonicalSpeech.spans, dispatch, planner.runtime, planner.status, plannerClient, sessionStatus, speechRunId, speechStatus, traceSessionId, traceWriteCapability, tracingEnabled]);
 }

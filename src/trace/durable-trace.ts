@@ -29,15 +29,24 @@ export type DurableTraceEvent = {
   id: string;
   schemaVersion: typeof TRACE_SCHEMA_VERSION;
   sessionId: string;
-  timestamp: string;
+  occurredAt: string;
+  ingestedAt?: string;
   stage: DurableTraceStage;
   type: string;
+  causationEventId?: string;
   correlation?: TraceCorrelation;
   payload: unknown;
   source: "browser" | "server" | "synthetic";
+  sourceInstanceId: string;
+  sourceSeq: number;
 };
 
-export type DurableTraceEventDraft = Omit<DurableTraceEvent, "schemaVersion" | "sessionId">;
+export type DurableTraceEventDraft = Omit<DurableTraceEvent, "schemaVersion" | "sessionId" | "occurredAt" | "sourceInstanceId" | "sourceSeq"> & {
+  occurredAt?: string;
+  timestamp?: string;
+  sourceInstanceId?: string;
+  sourceSeq?: number;
+};
 
 const SECRET_KEY = /^(?:authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|token|jwt|cookie|credentials?|password|secret)$/i;
 const AUDIO_KEY = /^(?:audio(?:data|frames?|blob|buffer)?|pcm(?:data|frames?|buffer)?|microphone(?:data|frames?)?|recording|waveform|binary|blob|buffer)$/i;
@@ -69,17 +78,20 @@ export function sanitizeTracePayload(value: unknown, key = "payload", seen = new
 }
 
 export function prepareDurableTraceEvent(sessionId: string, draft: DurableTraceEventDraft): DurableTraceEvent {
+  const { timestamp: legacyTimestamp, ...event } = draft;
   return {
-    ...draft,
+    ...event,
     schemaVersion: TRACE_SCHEMA_VERSION,
     sessionId,
-    timestamp: new Date(draft.timestamp).toISOString(),
-    payload: sanitizeTracePayload(draft.payload),
+    occurredAt: new Date(draft.occurredAt ?? legacyTimestamp ?? Date.now()).toISOString(),
+    payload: sanitizeTracePayload(event.payload),
+    sourceInstanceId: draft.sourceInstanceId ?? `${draft.source}:unknown`,
+    sourceSeq: draft.sourceSeq ?? 0,
   };
 }
 
 export function compareTraceEvents(left: DurableTraceEvent, right: DurableTraceEvent): number {
-  return left.timestamp.localeCompare(right.timestamp) || left.id.localeCompare(right.id);
+  return left.occurredAt.localeCompare(right.occurredAt) || left.id.localeCompare(right.id);
 }
 
 export function traceEventsToJsonl(events: DurableTraceEvent[]): string {

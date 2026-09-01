@@ -92,10 +92,10 @@ export function speechStartFailureFrom(error: unknown): SpeechStartFailure {
   return { code: "realtime-connection-failed", message: "CueLayer could not connect to Speechmatics realtime. You can reconnect speech without ending the session." };
 }
 
-async function requestRealtimeToken(sessionId: string, apiRequestId: string): Promise<string> {
+async function requestRealtimeToken(sessionId: string, apiRequestId: string, writeCapability?: string): Promise<string> {
   let response: Response;
   try {
-    response = await fetch(TOKEN_ENDPOINT, { method: "POST", headers: { Accept: "application/json", "X-CueLayer-Session-Id": sessionId, "X-CueLayer-Api-Request-Id": apiRequestId } });
+    response = await fetch(TOKEN_ENDPOINT, { method: "POST", headers: { Accept: "application/json", "X-CueLayer-Session-Id": sessionId, "X-CueLayer-Api-Request-Id": apiRequestId, ...(writeCapability ? { "X-CueLayer-Trace-Write-Capability": writeCapability } : {}) } });
   } catch {
     throw failure("speech-token-failed", "CueLayer could not request a short-lived Speechmatics access token. Check the server connection and try again.");
   }
@@ -109,6 +109,7 @@ async function requestRealtimeToken(sessionId: string, apiRequestId: string): Pr
 
 type SpeechmaticsSessionCallbacks = {
   traceSessionId: string;
+  traceWriteCapability?: string;
   onEvent: (runId: number, event: SpeechEvent) => void;
   onReady: (runId: number) => void;
   onTrace: (event: Omit<DurableTraceEventDraft, "id" | "timestamp" | "source">) => void;
@@ -118,7 +119,7 @@ type SpeechmaticsSessionCallbacks = {
  * Product glue only: official React providers own the recorder, WebSocket, audio
  * forwarding and cleanup; CueLayer supplies run identity and canonical events.
  */
-export function useSpeechmaticsSession({ traceSessionId, onEvent, onReady, onTrace }: SpeechmaticsSessionCallbacks) {
+export function useSpeechmaticsSession({ traceSessionId, traceWriteCapability, onEvent, onReady, onTrace }: SpeechmaticsSessionCallbacks) {
   const activeRunIdRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
   const sawRecordingRef = useRef(false);
@@ -143,6 +144,7 @@ export function useSpeechmaticsSession({ traceSessionId, onEvent, onReady, onTra
   const onProviderMessage = useCallback(({ data }: { data: Parameters<typeof speechEventFromSpeechmatics>[0] }) => {
     const runId = activeRunIdRef.current;
     if (runId === null) return;
+    onTrace({ stage: "speechmatics", type: "speechmatics.raw_message", payload: { runId, message: data } });
     const event = speechEventFromSpeechmatics(data);
     if (!event) return;
     if (event.kind === "error") {
@@ -151,7 +153,7 @@ export function useSpeechmaticsSession({ traceSessionId, onEvent, onReady, onTra
     }
     const sequence = providerSequenceRef.current++;
     onEvent(runId, event.provider ? { ...event, provider: { ...event.provider, sequence } } : event);
-  }, [failRun, onEvent]);
+  }, [failRun, onEvent, onTrace]);
 
   useRealtimeEventListener("receiveMessage", onProviderMessage);
 
@@ -193,7 +195,7 @@ export function useSpeechmaticsSession({ traceSessionId, onEvent, onReady, onTra
         getPermissionState: () => getAudioDevicesStore().permissionState,
       });
       onTrace({ stage: "speechmatics", type: "speechmatics.browser_audio_ready", payload: { runId, sampleRate: browserAudioContext.sampleRate } });
-      const token = await requestRealtimeToken(traceSessionId, `speechmatics-token-${runId}`);
+      const token = await requestRealtimeToken(traceSessionId, `speechmatics-token-${runId}`, traceWriteCapability);
       onTrace({ stage: "speechmatics", type: "speechmatics.temporary_token_received", payload: { runId, tokenReceived: true } });
       try {
         await startTranscription(token, createSpeechmaticsConfig(browserAudioContext.sampleRate));
@@ -218,7 +220,7 @@ export function useSpeechmaticsSession({ traceSessionId, onEvent, onReady, onTra
       void stopTranscription().catch(() => undefined);
       throw error;
     }
-  }, [audioContext, audioDevices, onReady, onTrace, startRecording, startTranscription, stopRecording, stopTranscription, traceSessionId]);
+  }, [audioContext, audioDevices, onReady, onTrace, startRecording, startTranscription, stopRecording, stopTranscription, traceSessionId, traceWriteCapability]);
 
   const stop = useCallback(async () => {
     const runId = activeRunIdRef.current;

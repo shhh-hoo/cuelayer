@@ -1,84 +1,49 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import packageMetadata from "../../package.json";
 import { compareTraceEvents, type DurableTraceEvent, type DurableTraceEventDraft } from "./durable-trace";
+import { TraceOutbox } from "./outbox";
 import { createHttpTraceTransport, type TraceTransport } from "./trace-client";
 import type { TeachingTraceState } from "../session/teaching-trace";
 import { teachingTraceEventToDurable } from "../session/teaching-trace-persistence";
-import packageMetadata from "../../package.json";
 
-function merged(events: DurableTraceEvent[], appended: DurableTraceEvent[]) {
-  return [...new Map([...events, ...appended].map((event) => [event.id, event])).values()].sort(compareTraceEvents);
-}
+const VIEW_LIMIT = 300;
+function mergeBounded(current: DurableTraceEvent[], added: DurableTraceEvent[]) { return [...new Map([...current, ...added].map((event) => [event.id, event])).values()].sort(compareTraceEvents).slice(-VIEW_LIMIT); }
 
 export function useDurableTrace({ sessionId, isNewSession, liveTrace, transport: providedTransport }: { sessionId: string; isNewSession: boolean; liveTrace: TeachingTraceState; transport?: TraceTransport }) {
   const transport = useMemo(() => providedTransport ?? createHttpTraceTransport(), [providedTransport]);
-  const pageInstanceId = useRef(`page-${crypto.randomUUID()}`);
-  const seenTransientIds = useRef(new Set<string>());
-  const [events, setEvents] = useState<DurableTraceEvent[]>([]);
-  const [recentSessionIds, setRecentSessionIds] = useState<string[]>([]);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [error, setError] = useState<string>();
+  const pageInstanceId = useRef(`page-${crypto.randomUUID()}`); const outboxRef = useRef<TraceOutbox | undefined>(undefined); const seenTransientIds = useRef(new Set<string>()); const pendingRef = useRef<DurableTraceEventDraft[]>([]);
+  const [events, setEvents] = useState<DurableTraceEvent[]>([]); const [status, setStatus] = useState<"loading" | "healthy" | "degraded" | "recovering">("loading"); const [error, setError] = useState<string>(); const [readCapability, setReadCapability] = useState<string>(); const [writeCapability, setWriteCapability] = useState<string>(); const [pendingCount, setPendingCount] = useState(0); const [nextCursor, setNextCursor] = useState<string>();
+
+  const flush = useCallback(async () => {
+    const outbox = outboxRef.current; if (!outbox) return;
+    try { const result = await outbox.flush(sessionId, transport); setEvents((current) => mergeBounded(current, result.acknowledged)); setPendingCount(result.pending); setStatus(result.pending ? "recovering" : "healthy"); setError(undefined); }
+    catch (reason) { setPendingCount(await outbox.pendingCount(sessionId)); setStatus("degraded"); setError(reason instanceof Error ? reason.message : "trace-ingestion-unavailable"); }
+  }, [sessionId, transport]);
 
   const append = useCallback(async (drafts: DurableTraceEventDraft[]) => {
-    if (!drafts.length) return [];
-    try {
-      const stored = await transport.append(sessionId, drafts);
-      setEvents((current) => merged(current, stored));
-      setStatus("ready");
-      setError(undefined);
-      return stored;
-    } catch (reason) {
-      setStatus("error");
-      setError(reason instanceof Error ? reason.message : "trace-storage-unavailable");
-      return [];
-    }
-  }, [sessionId, transport]);
+    const outbox = outboxRef.current;
+    if (!outbox) { pendingRef.current.push(...drafts); return []; }
+    const queued = await outbox.enqueue(sessionId, drafts, pageInstanceId.current); setEvents((current) => mergeBounded(current, queued)); setPendingCount(await outbox.pendingCount(sessionId)); void flush(); return queued;
+  }, [flush, sessionId]);
 
   const reload = useCallback(async () => {
-    setStatus("loading");
+    const outbox = outboxRef.current; if (!outbox) return; const session = await outbox.session(sessionId); if (!session?.readCapability) { setStatus("degraded"); setError("trace-read-capability-unavailable-on-this-browser"); return; }
+    setReadCapability(session.readCapability); setStatus("loading");
+    try { const page = await transport.load(sessionId, session.readCapability); setEvents(page.events.slice(-VIEW_LIMIT)); setNextCursor(page.nextCursor); setStatus("healthy"); setError(undefined); void flush(); }
+    catch (reason) { setStatus("degraded"); setError(reason instanceof Error ? reason.message : "trace-query-unavailable"); }
+  }, [flush, sessionId, transport]);
+
+  useEffect(() => { void (async () => {
     try {
-      const [stored, recent] = await Promise.all([transport.load(sessionId), transport.recent()]);
-      setEvents((current) => merged(stored, current));
-      setRecentSessionIds(recent);
-      setStatus("ready");
-      setError(undefined);
-    } catch (reason) {
-      setStatus("error");
-      setError(reason instanceof Error ? reason.message : "trace-storage-unavailable");
-    }
-  }, [sessionId, transport]);
-
-  useEffect(() => { void reload(); }, [reload]);
-
-  useEffect(() => {
-    const event: DurableTraceEventDraft = {
-      id: `${pageInstanceId.current}:session-${isNewSession ? "started" : "reloaded"}`,
-      timestamp: new Date().toISOString(),
-      stage: "session",
-      type: isNewSession ? "session.started" : "session.reloaded",
-      payload: { schemaVersion: 1, appVersion: packageMetadata.version, buildVersion: import.meta.env.VITE_CUELAYER_BUILD_VERSION ?? import.meta.env.MODE, url: window.location.pathname },
-      source: "browser",
-    };
-    void append([event]);
-  }, [append, isNewSession]);
-
-  useEffect(() => {
-    const drafts = liveTrace.events.flatMap((event) => {
-      if (seenTransientIds.current.has(event.id)) return [];
-      seenTransientIds.current.add(event.id);
-      return [teachingTraceEventToDurable(event, pageInstanceId.current)];
-    });
-    void append(drafts);
-  }, [append, liveTrace.events]);
-
-  return {
-    sessionId,
-    events,
-    recentSessionIds,
-    status,
-    error,
-    append,
-    reload,
-    exportUrl: `/api/trace/session?sessionId=${encodeURIComponent(sessionId)}&format=jsonl`,
-    pageInstanceId: pageInstanceId.current,
-  };
+      const outbox = await TraceOutbox.open(); outboxRef.current = outbox; let session = await outbox.session(sessionId);
+      if (!session?.writeCapability && isNewSession) { const created = await transport.createSession(sessionId, { appVersion: packageMetadata.version, buildVersion: import.meta.env.VITE_CUELAYER_BUILD_VERSION ?? import.meta.env.MODE, environment: import.meta.env.MODE }); session = { ...created, sessionId, sourceInstanceId: pageInstanceId.current, nextSeq: 1 }; await outbox.saveSession(session); }
+      if (!session?.writeCapability) { setStatus("degraded"); setError("trace-capability-unavailable-on-this-browser"); return; }
+      setReadCapability(session.readCapability); setWriteCapability(session.writeCapability); const initial: DurableTraceEventDraft = { id: `${pageInstanceId.current}:session-${isNewSession ? "started" : "reloaded"}`, occurredAt: new Date().toISOString(), stage: "session", type: isNewSession ? "session.started" : "session.reloaded", payload: { schemaVersion: 1, appVersion: packageMetadata.version, buildVersion: import.meta.env.VITE_CUELAYER_BUILD_VERSION ?? import.meta.env.MODE, url: window.location.pathname }, source: "browser" };
+      const queued = await outbox.enqueue(sessionId, [...pendingRef.current.splice(0), initial], pageInstanceId.current); setEvents((current) => mergeBounded(current, queued)); setPendingCount(await outbox.pendingCount(sessionId)); await reload();
+    } catch (reason) { setStatus("degraded"); setError(reason instanceof Error ? reason.message : "trace-outbox-unavailable"); }
+  })(); }, [isNewSession, reload, sessionId, transport]);
+  useEffect(() => { const drafts = liveTrace.events.flatMap((event) => seenTransientIds.current.has(event.id) ? [] : (seenTransientIds.current.add(event.id), [teachingTraceEventToDurable(event, pageInstanceId.current)])); void append(drafts); }, [append, liveTrace.events]);
+  useEffect(() => { const timer = window.setInterval(() => void flush(), 500); return () => window.clearInterval(timer); }, [flush]);
+  const exportJsonl = useCallback(async () => { if (!readCapability) throw new Error("trace-read-capability-unavailable"); const response = await fetch(`/api/trace/session?sessionId=${encodeURIComponent(sessionId)}&format=jsonl`, { headers: { "X-CueLayer-Trace-Read-Capability": readCapability } }); if (!response.ok) throw new Error("trace-export-failed"); const url = URL.createObjectURL(await response.blob()); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `cuelayer-trace-${sessionId}.jsonl`; anchor.click(); URL.revokeObjectURL(url); }, [readCapability, sessionId]);
+  return { sessionId, events, status, error, append, reload, pendingCount, nextCursor, readCapability, writeCapability, exportJsonl, pageInstanceId: pageInstanceId.current };
 }

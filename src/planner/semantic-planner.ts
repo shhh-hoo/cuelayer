@@ -1,7 +1,7 @@
 import type { PlannerInput } from "./contracts";
 
 export type SemanticPlanner = {
-  decide(input: PlannerInput, options?: { signal?: AbortSignal; traceSessionId?: string; apiRequestId?: string; plannerRequestId?: number }): Promise<unknown>;
+  decide(input: PlannerInput, options?: { signal?: AbortSignal; traceSessionId?: string; traceWriteCapability?: string; apiRequestId?: string; plannerRequestId?: number }): Promise<unknown>;
 };
 
 type PlannerResponse = { decision?: unknown; error?: string };
@@ -16,6 +16,7 @@ export function createHttpSemanticPlanner(endpoint = "/api/planner/decision"): S
           "Content-Type": "application/json",
           Accept: "application/json",
           ...(options?.traceSessionId ? { "X-CueLayer-Session-Id": options.traceSessionId } : {}),
+          ...(options?.traceWriteCapability ? { "X-CueLayer-Trace-Write-Capability": options.traceWriteCapability } : {}),
           ...(options?.apiRequestId ? { "X-CueLayer-Api-Request-Id": options.apiRequestId } : {}),
           ...(options?.plannerRequestId === undefined ? {} : { "X-CueLayer-Planner-Request-Id": String(options.plannerRequestId) }),
         },

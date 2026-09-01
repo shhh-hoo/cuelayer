@@ -1,7 +1,7 @@
 import { appendTraceEvents } from "./trace-store.ts";
 import type { DurableTraceEventDraft } from "../../src/trace/durable-trace.ts";
 
-type Request = { method?: string; body?: unknown };
+type Request = { method?: string; body?: unknown; headers?: Record<string, string | string[] | undefined> };
 type Response = { setHeader(name: string, value: string): void; status(code: number): { json(body: unknown): void } };
 
 export default async function handler(request: Request, response: Response): Promise<void> {
@@ -12,9 +12,11 @@ export default async function handler(request: Request, response: Response): Pro
     response.status(400).json({ error: "invalid-trace-batch" }); return;
   }
   try {
-    const events = await appendTraceEvents(body.sessionId, body.events as DurableTraceEventDraft[]);
+    const token = request.headers?.["x-cuelayer-trace-write-capability"] ?? request.headers?.["X-CueLayer-Trace-Write-Capability"];
+    const events = await appendTraceEvents(body.sessionId, Array.isArray(token) ? token[0] : token, body.events as DurableTraceEventDraft[]);
     response.status(200).json({ events });
   } catch (error) {
-    response.status(error instanceof Error && error.message.startsWith("invalid-") ? 400 : 503).json({ error: error instanceof Error ? error.message : "trace-storage-unavailable" });
+    const message = error instanceof Error ? error.message : "trace-storage-unavailable";
+    response.status(message.startsWith("invalid-") ? 400 : message.startsWith("trace-capability") ? 403 : 503).json({ error: message });
   }
 }
