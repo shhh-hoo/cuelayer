@@ -1,6 +1,7 @@
 import type { CanonicalSpeechSpanCloseReason, CanonicalSpeechState, SpeechDebugState, SpeechError, SpeechEvent, SpeechStatus } from "./speech-types";
 import type { CaptionEpisode, PlannerDebugState, PlannerInput, RuntimeDecision } from "../planner/contracts";
 import type { TeachingTraceState } from "./teaching-trace";
+import type { PresentationMode } from "./presentation-mode";
 
 export type SessionStatus = "idle" | "active" | "paused" | "ended";
 
@@ -48,7 +49,7 @@ export type SessionAction =
   | { type: "planner-decision"; requestId: number; runId: number; spanId: string; spanRevision: number; input: PlannerInput; decision: unknown; now: number; startedAt?: number; segmentIds?: string[] }
   | { type: "planner-failed"; requestId: number; runId: number; spanId: string; spanRevision: number; input: PlannerInput; message: string; now?: number; startedAt?: number; segmentIds?: string[] }
   | { type: "debug-inject-decision"; traceId: string; episodeId: string; input: PlannerInput; decision: RuntimeDecision; now: number }
-  | { type: "renderer-activated"; episode: CaptionEpisode; now: number }
+  | { type: "renderer-activated"; episode: CaptionEpisode; now: number; presentationMode?: PresentationMode }
   | { type: "caption-expired"; episodeId: string }
   | { type: "learner-cue-expired"; cueId: string }
   | { type: "toggle-caption-lock" }

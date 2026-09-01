@@ -2,8 +2,24 @@ import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
 import { CaptionRenderer } from "../renderer/CaptionRenderer";
 import type { CaptionEpisode, CaptionRuntimeState, TransientLearnerCue } from "../planner/contracts";
+import type { CaptionClip } from "../types";
+import type { CanonicalSpeechSpan, CanonicalSpeechState } from "./speech-types";
+import type { PresentationMode } from "./presentation-mode";
 
-function EpisodeCaption({ episode, locked }: { episode: CaptionEpisode; locked?: boolean }) {
+function canonicalClipFor(span: CanonicalSpeechSpan): CaptionClip {
+  return {
+    id: `canonical-${span.id}-${span.revision}`,
+    captionText: span.text,
+    words: span.words.map((word, index) => ({ id: `${span.id}:word-${index}`, text: word.text, startMs: word.startMs, endMs: word.endMs })),
+    cues: [],
+  };
+}
+
+function episodeForCanonicalSpan(span: CanonicalSpeechSpan): CaptionEpisode {
+  return { id: `canonical-${span.id}-${span.revision}`, clip: canonicalClipFor(span), status: "live", sourceSegmentIds: [span.id], activatedAt: span.updatedAtMs };
+}
+
+function EpisodeCaption({ episode, presentationMode, locked }: { episode: CaptionEpisode; presentationMode: PresentationMode; locked?: boolean }) {
   const reducedMotion = Boolean(useReducedMotion());
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -14,7 +30,7 @@ function EpisodeCaption({ episode, locked }: { episode: CaptionEpisode; locked?:
   const cueEnd = episode.cue ? episode.cue.startMs + episode.cue.durationMs + episode.cue.holdMs - 1 : 0;
   const currentMs = locked ? cueEnd : Math.min(cueEnd, Math.max(0, now - episode.activatedAt));
   return <div className={locked ? "semantic-caption semantic-caption-locked" : "semantic-caption"}>
-    <CaptionRenderer clip={episode.clip} cue={episode.cue} currentMs={currentMs} mode="fx" reducedMotion={reducedMotion} embedded />
+    <CaptionRenderer clip={episode.clip} cue={episode.cue} currentMs={currentMs} mode="fx" reducedMotion={reducedMotion} embedded presentationMode={presentationMode} />
   </div>;
 }
 
@@ -26,7 +42,7 @@ function LearnerCue({ cue, onExpire }: { cue: TransientLearnerCue; onExpire(cueI
   return <div className="learner-cue-layer" aria-live="polite"><span className="semantic-caption-cue">{cue.kind === "NOTE" ? "Note" : "Reflect"}</span></div>;
 }
 
-export function SemanticCaptionLayer({ runtime, onRendered, onExpire, onLearnerCueExpire }: { runtime: CaptionRuntimeState; onRendered?(episode: CaptionEpisode, now: number): void; onExpire(episodeId: string): void; onLearnerCueExpire(cueId: string): void }) {
+export function SemanticCaptionLayer({ runtime, speech, presentationMode, onRendered, onExpire, onLearnerCueExpire }: { runtime: CaptionRuntimeState; speech: CanonicalSpeechState; presentationMode: PresentationMode; onRendered?(episode: CaptionEpisode, now: number): void; onExpire(episodeId: string): void; onLearnerCueExpire(cueId: string): void }) {
   const renderedEpisodeIds = useRef(new Set<string>());
   useEffect(() => {
     const episode = runtime.current;
@@ -40,10 +56,13 @@ export function SemanticCaptionLayer({ runtime, onRendered, onExpire, onLearnerC
     const timeout = window.setTimeout(() => onExpire(runtime.current!.id), Math.max(0, expiresAt - Date.now()));
     return () => window.clearTimeout(timeout);
   }, [onExpire, runtime.current]);
+  const latestSpan = speech.spans.at(-1);
+  const currentMatchesCanonicalSpeech = Boolean(runtime.current && (!latestSpan || runtime.current.sourceSegmentIds.includes(latestSpan.id)));
+  const primaryEpisode = currentMatchesCanonicalSpeech ? runtime.current : latestSpan?.text.trim() ? episodeForCanonicalSpan(latestSpan) : undefined;
   return <>
-    <div className="adaptive-semantic-layer" aria-live="polite">
-      {runtime.locked ? <EpisodeCaption episode={runtime.locked} locked /> : null}
-      {runtime.current ? <EpisodeCaption episode={runtime.current} /> : null}
+    <div className={`adaptive-semantic-layer ${presentationMode}-semantic-layer`} aria-live="polite">
+      {runtime.locked ? <EpisodeCaption episode={runtime.locked} presentationMode={presentationMode} locked /> : null}
+      {primaryEpisode ? <EpisodeCaption episode={primaryEpisode} presentationMode={presentationMode} /> : null}
     </div>
     {runtime.learnerCue ? <LearnerCue cue={runtime.learnerCue} onExpire={onLearnerCueExpire} /> : null}
   </>;

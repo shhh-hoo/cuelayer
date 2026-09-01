@@ -90,6 +90,27 @@ h2 { margin-top: 7px; font-size: 24px; letter-spacing: -.025em; }
 .semantic-caption { position: relative; width: min(880px, 100%); padding: 10px; border: 1px solid #ffffff2e; border-radius: 18px; background: #0d130fe6; box-shadow: 0 16px 42px #00000059; }
 .semantic-caption .embedded-caption-stage { min-height: 0; padding: 12px 18px 14px; overflow: visible; border-radius: 11px; background: transparent; }.semantic-caption .caption-line { max-width: 780px; font-size: clamp(22px, 3.2vw, 40px); }.semantic-caption .semantic-layout { max-width: 780px; font-size: clamp(22px, 3.2vw, 40px); }
 .semantic-caption-locked { align-self: flex-end; width: min(520px, 78%); order: -1; opacity: .94; }.semantic-caption-locked .caption-line, .semantic-caption-locked .semantic-layout { font-size: clamp(16px, 2.1vw, 25px); }
+.presentation-mode-presentationless .presentation-background { background: radial-gradient(circle at 50% 15%, #243a2b, #0a110c 62%); }
+.presentationless-semantic-layer { justify-content: center; padding: clamp(42px, 8vh, 112px) clamp(24px, 7vw, 110px); }
+.presentationless-semantic-layer .semantic-caption { width: min(1120px, 100%); padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.presentationless-semantic-layer .embedded-caption-stage { display: grid; min-height: min(62vh, 760px); padding: 0; place-items: center; background: transparent; }
+.presentationless-semantic-layer .caption-line { max-width: 1030px; font-size: clamp(30px, 4.5vw, 68px); line-height: 1.16; }
+.presentationless-semantic-layer .semantic-layout { max-width: 1040px; font-size: clamp(30px, 4.5vw, 68px); }
+.presentationless-semantic-layer .semantic-caption-locked { position: absolute; right: 24px; bottom: 86px; width: min(360px, calc(100% - 48px)); opacity: .78; }
+.presentationless-semantic-layer .semantic-caption-locked .embedded-caption-stage { min-height: 0; padding: 10px 14px; border: 1px solid #ffffff22; border-radius: 12px; background: #0d130fc7; }
+.presentationless-semantic-layer .semantic-caption-locked .caption-line, .presentationless-semantic-layer .semantic-caption-locked .semantic-layout { font-size: clamp(15px, 1.8vw, 22px); }
+.presentationless-operation { display: grid; width: min(1040px, 100%); justify-items: center; gap: clamp(22px, 4vh, 46px); text-align: center; }
+.presentationless-operation .semantic-layout { width: 100%; }
+.presentationless-operation .semantic-canonical-context { max-width: min(860px, 100%); color: #c7d3c8; font-size: clamp(17px, 1.8vw, 26px); font-weight: 500; line-height: 1.42; letter-spacing: -.02em; }
+.presentationless-operation .semantic-canonical-context .caption-surface { display: inline; }
+.presentationless-relation.relation-cause .semantic-layout { gap: .18em; }
+.presentationless-relation.relation-cause .semantic-relation-entry { gap: .08em; }
+.presentationless-relation.relation-sequence .semantic-layout { gap: .38em; }
+.presentationless-relation.relation-sequence .semantic-relation-entry { grid-template-columns: 1.15em minmax(0, auto); }
+.presentationless-relation.relation-sequence .semantic-connector { grid-column: 2; justify-self: start; }
+.presentationless-relation.relation-contrast .semantic-layout { align-items: center; }
+.presentationless-transform .semantic-layout { gap: .5em; }
+.presentationless-transform .semantic-connector { font-size: .9em; }
 .semantic-caption-cue { position: absolute; top: -11px; right: 15px; padding: 4px 8px; border: 1px solid #d9e46988; border-radius: 999px; color: #f4f8d8; background: #27311ee8; font-size: 10px; font-weight: 780; letter-spacing: .09em; text-transform: uppercase; }
 .learner-cue-layer { display: flex; align-items: flex-end; justify-content: center; padding: 0 22px 178px; }.learner-cue-layer .semantic-caption-cue { position: static; box-shadow: 0 8px 24px #0000004d; }
 .speech-inspection-surface { position: absolute; right: 18px; bottom: 84px; z-index: 2; width: min(440px, calc(100% - 36px)); padding: 11px 13px; border: 1px solid #ffffff29; border-radius: 12px; color: #ecf3eb; background: #101712d9; box-shadow: 0 12px 28px #0000002b; font-size: 13px; line-height: 1.42; }.speech-inspection-surface span { display: block; margin-bottom: 6px; color: #acc8ad; font-size: 10px; font-weight: 760; letter-spacing: .1em; text-transform: uppercase; }.speech-inspection-surface p { margin: 4px 0; }.speech-provisional { color: #b8c7b9; font-style: italic; }
@@ -106,4 +127,4 @@ h2 { margin-top: 7px; font-size: 24px; letter-spacing: -.025em; }
 .teaching-trace-event { padding: 7px 9px; border-radius: 8px; background: #ffffff0a; }
 .teaching-trace-event pre { margin: 8px 0 0; padding: 8px; overflow: auto; border-radius: 6px; color: #afc5b3; background: #0006; white-space: pre-wrap; overflow-wrap: anywhere; }
 .teaching-trace-drawer > p { margin-top: 10px; color: #8ca48f; }
-@media (max-width: 720px) { .session-shell { padding: 10px; }.session-header { margin-bottom: 10px; }.presentation-stage { min-height: 68vh; border-radius: 17px; }.presentation-control-layer { padding: 14px; }.session-controls { gap: 4px; }.session-controls button { padding: 9px 11px; font-size: 13px; } }
+@media (max-width: 720px) { .session-shell { padding: 10px; }.session-header { margin-bottom: 10px; }.presentation-stage { min-height: 68vh; border-radius: 17px; }.presentation-control-layer { padding: 14px; }.session-controls { gap: 4px; }.session-controls button { padding: 9px 11px; font-size: 13px; }.presentationless-semantic-layer { padding: 34px 18px 78px; }.presentationless-semantic-layer .embedded-caption-stage { min-height: 54vh; }.presentationless-semantic-layer .caption-line, .presentationless-semantic-layer .semantic-layout { font-size: clamp(26px, 8vw, 42px); }.presentationless-operation .semantic-canonical-context { font-size: 16px; }.presentationless-semantic-layer .semantic-caption-locked { right: 14px; bottom: 66px; width: min(300px, calc(100% - 28px)); } }

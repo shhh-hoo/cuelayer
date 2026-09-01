@@ -12,10 +12,10 @@ const speech = {
   provisional: { id: "provisional-1", text: "particles move", words: [] },
 };
 
-function stage(showSpeechDebug: boolean) {
+function stage(showSpeechDebug: boolean, presentationStatus: "empty" | "ready" = "empty", stream: MediaStream | null = null) {
   return renderToStaticMarkup(<PresentationStage
-    stream={null}
-    presentationStatus="empty"
+    stream={stream}
+    presentationStatus={presentationStatus}
     sessionStatus="active"
     speech={speech}
     speechStatus="ready"
@@ -27,10 +27,23 @@ function stage(showSpeechDebug: boolean) {
 }
 
 describe("session debug visibility", () => {
+  it("selects the presentationless teaching surface without a shared presentation", () => {
+    const html = stage(false);
+    expect(html).toContain('data-presentation-mode="presentationless"');
+    expect(html).not.toContain("Listening for live teaching");
+  });
+
+  it("preserves the overlay mode when a presentation stream is present", () => {
+    const html = stage(false, "ready", {} as MediaStream);
+    expect(html).toContain('data-presentation-mode="presentation-overlay"');
+    expect(html).toContain("surface-presentation-overlay");
+  });
+
   it("keeps realtime transcript inspection out of a normal /session", () => {
     expect(speechDebugEnabled("")).toBe(false);
     expect(stage(false)).not.toContain("speech-inspection-surface");
-    expect(stage(false)).not.toContain("temperature increases");
+    expect(stage(false)).toContain("temperature increases");
+    expect(stage(false)).not.toContain("particles move");
   });
 
   it("shows provisional and canonical-span inspection only for ?debug=speech", () => {

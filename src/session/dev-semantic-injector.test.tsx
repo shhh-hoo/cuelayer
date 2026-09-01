@@ -32,18 +32,20 @@ describe("development semantic cue injector", () => {
 
     const html = renderToStaticMarkup(<SemanticCaptionLayer
       runtime={state.planner.runtime}
+      speech={state.speech.canonical}
+      presentationMode="presentationless"
       onExpire={() => undefined}
       onLearnerCueExpire={() => undefined}
     />);
     expect(html).toContain("Activation energy");
     expect(html).toContain("semantic-caption");
 
-    state = sessionReducer(state, { type: "renderer-activated", episode: state.planner.runtime.current!, now: 125 });
+    state = sessionReducer(state, { type: "renderer-activated", episode: state.planner.runtime.current!, now: 125, presentationMode: "presentationless" });
     expect(state.trace.events.map((event) => `${event.stage}:${event.decision}`)).toEqual(["compile:emit", "render:activated"]);
     expect(state.trace.events.every((event) => event.traceId === fixture.traceId && event.source === "synthetic")).toBe(true);
     expect(state.trace.events.every((event) => !event.segmentId?.startsWith("committed-"))).toBe(true);
     expect(state.trace.events[0]).toMatchObject({ cueId: fixture.episodeId, displayIntent: { kind: "FOCUS" } });
-    expect(state.trace.events[1]).toMatchObject({ cueId: fixture.episodeId, status: "rendered", latencyMs: 25 });
+    expect(state.trace.events[1]).toMatchObject({ cueId: fixture.episodeId, status: "rendered", presentationMode: "presentationless", latencyMs: 25 });
   });
 
   it("reaches distinct RELATE and TRANSFORM renderer treatments", () => {

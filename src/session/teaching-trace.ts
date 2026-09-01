@@ -1,5 +1,6 @@
 import type { EffectCue } from "../types";
 import type { DisplayIntent, LearnerIntent, PlannerInput, RuntimeDecision } from "../planner/contracts";
+import type { PresentationMode } from "./presentation-mode";
 
 export const DEFAULT_TRACE_LIMIT = 160;
 
@@ -35,7 +36,7 @@ export type TeachingTraceEvent =
   | TraceBase & { stage: "planner_gate"; decision: "run" | "skip"; input?: PlannerInputSummary }
   | TraceBase & { stage: "planner"; decision: "started" | "completed" | "failed" | "aborted" | "stale" | "structured_output_invalid" | "validation_degraded"; input?: PlannerInputSummary; output?: RuntimeDecision }
   | TraceBase & { stage: "compile"; decision: "emit" | "no_emit" | "failed"; displayIntent?: DisplayIntent; learnerIntent?: LearnerIntent; effectCue?: EffectCue }
-  | TraceBase & { stage: "render"; decision: "activated"; status: "rendered"; effectCue?: EffectCue };
+  | TraceBase & { stage: "render"; decision: "activated"; status: "rendered"; presentationMode?: PresentationMode; effectCue?: EffectCue };
 
 type WithoutId<T> = T extends unknown ? Omit<T, "id"> : never;
 export type TeachingTraceEventDraft = WithoutId<TeachingTraceEvent>;
