@@ -3,6 +3,7 @@ import { PresentationStage } from "./PresentationStage";
 import { requestPresentationStream, stopPresentationStream } from "./presentation-capture";
 import { SessionControls } from "./SessionControls";
 import { createInitialSessionState, sessionReducer } from "./session-state";
+import { usePrepareSpeechmaticsAudioContext } from "./SpeechmaticsSessionProvider";
 import { speechStartFailureFrom, useSpeechmaticsSession } from "./use-speechmatics-session";
 
 export function SessionPage() {
@@ -13,6 +14,7 @@ export function SessionPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const endedListenerRef = useRef<(() => void) | null>(null);
   const speechRunIdRef = useRef(0);
+  const prepareSpeechmaticsAudioContext = usePrepareSpeechmaticsAudioContext();
 
   const { start: startSpeechmatics, stop: stopSpeechmatics, pause: pauseSpeechmatics, resume: resumeSpeechmatics } = useSpeechmaticsSession({
     onEvent: (runId, event) => dispatch({ type: "speech-event", runId, event }),
@@ -123,7 +125,7 @@ export function SessionPage() {
       <p>Live session</p>
     </header>
     <PresentationStage ref={stageRef} stream={state.presentation.stream} presentationStatus={state.presentation.status} sessionStatus={state.status} speech={state.speech.canonical} speechStatus={state.speech.status}>
-      <SessionControls sessionStatus={state.status} isFullscreen={isFullscreen} onPauseToggle={toggleSessionPause} onFullscreen={toggleFullscreen} onEnd={() => void endSession()} speechStatus={state.speech.status} onSpeechToggle={() => void toggleSpeech()} />
+      <SessionControls sessionStatus={state.status} isFullscreen={isFullscreen} onPauseToggle={toggleSessionPause} onFullscreen={toggleFullscreen} onEnd={() => void endSession()} speechStatus={state.speech.status} onSpeechToggle={() => void toggleSpeech()} onSpeechPrepare={prepareSpeechmaticsAudioContext} />
     </PresentationStage>
     <section className="session-panel" aria-live="polite">
       {hasPresentation ? <p>{state.status === "paused" ? "The shared presentation remains visible. Pause currently prepares the CueLayer runtime for later speech and AI layers." : "Your presentation is live in CueLayer. Keep controlling the original presentation as usual."}</p> : <>

@@ -182,7 +182,8 @@ export function useSpeechmaticsSession({ onEvent, onReady }: SpeechmaticsSession
       const token = await requestRealtimeToken();
       try {
         await startTranscription(token, createSpeechmaticsConfig(browserAudioContext.sampleRate));
-      } catch {
+      } catch (error) {
+        if (import.meta.env.DEV) console.warn("Speechmatics realtime startup failed", error);
         throw failure("realtime-connection-failed", "CueLayer could not connect to Speechmatics realtime. You can reconnect speech without ending the session.");
       }
       try {
