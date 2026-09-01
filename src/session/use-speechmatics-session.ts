@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { RealtimeTranscriptionConfig } from "@speechmatics/real-time-client-react";
 import { useRealtimeEventListener, useRealtimeTranscription } from "@speechmatics/real-time-client-react";
-import { usePCMAudioListener, usePCMAudioRecorderContext } from "@speechmatics/browser-audio-input-react";
+import { getAudioDevicesStore, useAudioDevices, usePCMAudioListener, usePCMAudioRecorderContext } from "@speechmatics/browser-audio-input-react";
 import { speechEventFromSpeechmatics } from "./speechmatics-adapter";
 import type { SpeechEvent } from "./speech-types";
 
@@ -17,6 +17,36 @@ class SpeechStartError extends Error {
     super(failure.message);
     this.name = "SpeechStartError";
   }
+}
+
+type BrowserAudioActivation = {
+  audioContext?: Pick<AudioContext, "state" | "resume">;
+  permissionState: PermissionState | "prompting";
+  promptPermissions?: () => void | Promise<void>;
+  getPermissionState: () => PermissionState | "prompting";
+};
+
+/** Starts the official browser-audio permission and context lifecycle in the click call stack. */
+export async function activateBrowserAudio({ audioContext, permissionState, promptPermissions, getPermissionState }: BrowserAudioActivation): Promise<void> {
+  if (!audioContext) throw failure("audio-context-failed", "CueLayer could not create browser audio. Reload the page and try again.");
+  if (permissionState === "denied") throw failure("microphone-permission-denied", "CueLayer needs microphone permission to enable live speech.");
+
+  // Both calls begin before the first await, preserving the deliberate Enable mic gesture.
+  const permissionRequest = permissionState === "prompt" && promptPermissions
+    ? Promise.resolve(promptPermissions())
+    : Promise.resolve();
+  const resumeRequest = audioContext.state === "running"
+    ? Promise.resolve()
+    : audioContext.resume().catch(() => { throw failure("audio-context-failed", "CueLayer could not start browser audio. Try interacting with the page and enabling the microphone again."); });
+
+  try {
+    await Promise.all([permissionRequest, resumeRequest]);
+  } catch (error) {
+    if (error instanceof SpeechStartError) throw error;
+    throw new SpeechStartError(speechStartFailureFrom(error));
+  }
+  if (getPermissionState() === "denied") throw failure("microphone-permission-denied", "CueLayer needs microphone permission to enable live speech.");
+  if (audioContext.state !== "running") throw failure("audio-context-failed", "CueLayer could not start browser audio. Try interacting with the page and enabling the microphone again.");
 }
 
 export function createSpeechmaticsConfig(sampleRate: number) {
@@ -91,6 +121,7 @@ export function useSpeechmaticsSession({ onEvent, onReady }: SpeechmaticsSession
   const sawRecordingRef = useRef(false);
   const { startTranscription, stopTranscription, sendAudio, socketState } = useRealtimeTranscription();
   const { startRecording, stopRecording, mute, unmute, isRecording, audioContext } = usePCMAudioRecorderContext();
+  const audioDevices = useAudioDevices();
 
   // This is Speechmatics' documented React audio handoff.
   usePCMAudioListener(sendAudio);
@@ -140,10 +171,17 @@ export function useSpeechmaticsSession({ onEvent, onReady }: SpeechmaticsSession
     stoppingRef.current = false;
     sawRecordingRef.current = false;
     try {
-      if (!audioContext) throw failure("audio-context-failed", "CueLayer could not create browser audio. Reload the page and try again.");
+      const browserAudioContext = audioContext;
+      if (!browserAudioContext) throw failure("audio-context-failed", "CueLayer could not create browser audio. Reload the page and try again.");
+      await activateBrowserAudio({
+        audioContext: browserAudioContext,
+        permissionState: audioDevices.permissionState,
+        promptPermissions: "promptPermissions" in audioDevices ? audioDevices.promptPermissions : undefined,
+        getPermissionState: () => getAudioDevicesStore().permissionState,
+      });
       const token = await requestRealtimeToken();
       try {
-        await startTranscription(token, createSpeechmaticsConfig(audioContext.sampleRate));
+        await startTranscription(token, createSpeechmaticsConfig(browserAudioContext.sampleRate));
       } catch {
         throw failure("realtime-connection-failed", "CueLayer could not connect to Speechmatics realtime. You can reconnect speech without ending the session.");
       }
@@ -159,7 +197,7 @@ export function useSpeechmaticsSession({ onEvent, onReady }: SpeechmaticsSession
       void stopTranscription().catch(() => undefined);
       throw error;
     }
-  }, [audioContext, onReady, startRecording, startTranscription, stopRecording, stopTranscription]);
+  }, [audioContext, audioDevices, onReady, startRecording, startTranscription, stopRecording, stopTranscription]);
 
   const stop = useCallback(async () => {
     activeRunIdRef.current = null;
