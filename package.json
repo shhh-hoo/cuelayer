@@ -4,9 +4,16 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "generate:cuecaption-policy": "node --experimental-strip-types scripts/generate-cuecaption-policy.ts",
+    "check:cuecaption-policy": "node --experimental-strip-types scripts/generate-cuecaption-policy.ts --check",
+    "benchmark:planner": "node --experimental-strip-types scripts/benchmark-live-planner.ts",
+    "predev": "npm run check:cuecaption-policy",
     "dev": "vite",
+    "prebuild": "npm run check:cuecaption-policy",
     "build": "tsc -b && vite build",
+    "pretypecheck": "npm run check:cuecaption-policy",
     "typecheck": "tsc --noEmit",
+    "pretest": "npm run check:cuecaption-policy",
     "test": "vitest run",
     "preview": "vite preview"
   },
@@ -17,8 +24,10 @@
     "@speechmatics/real-time-client": "^8.5.1",
     "@speechmatics/real-time-client-react": "^3.5.1",
     "motion": "13.1.1",
+    "openai": "^7.8.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/react": "19.2.18",

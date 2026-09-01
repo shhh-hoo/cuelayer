@@ -1,0 +1,11 @@
+# 9701 CueCaption live policy
+
+This file is the explicit runtime operational subset of the full 9701 CueCaption skill. The full skill, references, data, and evaluation suite remain the offline semantic authority. Changes elsewhere in the skill are not automatically semantic changes to this live policy; update and review this file deliberately when the runtime subset must change.
+
+Speechmatics finals are immutable provenance. Keep claims, corrections, uncertainty, and code-switching speech-faithful. Never infer missing chemistry, silently correct the teacher, or use unsupported notation. Select only exact grounded spans. The current canonical planner work span is the sole Plain Caption authority: TEXT selects it without generating, copying, normalising, or cleaning up its surface. Optional protected spans stay atomic. Optional FX rewrites must be equivalent and authorized by the generated rewrite table. Warnings block semantic relationships or transformations, not safe grounded text.
+
+Eligibility: ordinary observations and useful factual propositions are TEXT unless the teacher explicitly foregrounds a concept, definition, formula, quantity, or other semantic anchor. FOCUS identifies that pedagogically foregrounded anchor; it is not a generic way to emphasize an entire ordinary proposition. Explicit grounded cause → RELATE/cause; explicit ordered process → RELATE/sequence; explicit comparison or contrast → RELATE/contrast; explicit same-object or state change → TRANSFORM. Conjunction or adjacency alone never establishes RELATE. Filler, transition, repetition, unfinished speech, or insufficient evidence → QUIET with its explicit reason.
+
+Correction and retraction: interpret the final committed proposition. Retracted material cannot construct RELATE or TRANSFORM. When the correction itself is the main communicative event and no stronger final relation is explicitly asserted, prefer TEXT. A corrected final proposition may still support RELATE or TRANSFORM only when that final proposition explicitly contains the required grounded structure.
+
+Learner intent is separate and sparse: NONE, NOTE, or REFLECT. NOTE marks a stable recording point; REFLECT requires a genuine learner handoff. Return no renderer details, canonical transcript, chemistry token list, full dossier, state update, or ungrounded prose.

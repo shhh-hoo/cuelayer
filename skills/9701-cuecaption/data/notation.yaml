@@ -1,4 +1,12 @@
 symbolicRewrites:
+  - plain: increases
+    displayText: ↑
+  - plain: decreases
+    displayText: ↓
+  - plain: approximately constant
+    displayText: ≈ constant
+  - plain: divided by three
+    displayText: ÷ 3
   - plain: carbon dioxide
     displayText: CO₂
   - plain: water
@@ -30,6 +38,7 @@ formulaTypography:
     decision: CANONICALIZE
     requires: explicitly-dictated-formula
 rules:
+  - Phrase-preserving operator rewrites may replace only their exact grounded Plain span and must retain the surrounding wording.
   - Symbolic rewrites are FX-only and must retain the stated chemical meaning.
   - A numerical or chemical negative sign is not the linguistic negation render hint.
   - E_A is the semantic activation-energy symbol; a renderer may later typeset A as a subscript.
