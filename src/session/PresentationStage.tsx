@@ -2,6 +2,8 @@ import { forwardRef, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import type { PresentationStatus, SessionStatus } from "./session-types";
 import type { CanonicalSpeechState, SpeechStatus } from "./speech-types";
+import type { CaptionEpisode, CaptionRuntimeState } from "../planner/contracts";
+import { SemanticCaptionLayer } from "./SemanticCaptionLayer";
 
 type PresentationStageProps = {
   stream: MediaStream | null;
@@ -10,6 +12,11 @@ type PresentationStageProps = {
   children?: ReactNode;
   speech: CanonicalSpeechState;
   speechStatus: SpeechStatus;
+  showSpeechDebug: boolean;
+  captionRuntime: CaptionRuntimeState;
+  onCaptionRendered?(episode: CaptionEpisode, now: number): void;
+  onCaptionExpire(episodeId: string): void;
+  onLearnerCueExpire(cueId: string): void;
 };
 
 const emptyStageCopy: Record<Exclude<PresentationStatus, "ready">, { title: string; detail: string }> = {
@@ -19,7 +26,7 @@ const emptyStageCopy: Record<Exclude<PresentationStatus, "ready">, { title: stri
   error: { title: "Presentation not connected", detail: "Choose a presentation again to continue." },
 };
 
-export const PresentationStage = forwardRef<HTMLElement, PresentationStageProps>(function PresentationStage({ stream, presentationStatus, sessionStatus, children, speech, speechStatus }, ref) {
+export const PresentationStage = forwardRef<HTMLElement, PresentationStageProps>(function PresentationStage({ stream, presentationStatus, sessionStatus, children, speech, speechStatus, showSpeechDebug, captionRuntime, onCaptionRendered, onCaptionExpire, onLearnerCueExpire }, ref) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -36,11 +43,10 @@ export const PresentationStage = forwardRef<HTMLElement, PresentationStageProps>
     <div className="presentation-background">
       {stream ? <video ref={videoRef} className="presentation-video" autoPlay muted playsInline aria-label="Live shared presentation" /> : null}
     </div>
-    <div className="adaptive-semantic-layer" aria-hidden="true" />
-    <div className="learner-cue-layer" aria-hidden="true" />
-    {speechStatus !== "off" && speechStatus !== "ended" ? <aside className="speech-inspection-surface" aria-label="Temporary live speech inspection">
+    <SemanticCaptionLayer runtime={captionRuntime} onRendered={onCaptionRendered} onExpire={onCaptionExpire} onLearnerCueExpire={onLearnerCueExpire} />
+    {showSpeechDebug && speechStatus !== "off" && speechStatus !== "ended" ? <aside className="speech-inspection-surface" aria-label="Live speech debug inspection">
       <span>Live speech · {speechStatus}</span>
-      {speech.committed.slice(-3).map((segment) => <p key={segment.id}>{segment.text}</p>)}
+      {speech.spans.slice(-3).map((span) => <p key={span.id}>{span.text}</p>)}
       {speech.provisional ? <p className="speech-provisional">{speech.provisional.text}</p> : null}
       {speechStatus === "error" ? <p className="speech-provisional">Speech is unavailable. The presentation is still live.</p> : null}
     </aside> : null}

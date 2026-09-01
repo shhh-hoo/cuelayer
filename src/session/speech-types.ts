@@ -10,15 +10,33 @@ export type SpeechEvent =
   | { kind: "committed"; text: string; words: SpeechWord[] }
   | { kind: "error"; code: string; message: string };
 
-export type CanonicalSpeechSegment = {
+export type ProviderFinal = {
   id: string;
   text: string;
   words: SpeechWord[];
+  committedAtMs: number;
+};
+
+export type CanonicalSpeechSpanCloseReason = "meaningful_pause" | "timing_gap" | "terminal_punctuation" | "max_duration" | "max_words";
+
+export type CanonicalSpeechSpan = {
+  id: string;
+  revision: number;
+  sourceFinalIds: string[];
+  text: string;
+  words: SpeechWord[];
+  startMs: number;
+  endMs: number;
+  openedAtMs: number;
+  updatedAtMs: number;
+  status: "open" | "closed";
+  closeReason?: CanonicalSpeechSpanCloseReason;
 };
 
 export type CanonicalSpeechState = {
-  committed: CanonicalSpeechSegment[];
-  provisional?: CanonicalSpeechSegment;
+  finals: ProviderFinal[];
+  spans: CanonicalSpeechSpan[];
+  provisional?: { id: string; text: string; words: SpeechWord[] };
 };
 
 export type SpeechStatus = "off" | "starting" | "ready" | "paused" | "error" | "ended";
