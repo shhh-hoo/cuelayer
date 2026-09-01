@@ -30,7 +30,8 @@ export const PresentationStage = forwardRef<HTMLElement, PresentationStageProps>
     return () => { video.srcObject = null; };
   }, [stream]);
 
-  const emptyCopy = presentationStatus === "ready" ? undefined : sessionStatus === "ended" ? { title: "Session ended", detail: "The presentation connection has been released. You can start another session whenever you are ready." } : emptyStageCopy[presentationStatus];
+  const speechOnly = presentationStatus === "empty" && speechStatus !== "off" && speechStatus !== "ended";
+  const emptyCopy = presentationStatus === "ready" ? undefined : sessionStatus === "ended" ? { title: "Session ended", detail: "The presentation connection has been released. You can start another session whenever you are ready." } : speechOnly ? { title: "Listening for live teaching", detail: "Live speech is active. You can add a presentation whenever you are ready." } : emptyStageCopy[presentationStatus];
   return <section ref={ref} className={`presentation-stage presentation-${presentationStatus} session-${sessionStatus}`} aria-label="Learner presentation stage">
     <div className="presentation-background">
       {stream ? <video ref={videoRef} className="presentation-video" autoPlay muted playsInline aria-label="Live shared presentation" /> : null}

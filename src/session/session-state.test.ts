@@ -13,6 +13,12 @@ describe("live session state", () => {
     expect(sessionReducer(sessionReducer(active, { type: "pause" }), { type: "resume" }).status).toBe("active");
   });
 
+  it("starts speech from idle without requiring a presentation", () => {
+    const startingSpeech = sessionReducer(createInitialSessionState(), { type: "begin-speech", runId: 1 });
+    const readySpeech = sessionReducer(startingSpeech, { type: "speech-ready", runId: 1 });
+    expect(readySpeech).toMatchObject({ status: "active", presentation: { status: "empty", stream: null }, speech: { status: "ready" } });
+  });
+
   it("keeps the session alive when a source ends and supports a new capture", () => {
     const active = sessionReducer(sessionReducer(createInitialSessionState(), { type: "begin-capture" }), { type: "capture-ready", stream });
     const ended = sessionReducer(active, { type: "capture-ended" });
@@ -25,6 +31,20 @@ describe("live session state", () => {
     const failed = sessionReducer(running, { type: "capture-failed", error: { kind: "cancelled", message: "Cancelled" } });
     expect(failed).toMatchObject({ status: "active", presentation: { status: "error", stream: null } });
     expect(sessionReducer(failed, { type: "end" })).toMatchObject({ status: "ended", presentation: { status: "ended", stream: null } });
+  });
+
+  it("keeps speech running when presentation selection fails", () => {
+    const speechReady = sessionReducer(sessionReducer(createInitialSessionState(), { type: "begin-speech", runId: 1 }), { type: "speech-ready", runId: 1 });
+    const choosingPresentation = sessionReducer(speechReady, { type: "begin-capture" });
+    const failed = sessionReducer(choosingPresentation, { type: "capture-failed", error: { kind: "cancelled", message: "Cancelled" } });
+    expect(failed).toMatchObject({ status: "active", presentation: { status: "error" }, speech: { status: "ready", debug: { runId: 1 } } });
+  });
+
+  it("adds a presentation after speech without resetting its canonical state", () => {
+    const speechReady = sessionReducer(sessionReducer(createInitialSessionState(), { type: "begin-speech", runId: 1 }), { type: "speech-ready", runId: 1 });
+    const withSpeech = sessionReducer(speechReady, { type: "speech-event", runId: 1, event: { kind: "committed", text: "activation energy", words: [] } });
+    const presentationReady = sessionReducer(sessionReducer(withSpeech, { type: "begin-capture" }), { type: "capture-ready", stream });
+    expect(presentationReady).toMatchObject({ presentation: { status: "ready", stream }, speech: { status: "ready", canonical: { committed: [{ text: "activation energy" }] }, debug: { runId: 1, committedEvents: 1 } } });
   });
 
   it("ignores an event from a disposed speech run and retains presentation state after a speech failure", () => {

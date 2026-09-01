@@ -3,7 +3,7 @@ import { PresentationStage } from "./PresentationStage";
 import { requestPresentationStream, stopPresentationStream } from "./presentation-capture";
 import { SessionControls } from "./SessionControls";
 import { createInitialSessionState, sessionReducer } from "./session-state";
-import { useSpeechmaticsSession } from "./use-speechmatics-session";
+import { speechStartFailureFrom, useSpeechmaticsSession } from "./use-speechmatics-session";
 
 export function SessionPage() {
   const [state, dispatch] = useReducer(sessionReducer, undefined, createInitialSessionState);
@@ -76,13 +76,12 @@ export function SessionPage() {
     dispatch({ type: "begin-speech", runId });
     try { await startSpeechmatics(runId); }
     catch (error) {
-      const message = error instanceof Error && error.message === "microphone-unsupported" ? "Microphone capture is not available in this browser." : "CueLayer could not enable live speech. Check microphone permission and Speechmatics setup, then try again.";
-      dispatch({ type: "speech-event", runId, event: { kind: "error", code: error instanceof Error ? error.message : "speech-start-failed", message } });
+      const startFailure = speechStartFailureFrom(error);
+      dispatch({ type: "speech-event", runId, event: { kind: "error", code: startFailure.code, message: startFailure.message } });
     }
   };
 
   const toggleSpeech = async () => {
-    if (state.status !== "active") return;
     if (state.speech.status === "ready") {
       pauseSpeechmatics();
       dispatch({ type: "speech-paused", runId: state.speech.debug.runId });
@@ -124,7 +123,7 @@ export function SessionPage() {
       <p>Live session</p>
     </header>
     <PresentationStage ref={stageRef} stream={state.presentation.stream} presentationStatus={state.presentation.status} sessionStatus={state.status} speech={state.speech.canonical} speechStatus={state.speech.status}>
-      {hasPresentation ? <SessionControls paused={state.status === "paused"} isFullscreen={isFullscreen} onPauseToggle={toggleSessionPause} onFullscreen={toggleFullscreen} onEnd={() => void endSession()} speechStatus={state.speech.status} onSpeechToggle={() => void toggleSpeech()} /> : null}
+      <SessionControls sessionStatus={state.status} isFullscreen={isFullscreen} onPauseToggle={toggleSessionPause} onFullscreen={toggleFullscreen} onEnd={() => void endSession()} speechStatus={state.speech.status} onSpeechToggle={() => void toggleSpeech()} />
     </PresentationStage>
     <section className="session-panel" aria-live="polite">
       {hasPresentation ? <p>{state.status === "paused" ? "The shared presentation remains visible. Pause currently prepares the CueLayer runtime for later speech and AI layers." : "Your presentation is live in CueLayer. Keep controlling the original presentation as usual."}</p> : <>

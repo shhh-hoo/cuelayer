@@ -24,9 +24,10 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       if (state.status === "idle" || state.status === "ended") return state;
       return { ...state, presentation: { status: "ended", stream: null } };
     case "begin-speech":
-      if (state.status !== "active" || state.speech.status === "starting" || state.speech.status === "ready") return state;
+      if (state.status === "ended" || state.status === "paused" || state.speech.status === "starting" || state.speech.status === "ready") return state;
       return {
         ...state,
+        status: "active",
         speech: { status: "starting", canonical: createInitialCanonicalSpeechState(), debug: { runId: action.runId, provisionalEvents: 0, committedEvents: 0 } },
       };
     case "speech-ready":
