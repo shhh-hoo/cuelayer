@@ -57,8 +57,16 @@ export function SemanticCaptionLayer({ runtime, speech, presentationMode, onRend
     return () => window.clearTimeout(timeout);
   }, [onExpire, runtime.current]);
   const latestSpan = speech.spans.at(-1);
-  const currentMatchesCanonicalSpeech = Boolean(runtime.current && (!latestSpan || runtime.current.sourceSegmentIds.includes(latestSpan.id)));
-  const primaryEpisode = currentMatchesCanonicalSpeech ? runtime.current : latestSpan?.text.trim() ? episodeForCanonicalSpan(latestSpan) : undefined;
+  const currentMatchesCanonicalSpeech = Boolean(runtime.current && (!latestSpan || (
+    runtime.current.sourceSegmentIds.includes(latestSpan.id)
+    && runtime.current.activatedAt >= latestSpan.updatedAtMs
+  )));
+  const latestCanonicalEpisode = latestSpan?.text.trim() ? episodeForCanonicalSpan(latestSpan) : undefined;
+  const primaryEpisode = presentationMode === "presentation-overlay"
+    ? runtime.current
+    : currentMatchesCanonicalSpeech
+      ? runtime.current
+      : latestCanonicalEpisode;
   return <>
     <div className={`adaptive-semantic-layer ${presentationMode}-semantic-layer`} aria-live="polite">
       {runtime.locked ? <EpisodeCaption episode={runtime.locked} presentationMode={presentationMode} locked /> : null}

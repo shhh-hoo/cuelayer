@@ -36,7 +36,9 @@ describe("session debug visibility", () => {
   it("preserves the overlay mode when a presentation stream is present", () => {
     const html = stage(false, "ready", {} as MediaStream);
     expect(html).toContain('data-presentation-mode="presentation-overlay"');
-    expect(html).toContain("surface-presentation-overlay");
+    expect(html).toContain("Live shared presentation");
+    expect(html).not.toContain("semantic-caption");
+    expect(html).not.toContain("temperature increases");
   });
 
   it("keeps realtime transcript inspection out of a normal /session", () => {

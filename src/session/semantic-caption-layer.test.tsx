@@ -20,4 +20,20 @@ describe("presentationless canonical fallback", () => {
     expect(html).toContain("A stable canonical teaching statement remains visible.");
     expect(html).not.toContain("Old effect");
   });
+
+  it("does not render canonical fallback in presentation overlay mode", () => {
+    const html = renderToStaticMarkup(<SemanticCaptionLayer runtime={createInitialCaptionRuntime()} speech={speech} presentationMode="presentation-overlay" onExpire={() => undefined} onLearnerCueExpire={() => undefined} />);
+    expect(html).not.toContain("A stable canonical teaching statement remains visible.");
+    expect(html).not.toContain("semantic-caption");
+  });
+
+  it("replaces an older semantic episode when the same canonical span advances revision", () => {
+    const newerSpeech = {
+      ...speech,
+      spans: [{ ...speech.spans[0], revision: 2, text: "The canonical span now includes newly committed speech.", updatedAtMs: 200 }],
+    };
+    const html = renderToStaticMarkup(<SemanticCaptionLayer runtime={{ current: { id: "old-revision", clip: { id: "old-revision", captionText: "The old semantic episode.", words: [], cues: [] }, status: "holding", sourceSegmentIds: ["speech-span-0"], activatedAt: 100 } }} speech={newerSpeech} presentationMode="presentationless" onExpire={() => undefined} onLearnerCueExpire={() => undefined} />);
+    expect(html).toContain("The canonical span now includes newly committed speech.");
+    expect(html).not.toContain("The old semantic episode.");
+  });
 });
