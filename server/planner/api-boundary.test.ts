@@ -22,5 +22,6 @@ describe("Vercel planner function boundary", () => {
       functions?: Record<string, { includeFiles?: string }>;
     };
     expect(config.functions?.["api/planner/decision.ts"]?.includeFiles).toBe("server/planner/**");
+    expect(config.functions?.["api/teaching/interpretation.ts"]?.includeFiles).toBe("server/teaching/**");
   });
 });

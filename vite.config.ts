@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { createSpeechmaticsJWT } from "@speechmatics/auth";
 import { requestOpenAIPlannerDecision } from "./server/planner/openai-planner.ts";
+import { estimateTeachingCost, requestOpenAITeachingInterpretation } from "./server/teaching/openai-interpreter.ts";
 
 async function requestBody(request: import("http").IncomingMessage): Promise<unknown> {
   const chunks: Uint8Array[] = [];
@@ -45,6 +46,30 @@ export default defineConfig(({ mode }) => {
           const decision = await requestOpenAIPlannerDecision(input as never, openAIApiKey, env.OPENAI_MODEL || "gpt-5.6-luna");
           response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ decision }));
         } catch (error) { response.statusCode = 502; response.end(JSON.stringify({ error: plannerFailureReason(error) })); }
+      });
+      server.middlewares.use("/api/teaching/interpretation", async (request, response) => {
+        response.setHeader("Cache-Control", "no-store");
+        if (request.method !== "POST") { response.statusCode = 405; response.end(JSON.stringify({ error: "method-not-allowed" })); return; }
+        const openAIApiKey = env.OPENAI_API_KEY;
+        if (!openAIApiKey) { response.statusCode = 503; response.end(JSON.stringify({ error: "planner-not-configured" })); return; }
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort("hard_deadline"), 6_000);
+        try {
+          const input = await requestBody(request);
+          const result = await requestOpenAITeachingInterpretation(input as never, openAIApiKey, env.OPENAI_MODEL || "gpt-5.6-luna", { signal: controller.signal });
+          const estimatedCostUsd = estimateTeachingCost(result.usage, {
+            inputPerMillion: env.OPENAI_INPUT_COST_PER_MILLION ? Number(env.OPENAI_INPUT_COST_PER_MILLION) : undefined,
+            cachedInputPerMillion: env.OPENAI_CACHED_INPUT_COST_PER_MILLION ? Number(env.OPENAI_CACHED_INPUT_COST_PER_MILLION) : undefined,
+            outputPerMillion: env.OPENAI_OUTPUT_COST_PER_MILLION ? Number(env.OPENAI_OUTPUT_COST_PER_MILLION) : undefined,
+          });
+          response.setHeader("Content-Type", "application/json");
+          response.end(JSON.stringify({ ...result, ...(estimatedCostUsd === undefined ? {} : { estimatedCostUsd }) }));
+        } catch (error) {
+          response.statusCode = 502;
+          response.end(JSON.stringify({ error: controller.signal.aborted ? "teaching-interpretation-timeout" : plannerFailureReason(error) }));
+        } finally {
+          clearTimeout(timeout);
+        }
       });
     },
   }],
