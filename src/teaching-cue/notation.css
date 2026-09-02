@@ -11,16 +11,73 @@
 .notation-native-equation {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   gap: .12em .28em;
 }
-.notation-native-symbol { display: inline-flex; align-items: baseline; white-space: nowrap; font-style: italic; }
+.notation-native-equation-piece {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+}
+.notation-native-annotated-piece {
+  display: inline-grid;
+  grid-template-rows: auto auto;
+  justify-items: center;
+  align-items: start;
+  gap: .1em;
+  min-width: 0;
+}
+.notation-native-annotation {
+  min-width: 100%;
+  padding-top: .34em;
+  border-top: 2px solid #d9e469;
+  color: #9aaa9d;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(12px, .18em, 15px);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: .01em;
+  text-align: center;
+  white-space: nowrap;
+}
+.notation-native-symbol {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  font-style: italic;
+  line-height: 1;
+}
 .notation-native-symbol[data-roman="true"] { font-style: normal; }
-.notation-native-symbol sub,
-.notation-native-formula sub { font-size: .56em; line-height: 0; vertical-align: -.34em; }
-.notation-native-symbol sup,
-.notation-native-formula sup { font-size: .56em; line-height: 0; vertical-align: .64em; }
+.notation-native-base { display: inline-block; }
+.notation-native-scripts {
+  display: inline-grid;
+  grid-template-rows: .52em .52em;
+  width: max-content;
+  margin-left: .035em;
+  align-self: center;
+  font-style: normal;
+  line-height: 1;
+}
+.notation-native-scripts sup,
+.notation-native-scripts sub {
+  position: static;
+  margin: 0;
+  padding: 0;
+  font-size: .52em;
+  line-height: 1;
+}
+.notation-native-scripts sup {
+  grid-row: 1;
+  align-self: end;
+  transform: translateY(-.08em);
+}
+.notation-native-scripts sub {
+  grid-row: 2;
+  align-self: start;
+  transform: translateY(.08em);
+}
 .notation-native-operator { white-space: nowrap; opacity: .82; }
 .notation-native-fraction {
   display: inline-grid;
@@ -54,6 +111,16 @@
 .notation-native-reaction-arrow { opacity: .72; }
 .notation-native-reaction-arrow { flex: 0 0 auto; font-family: ui-sans-serif, system-ui, sans-serif; }
 .notation-native-species { display: inline-flex; align-items: baseline; white-space: nowrap; font-style: normal; }
+.notation-native-formula sub {
+  font-size: .56em;
+  line-height: 0;
+  vertical-align: -.34em;
+}
+.notation-native-formula sup {
+  font-size: .56em;
+  line-height: 0;
+  vertical-align: .64em;
+}
 .notation-native-coefficient { margin-right: .04em; }
 .notation-native-state { margin-left: .04em; font-size: .62em; opacity: .78; }
 .notation-invalid {
