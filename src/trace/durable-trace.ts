@@ -91,9 +91,27 @@ export function prepareDurableTraceEvent(sessionId: string, draft: DurableTraceE
 }
 
 export function compareTraceEvents(left: DurableTraceEvent, right: DurableTraceEvent): number {
-  return left.occurredAt.localeCompare(right.occurredAt) || left.id.localeCompare(right.id);
+  const time = left.occurredAt.localeCompare(right.occurredAt);
+  if (time) return time;
+  const source = left.sourceInstanceId.localeCompare(right.sourceInstanceId);
+  if (source) return source;
+  const sequence = left.sourceSeq - right.sourceSeq;
+  if (sequence) return sequence;
+  return left.id.localeCompare(right.id);
 }
 
-export function traceEventsToJsonl(events: DurableTraceEvent[]): string {
-  return [...events].sort(compareTraceEvents).map((event) => JSON.stringify(event)).join("\n") + (events.length ? "\n" : "");
+export function traceRunScope(pageInstanceId: string, runId: number) {
+  return `${pageInstanceId}:speech-run-${runId}`;
+}
+
+export function scopedRunCorrelationId(pageInstanceId: string, runId: number, kind: string, value: string | number) {
+  return `${traceRunScope(pageInstanceId, runId)}:${kind}:${value}`;
+}
+
+export function scopedApiRequestId(pageInstanceId: string, operation: string, identity: string | number) {
+  return `${pageInstanceId}:api:${operation}:${identity}`;
+}
+
+export function isHumanTimelineEvent(event: Pick<DurableTraceEvent, "type">) {
+  return event.type !== "speechmatics.raw_message" && event.type !== "asr.partial";
 }

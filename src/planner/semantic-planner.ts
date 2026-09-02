@@ -1,8 +1,9 @@
 import type { PlannerInput } from "./contracts";
 import type { DurableTraceEventDraft } from "../trace/durable-trace";
+import { deliverTraceWithoutBlocking } from "../trace/client-api-trace";
 
 export type SemanticPlanner = {
-  decide(input: PlannerInput, options?: { signal?: AbortSignal; traceSessionId?: string; apiRequestId?: string; plannerRequestId?: number; onTraceEvents?(events: DurableTraceEventDraft[]): Promise<unknown> | unknown }): Promise<unknown>;
+  decide(input: PlannerInput, options?: { signal?: AbortSignal; traceSessionId?: string; apiRequestId?: string; plannerRequestId?: string | number; onTraceEvents?(events: DurableTraceEventDraft[]): Promise<unknown> | unknown }): Promise<unknown>;
 };
 
 type PlannerResponse = { decision?: unknown; error?: string; traceEvents?: DurableTraceEventDraft[] };
@@ -24,7 +25,7 @@ export function createHttpSemanticPlanner(endpoint = "/api/planner/decision"): S
         signal: options?.signal,
       });
       const body = await response.json().catch(() => ({})) as PlannerResponse;
-      if (body.traceEvents?.length) await options?.onTraceEvents?.(body.traceEvents);
+      if (body.traceEvents?.length) deliverTraceWithoutBlocking(options?.onTraceEvents, body.traceEvents);
       if (!response.ok || !body.decision) throw new Error(body.error ?? "Planner is temporarily unavailable.");
       return body.decision;
     },

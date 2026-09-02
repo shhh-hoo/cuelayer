@@ -11,7 +11,7 @@ import type { CaptionEpisode } from "../planner/contracts";
 import { createSyntheticSemanticFixture, type SyntheticIntentKind } from "./dev-semantic-fixtures";
 import type { PresentationMode } from "./presentation-mode";
 import { presentationModeFor } from "./presentation-mode";
-import { resolveTraceSession } from "../trace/session-identity";
+import { beginNewTraceSession, resolveTraceSession } from "../trace/session-identity";
 import { useDurableTrace } from "../trace/use-durable-trace";
 import type { DurableTraceEventDraft } from "../trace/durable-trace";
 import type { SpeechEvent } from "./speech-types";
@@ -27,7 +27,7 @@ export function developmentSpeechDebugEnabled(isDevelopment: boolean, search: st
 export function SessionPage() {
   const showSpeechDebug = speechDebugEnabled(window.location.search);
   const developmentDebug = developmentSpeechDebugEnabled(import.meta.env.DEV, window.location.search);
-  const [traceIdentity] = useState(() => resolveTraceSession(window.location, window.history));
+  const [traceIdentity, setTraceIdentity] = useState(() => resolveTraceSession(window.location, window.history));
   const [state, dispatch] = useReducer(sessionReducer, undefined, createDurableSessionState);
   const durableTrace = useDurableTrace({ sessionId: traceIdentity.sessionId, isNewSession: traceIdentity.isNew, liveTrace: state.trace });
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -55,6 +55,7 @@ export function SessionPage() {
 
   const { start: startSpeechmatics, stop: stopSpeechmatics, pause: pauseSpeechmatics, resume: resumeSpeechmatics } = useSpeechmaticsSession({
     traceSessionId: traceIdentity.sessionId,
+    tracePageInstanceId: durableTrace.pageInstanceId,
     onServerTraceEvents: durableTrace.append,
     onEvent: onSpeechEvent,
     onReady: onSpeechReady,
@@ -69,6 +70,7 @@ export function SessionPage() {
     planner: state.planner,
     tracingEnabled: true,
     traceSessionId: traceIdentity.sessionId,
+    tracePageInstanceId: durableTrace.pageInstanceId,
     onServerTraceEvents: durableTrace.append,
     dispatch,
   });
@@ -150,8 +152,19 @@ export function SessionPage() {
     await stopSpeech();
     releasePresentation(true);
     await exitStageFullscreen();
-    await appendTrace({ stage: "session", type: "session.ended", payload: { reason: "user_ended_session" } });
+    appendTrace({ stage: "session", type: "session.ended", payload: { reason: "user_ended_session" } });
+    await durableTrace.complete();
     dispatch({ type: "end" });
+  };
+
+  const startAnotherSession = async () => {
+    speechRunIdRef.current = 0;
+    syntheticSequenceRef.current = 0;
+    lifecycleSequenceRef.current = 0;
+    previousPresentationModeRef.current = undefined;
+    setTraceIdentity(beginNewTraceSession(window.location, window.history));
+    dispatch({ type: "restart" });
+    await startPresentation();
   };
 
   const startSpeech = async () => {
@@ -211,7 +224,7 @@ export function SessionPage() {
     <section className="session-panel" aria-live="polite">
       {hasPresentation ? <p>{state.status === "paused" ? "The shared presentation remains visible. Resume when you are ready to continue speech-aware captions." : "Your presentation is live in CueLayer. Press Space to keep or release the current semantic caption."}</p> : <>
         <p>{panelMessage}</p>
-        <div className="session-panel-actions"><button className="choose-presentation-button" type="button" disabled={state.presentation.status === "starting"} onClick={() => void startPresentation()}>{state.presentation.status === "starting" ? "Choosing presentation…" : state.status === "ended" ? "Start another session" : "Choose presentation"}</button>{sessionIsRunning && state.presentation.status !== "starting" ? <button className="end-session-link" type="button" onClick={() => void endSession()}>End session</button> : null}</div>
+        <div className="session-panel-actions"><button className="choose-presentation-button" type="button" disabled={state.presentation.status === "starting"} onClick={() => void (state.status === "ended" ? startAnotherSession() : startPresentation())}>{state.presentation.status === "starting" ? "Choosing presentation…" : state.status === "ended" ? "Start another session" : "Choose presentation"}</button>{sessionIsRunning && state.presentation.status !== "starting" ? <button className="end-session-link" type="button" onClick={() => void endSession()}>End session</button> : null}</div>
       </>}
       {state.speech.error ? <p className="session-error" role="alert">{state.speech.error.message}</p> : null}
       {showSpeechDebug && state.speech.status !== "off" ? <p className="session-debug">Speech debug · run {state.speech.debug.runId} · partials {state.speech.debug.provisionalEvents} · raw finals {state.speech.canonical.finals.length} · spans {state.speech.canonical.spans.length}{state.speech.debug.lastError ? ` · last error: ${state.speech.debug.lastError.code}` : ""}</p> : null}

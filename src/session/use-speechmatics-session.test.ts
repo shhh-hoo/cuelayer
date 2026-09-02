@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { activateBrowserAudio, createSpeechmaticsConfig, speechStartFailureFrom } from "./use-speechmatics-session";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { activateBrowserAudio, createSpeechmaticsConfig, requestRealtimeToken, speechStartFailureFrom } from "./use-speechmatics-session";
 
 describe("Speechmatics configuration", () => {
+  afterEach(() => vi.unstubAllGlobals());
   it("uses the actual browser audio sample rate for raw PCM", () => {
     expect(createSpeechmaticsConfig(48_000).audio_format.sample_rate).toBe(48_000);
   });
@@ -31,5 +32,14 @@ describe("Speechmatics configuration", () => {
     });
 
     expect(order).toEqual(["permission", "audio-context"]);
+  });
+
+  it("consumes a token without waiting for slow trace persistence and allows missing trace session metadata", async () => {
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => new Response(JSON.stringify({ token: "temporary-token", traceEvents: [{ id: "server-fact" }] }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetch);
+    const neverSettles = vi.fn(() => new Promise(() => undefined));
+    await expect(requestRealtimeToken(undefined, "api-token-request", neverSettles)).resolves.toBe("temporary-token");
+    expect(fetch.mock.calls[0]?.[1]?.headers).toEqual({ Accept: "application/json", "X-CueLayer-Api-Request-Id": "api-token-request" });
+    expect(neverSettles).toHaveBeenCalledOnce();
   });
 });

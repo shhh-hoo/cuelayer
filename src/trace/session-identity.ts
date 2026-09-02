@@ -9,12 +9,17 @@ export function createSessionId(randomUUID: () => string = () => crypto.randomUU
   return `session-${randomUUID()}`;
 }
 
-export function resolveTraceSession(location: LocationLike, history: HistoryLike, randomUUID?: () => string): TraceSessionIdentity {
+export function beginNewTraceSession(location: LocationLike, history: HistoryLike, randomUUID?: () => string): TraceSessionIdentity {
   const url = new URL(location.href);
-  const existing = url.searchParams.get("sessionId");
-  if (existing && SESSION_ID.test(existing)) return { sessionId: existing, isNew: false };
   const sessionId = createSessionId(randomUUID);
   url.searchParams.set("sessionId", sessionId);
   history.replaceState(null, "", url);
   return { sessionId, isNew: true };
+}
+
+export function resolveTraceSession(location: LocationLike, history: HistoryLike, randomUUID?: () => string): TraceSessionIdentity {
+  const url = new URL(location.href);
+  const existing = url.searchParams.get("sessionId");
+  if (existing && SESSION_ID.test(existing)) return { sessionId: existing, isNew: false };
+  return beginNewTraceSession(location, history, randomUUID);
 }

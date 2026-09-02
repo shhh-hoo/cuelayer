@@ -96,14 +96,47 @@ describe("development teaching trace", () => {
     state = sessionReducer(state, { type: "renderer-activated", episode: state.planner.runtime.current!, now: 190, presentationMode: "presentationless", surfaceSource: "semantic", rendererState: { captionText: "temperature increases" } });
     const durable = state.trace.events.map((event) => teachingTraceEventToDurable(event, "page-correlation"));
 
-    expect(durable.find((event) => event.type === "asr.final")?.correlation).toMatchObject({ speechEventId: "provider-event-1-0", finalId: "provider-final-0" });
-    expect(durable.find((event) => event.type === "commit.committed")?.correlation).toMatchObject({ commitId: "provider-final-0", finalId: "provider-final-0" });
-    expect(durable.find((event) => event.type === "span.opened")?.correlation).toMatchObject({ finalId: "provider-final-0", spanId: "speech-span-0", spanRevision: 1 });
-    expect(durable.find((event) => event.type === "planner.started")?.correlation).toMatchObject({ spanId: "speech-span-0", plannerRequestId: "9" });
+    expect(durable.find((event) => event.type === "asr.final")?.correlation).toMatchObject({ speechEventId: "page-correlation:speech-run-1:speech-event:provider-event-1-0", finalId: "page-correlation:speech-run-1:final:provider-final-0" });
+    expect(durable.find((event) => event.type === "commit.committed")?.correlation).toMatchObject({ commitId: "page-correlation:speech-run-1:commit:provider-final-0", finalId: "page-correlation:speech-run-1:final:provider-final-0" });
+    expect(durable.find((event) => event.type === "span.opened")?.correlation).toMatchObject({ finalId: "page-correlation:speech-run-1:final:provider-final-0", spanId: "page-correlation:speech-run-1:span:speech-span-0", spanRevision: 1 });
+    expect(durable.find((event) => event.type === "planner.started")?.correlation).toMatchObject({ spanId: "page-correlation:speech-run-1:span:speech-span-0", plannerRequestId: "page-correlation:speech-run-1:planner-request:9", apiRequestId: "page-correlation:api:planner:1-9" });
     expect(durable.find((event) => event.type === "planner.completed")?.payload).toMatchObject({ output: focus });
     const cueId = durable.find((event) => event.type === "compile.emit")?.correlation?.cueId;
-    expect(cueId).toBe("caption-1-9");
-    expect(durable.find((event) => event.type === "render.activated")?.correlation).toMatchObject({ spanId: "speech-span-0", plannerRequestId: "9", cueId });
+    expect(cueId).toBe("page-correlation:speech-run-1:cue:caption-1-9");
+    expect(durable.find((event) => event.type === "render.activated")?.correlation).toMatchObject({ spanId: "page-correlation:speech-run-1:span:speech-span-0", plannerRequestId: "page-correlation:speech-run-1:planner-request:9", cueId });
+  });
+
+  it("namespaces reset canonical IDs across speech restarts in one page writer", () => {
+    let state = sessionReducer(createInitialSessionState(true), { type: "begin-speech", runId: 1 });
+    state = sessionReducer(state, { type: "speech-ready", runId: 1 });
+    state = sessionReducer(state, { type: "speech-event", runId: 1, event: { kind: "committed", text: "first run", words: [], provider: { message: "AddTranscript", resultCount: 1, sequence: 0 } }, now: 10 });
+    state = sessionReducer(state, { type: "speech-stopped", runId: 1 });
+    state = sessionReducer(state, { type: "begin-speech", runId: 2 });
+    state = sessionReducer(state, { type: "speech-ready", runId: 2 });
+    state = sessionReducer(state, { type: "speech-event", runId: 2, event: { kind: "committed", text: "second run", words: [], provider: { message: "AddTranscript", resultCount: 1, sequence: 0 } }, now: 20 });
+    const finals = state.trace.events.filter((event) => event.stage === "asr" && event.decision === "final").map((event) => teachingTraceEventToDurable(event, "page-restart").correlation?.finalId);
+    const spans = state.trace.events.filter((event) => event.stage === "span" && event.decision === "opened").map((event) => teachingTraceEventToDurable(event, "page-restart").correlation?.spanId);
+    expect(new Set(finals).size).toBe(2);
+    expect(new Set(spans).size).toBe(2);
+  });
+
+  it("shares one durable message correlation between raw Speechmatics evidence and parsed ASR", () => {
+    let state = sessionReducer(createInitialSessionState(true), { type: "begin-speech", runId: 3 });
+    state = sessionReducer(state, { type: "speech-ready", runId: 3 });
+    state = sessionReducer(state, { type: "speech-event", runId: 3, event: { kind: "committed", text: "linked", words: [], provider: { message: "AddTranscript", resultCount: 1, sequence: 4, messageId: "provider-message-3-4" } }, now: 10 });
+    const parsed = teachingTraceEventToDurable(state.trace.events.find((event) => event.stage === "asr")!, "page-raw-link");
+    expect(parsed.correlation?.speechEventId).toBe("page-raw-link:speech-run-3:speech-event:provider-message-3-4");
+  });
+
+  it("keeps continued speech and planner identities unique after a page reload", () => {
+    let state = committedState();
+    const input = plannerInput(state);
+    state = sessionReducer(state, { type: "planner-requested", runId: 1, requestId: 1, ...checkpoint, input, now: 110 });
+    const trace = state.trace.events;
+    const beforeReload = trace.map((event) => teachingTraceEventToDurable(event, "page-before-reload"));
+    const afterReload = trace.map((event) => teachingTraceEventToDurable(event, "page-after-reload"));
+    expect(new Set([...beforeReload, ...afterReload].map((event) => event.id)).size).toBe(beforeReload.length + afterReload.length);
+    expect(beforeReload.find((event) => event.type === "planner.started")?.correlation?.apiRequestId).not.toBe(afterReload.find((event) => event.type === "planner.started")?.correlation?.apiRequestId);
   });
 
   it("explains a planner QUIET result as compile no_emit", () => {

@@ -5,7 +5,8 @@ import type { CaptionEpisode, DisplayIntent, PlannerDebugState, PlannerInput } f
 import { duePlannerCheckpoint, LIVE_PLANNER_BUDGET_MS, SPEECH_SPAN_ASSEMBLY, type PlannerCheckpointCursor } from "./canonical-speech";
 import type { CanonicalSpeechState, SpeechStatus } from "./speech-types";
 import type { SessionAction, SessionStatus } from "./session-types";
-import type { DurableTraceEventDraft } from "../trace/durable-trace";
+import { scopedApiRequestId, scopedRunCorrelationId, type DurableTraceEventDraft } from "../trace/durable-trace";
+import { clientApiTraceEvent, deliverTraceWithoutBlocking } from "../trace/client-api-trace";
 
 type TeachingPlannerCallbacks = {
   sessionStatus: SessionStatus;
@@ -15,6 +16,7 @@ type TeachingPlannerCallbacks = {
   planner: PlannerDebugState;
   tracingEnabled?: boolean;
   traceSessionId?: string;
+  tracePageInstanceId?: string;
   onServerTraceEvents?(events: DurableTraceEventDraft[]): Promise<unknown> | unknown;
   dispatch(action: SessionAction): void;
   semanticPlanner?: SemanticPlanner;
@@ -23,7 +25,7 @@ type TeachingPlannerCallbacks = {
 const captionContext = (episode?: CaptionEpisode): { sourceSegmentIds: string[]; displayKind: DisplayIntent["kind"] } | undefined => episode ? { sourceSegmentIds: episode.sourceSegmentIds, displayKind: episode.cue?.kind ?? "TEXT" } : undefined;
 
 /** Coalesces Speechmatics finals into one bounded planner request at a time. */
-export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, canonicalSpeech, planner, tracingEnabled = false, traceSessionId, onServerTraceEvents, dispatch, semanticPlanner }: TeachingPlannerCallbacks) {
+export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, canonicalSpeech, planner, tracingEnabled = false, traceSessionId, tracePageInstanceId, onServerTraceEvents, dispatch, semanticPlanner }: TeachingPlannerCallbacks) {
   const defaultPlanner = useMemo(() => createHttpSemanticPlanner(), []);
   const scheduler = useRef(new SingleFlightPlanner());
   const observed = useRef({ runId: -1, checkpoints: new Map<string, PlannerCheckpointCursor>() });
@@ -74,6 +76,9 @@ export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, c
     const startedAt = work.startedAtMs;
     if (tracingEnabled) dispatch({ type: "planner-gate", runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, segmentIds: work.segmentIds, decision: "run", reason: "canonical_span_checkpoint", requestId: work.requestId, input, now: startedAt });
     dispatch({ type: "planner-requested", requestId: work.requestId, runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, input, segmentIds: work.segmentIds, now: startedAt });
+    const plannerRequestId = tracePageInstanceId ? scopedRunCorrelationId(tracePageInstanceId, speechRunId, "planner-request", work.requestId) : String(work.requestId);
+    const apiRequestId = tracePageInstanceId ? scopedApiRequestId(tracePageInstanceId, "planner", `${speechRunId}-${work.requestId}`) : `planner-${speechRunId}-${work.requestId}`;
+    if (tracePageInstanceId) deliverTraceWithoutBlocking(onServerTraceEvents, [clientApiTraceEvent({ pageInstanceId: tracePageInstanceId, apiRequestId, plannerRequestId, outcome: "started" })]);
     const controller = new AbortController();
     let settled = false;
     let timeout: number | undefined;
@@ -84,11 +89,12 @@ export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, c
       scheduler.current.cancel(work.requestId, speechRunId);
       controller.abort(reason);
       if (activeRequest.current?.requestId === work.requestId) activeRequest.current = undefined;
+      if (tracePageInstanceId) deliverTraceWithoutBlocking(onServerTraceEvents, [clientApiTraceEvent({ pageInstanceId: tracePageInstanceId, apiRequestId, plannerRequestId, outcome: reason === "live_budget_timeout" ? "timed_out" : "aborted", reason })]);
       dispatch({ type: "planner-aborted", requestId: work.requestId, runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, input, reason, now: Date.now(), startedAt, segmentIds: work.segmentIds });
     };
     activeRequest.current = { requestId: work.requestId, abort };
     timeout = window.setTimeout(() => abort("live_budget_timeout"), LIVE_PLANNER_BUDGET_MS);
-    void plannerClient.decide(input, { signal: controller.signal, traceSessionId, apiRequestId: `planner-${speechRunId}-${work.requestId}`, plannerRequestId: work.requestId, onTraceEvents: onServerTraceEvents }).then(
+    void plannerClient.decide(input, { signal: controller.signal, traceSessionId, apiRequestId, plannerRequestId, onTraceEvents: onServerTraceEvents }).then(
       (decision) => {
         if (settled) return;
         settled = true;
@@ -103,8 +109,9 @@ export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, c
         if (timeout !== undefined) window.clearTimeout(timeout);
         scheduler.current.complete(work.requestId, speechRunId);
         if (activeRequest.current?.requestId === work.requestId) activeRequest.current = undefined;
+        if (tracePageInstanceId) deliverTraceWithoutBlocking(onServerTraceEvents, [clientApiTraceEvent({ pageInstanceId: tracePageInstanceId, apiRequestId, plannerRequestId, outcome: "failed", reason: error instanceof Error ? error.message : "planner_failed" })]);
         dispatch({ type: "planner-failed", requestId: work.requestId, runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, input, message: error instanceof Error ? error.message : "Planner is temporarily unavailable.", now: Date.now(), startedAt, segmentIds: work.segmentIds });
       },
     );
-  }, [canonicalSpeech.spans, dispatch, onServerTraceEvents, planner.runtime, planner.status, plannerClient, sessionStatus, speechRunId, speechStatus, traceSessionId, tracingEnabled]);
+  }, [canonicalSpeech.spans, dispatch, onServerTraceEvents, planner.runtime, planner.status, plannerClient, sessionStatus, speechRunId, speechStatus, tracePageInstanceId, traceSessionId, tracingEnabled]);
 }

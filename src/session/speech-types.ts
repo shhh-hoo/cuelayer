@@ -13,6 +13,7 @@ export type SpeechProviderMetadata = {
   startMs?: number;
   endMs?: number;
   sequence?: number;
+  messageId?: string;
 };
 
 export type SpeechEvent =

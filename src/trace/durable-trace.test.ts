@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { prepareDurableTraceEvent, sanitizeTracePayload, traceEventsToJsonl } from "./durable-trace";
+import { compareTraceEvents, prepareDurableTraceEvent, sanitizeTracePayload } from "./durable-trace";
 
 describe("durable trace contract", () => {
   it("removes secrets, credentials, audio, PCM, and binary values recursively", () => {
@@ -21,11 +21,17 @@ describe("durable trace contract", () => {
     expect(serialized).toContain("[OMITTED_NON_TEXT_MEDIA]");
   });
 
-  it("exports complete events in chronological JSONL order", () => {
+  it("orders complete events chronologically", () => {
     const later = prepareDurableTraceEvent("session-trace-test", { id: "event-later", timestamp: "2026-01-01T00:00:02.000Z", stage: "renderer", type: "render.activated", payload: {}, source: "browser" });
     const earlier = prepareDurableTraceEvent("session-trace-test", { id: "event-earlier", timestamp: "2026-01-01T00:00:01.000Z", stage: "speechmatics", type: "asr.partial", payload: { transcript: "exact" }, source: "browser" });
-    const lines = traceEventsToJsonl([later, earlier]).trim().split("\n").map((line) => JSON.parse(line));
-    expect(lines.map((event) => event.id)).toEqual(["event-earlier", "event-later"]);
-    expect(lines.every((event) => event.schemaVersion === 1 && event.sessionId === "session-trace-test")).toBe(true);
+    const ordered = [later, earlier].sort(compareTraceEvents);
+    expect(ordered.map((event) => event.id)).toEqual(["event-earlier", "event-later"]);
+    expect(ordered.every((event) => event.schemaVersion === 1 && event.sessionId === "session-trace-test")).toBe(true);
+  });
+
+  it("uses source sequence to keep same-millisecond API facts in causal order", () => {
+    const completed = prepareDurableTraceEvent("session-trace-test", { id: "a-completed", occurredAt: "2026-01-01T00:00:00.000Z", stage: "api", type: "api_call.completed", payload: {}, source: "server", sourceInstanceId: "server:request", sourceSeq: 2 });
+    const started = prepareDurableTraceEvent("session-trace-test", { id: "z-started", occurredAt: "2026-01-01T00:00:00.000Z", stage: "api", type: "api_call.started", payload: {}, source: "server", sourceInstanceId: "server:request", sourceSeq: 1 });
+    expect([completed, started].sort(compareTraceEvents).map((event) => event.type)).toEqual(["api_call.started", "api_call.completed"]);
   });
 });

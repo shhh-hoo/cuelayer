@@ -15,4 +15,10 @@ describe("local API trace facts", () => {
     expect(providerCall).toHaveBeenCalledOnce(); expect(captured).toBeInstanceOf(TracedExternalCallError);
     expect((captured as TracedExternalCallError).traceDelivery.events.map((event) => event.type)).toEqual(["api_call.started", "api_call.failed"]);
   });
+
+  it("can return local-delivery facts when trace session metadata is absent", async () => {
+    const traced = await traceExternalCall({ provider: "speechmatics", operation: "token", requestPayload: {}, responsePayload: () => ({ issued: true }) }, async () => "token");
+    expect(traced.result).toBe("token");
+    expect(traced.traceDelivery.events).toHaveLength(2);
+  });
 });

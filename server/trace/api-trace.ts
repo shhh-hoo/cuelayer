@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { prepareDurableTraceEvent, type DurableTraceEventDraft, type TraceCorrelation } from "../../src/trace/durable-trace.ts";
 
 type ExternalCallOptions<Result> = {
-  sessionId: string;
+  sessionId?: string;
   apiRequestId?: string;
   provider: string;
   model?: string;
@@ -71,7 +71,7 @@ export async function traceExternalCall<Result>(options: ExternalCallOptions<Res
   const startedAt = Date.now();
   const sourceInstanceId = `server:${apiRequestId}`;
   const facts: DurableTraceEventDraft[] = [];
-  const deliver = (draft: DurableTraceEventDraft) => { facts.push(sanitizedDraft(options.sessionId, draft)); };
+  const deliver = (draft: DurableTraceEventDraft) => { facts.push(sanitizedDraft(options.sessionId ?? "unscoped-local-delivery", draft)); };
   const delivery = (): TraceDelivery => ({ events: facts });
 
   deliver({

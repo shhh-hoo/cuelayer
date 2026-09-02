@@ -38,6 +38,8 @@ function exactSpanRevision(state: SessionState, spanId: string, spanRevision: nu
 
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
   switch (action.type) {
+    case "restart":
+      return createDurableSessionState();
     case "begin-capture":
       if (state.presentation.status === "starting" || state.presentation.status === "ready") return state;
       return { ...state, status: state.status === "paused" ? "paused" : "active", presentation: { status: "starting", stream: null } };
@@ -65,7 +67,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       const now = action.now ?? 0;
       const finalId = `provider-final-${state.speech.canonical.finals.length}`;
       const providerSequence = action.event.kind === "error" ? state.speech.debug.providerEvents : action.event.provider?.sequence ?? state.speech.debug.providerEvents;
-      const speechEventId = `provider-event-${action.runId}-${providerSequence}`;
+      const speechEventId = action.event.kind === "error" ? `provider-event-${action.runId}-${providerSequence}` : action.event.provider?.messageId ?? `provider-event-${action.runId}-${providerSequence}`;
       const traceId = traceIdFor(action.runId, speechEventId);
       const asrEvent: TeachingTraceEventDraft = action.event.kind === "error"
         ? { traceId, stage: "asr", timestamp: now, speechEventId, decision: "error", isFinal: false, reason: action.event.message, errorCode: action.event.code }

@@ -15,7 +15,7 @@ function label(event: DurableTraceEvent) {
 export function TeachingTraceDrawer({ sessionId, events, status, error, pendingCount, onReload, onExport, onInject }: { sessionId: string; events: DurableTraceEvent[]; status: "loading" | "healthy" | "degraded" | "recovering"; error?: string; pendingCount: number; onReload(): void; onExport(): void; onInject?(kind: SyntheticIntentKind): void }) {
   const moments = teachingMoments(events);
   return <details className="teaching-trace-drawer" open>
-    <summary>Persistent trace · {events.length} events · {sessionId}</summary>
+    <summary>Persistent trace · {events.length} events loaded · {sessionId}</summary>
     <div className="trace-actions">
       <button type="button" onClick={onReload} disabled={status === "loading"}>{status === "loading" ? "Loading…" : "Reload trace"}</button>
       <button type="button" onClick={onExport}>Export JSONL</button>
@@ -27,6 +27,7 @@ export function TeachingTraceDrawer({ sessionId, events, status, error, pendingC
     </div> : null}
     <section className="teaching-trace-narrative" aria-label="Teaching narrative trace">
       <h2>Teaching narrative</h2>
+      <p>Full semantic and lifecycle timeline, with the latest 300 raw ASR/provider events loaded from local storage.</p>
       {moments.map((moment, index) => <details key={moment.id} open={index === moments.length - 1}><summary>Teaching moment {index + 1} · {moment.partialCount} ASR revisions{moment.speech ? ` → “${moment.speech}”` : ""}</summary><ol>{moment.rawEvents.filter((event) => event.type !== "asr.partial").map((event) => <li key={event.id}>{clock(event.occurredAt)} · {narrativeLine(event)}</li>)}</ol>{moment.partialCount ? <details><summary>Show {moment.partialCount} raw revisions</summary>{moment.rawEvents.filter((event) => event.type === "asr.partial").map((event) => <p key={event.id}>{clock(event.occurredAt)} · {String((event.payload as { transcript?: unknown }).transcript ?? "")}</p>)}</details> : null}</details>)}
     </section>
     {events.length ? <div className="teaching-trace-events">

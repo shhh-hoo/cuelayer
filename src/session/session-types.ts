@@ -32,6 +32,7 @@ export type SessionState = {
 };
 
 export type SessionAction =
+  | { type: "restart" }
   | { type: "begin-capture" }
   | { type: "capture-ready"; stream: MediaStream }
   | { type: "capture-failed"; error: CaptureError }

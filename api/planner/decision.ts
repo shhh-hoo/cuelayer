@@ -16,7 +16,6 @@ export default async function handler(request: Request, response: Response): Pro
   const input = request.body as PlannerInput | undefined;
   if (!input?.recentSpeech?.length) { response.status(400).json({ error: "invalid-planner-input" }); return; }
   const trace = traceHeaders(request);
-  if (!trace.sessionId) { response.status(400).json({ error: "missing-trace-session-id" }); return; }
   try {
     const model = process.env.OPENAI_MODEL ?? "gpt-5.6-luna";
     const providerRequest = createOpenAIPlannerRequest(input, model);

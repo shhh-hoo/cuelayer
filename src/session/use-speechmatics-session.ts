@@ -5,6 +5,8 @@ import { getAudioDevicesStore, useAudioDevices, usePCMAudioListener, usePCMAudio
 import { speechEventFromSpeechmatics } from "./speechmatics-adapter";
 import type { SpeechEvent } from "./speech-types";
 import type { DurableTraceEventDraft } from "../trace/durable-trace";
+import { scopedApiRequestId, scopedRunCorrelationId } from "../trace/durable-trace";
+import { deliverTraceWithoutBlocking } from "../trace/client-api-trace";
 
 const TOKEN_ENDPOINT = "/api/speechmatics/token";
 
@@ -92,17 +94,17 @@ export function speechStartFailureFrom(error: unknown): SpeechStartFailure {
   return { code: "realtime-connection-failed", message: "CueLayer could not connect to Speechmatics realtime. You can reconnect speech without ending the session." };
 }
 
-async function requestRealtimeToken(sessionId: string, apiRequestId: string, onTraceEvents?: (events: DurableTraceEventDraft[]) => Promise<unknown> | unknown): Promise<string> {
+export async function requestRealtimeToken(sessionId: string | undefined, apiRequestId: string, onTraceEvents?: (events: DurableTraceEventDraft[]) => Promise<unknown> | unknown): Promise<string> {
   let response: Response;
   try {
-    response = await fetch(TOKEN_ENDPOINT, { method: "POST", headers: { Accept: "application/json", "X-CueLayer-Session-Id": sessionId, "X-CueLayer-Api-Request-Id": apiRequestId } });
+    response = await fetch(TOKEN_ENDPOINT, { method: "POST", headers: { Accept: "application/json", ...(sessionId ? { "X-CueLayer-Session-Id": sessionId } : {}), "X-CueLayer-Api-Request-Id": apiRequestId } });
   } catch {
     throw failure("speech-token-failed", "CueLayer could not request a short-lived Speechmatics access token. Check the server connection and try again.");
   }
   let payload: unknown;
   try { payload = await response.json(); } catch { throw failure("speech-token-failed", "CueLayer received an invalid Speechmatics access token response. Please try again."); }
   const traceEvents = payload && typeof payload === "object" && "traceEvents" in payload ? (payload as { traceEvents?: DurableTraceEventDraft[] }).traceEvents : undefined;
-  if (traceEvents?.length) await onTraceEvents?.(traceEvents);
+  if (traceEvents?.length) deliverTraceWithoutBlocking(onTraceEvents, traceEvents);
   if (response.status === 503) throw failure("speech-not-configured", "Speechmatics is not configured on this deployment. Add SPEECHMATICS_API_KEY to the server environment.");
   if (!response.ok) throw failure("speech-token-failed", "CueLayer could not create a short-lived Speechmatics access token. Check the server configuration and try again.");
   if (!payload || typeof payload !== "object" || !("token" in payload) || typeof payload.token !== "string") throw failure("speech-token-failed", "CueLayer received an invalid Speechmatics access token response. Please try again.");
@@ -111,6 +113,7 @@ async function requestRealtimeToken(sessionId: string, apiRequestId: string, onT
 
 type SpeechmaticsSessionCallbacks = {
   traceSessionId: string;
+  tracePageInstanceId: string;
   onServerTraceEvents?: (events: DurableTraceEventDraft[]) => Promise<unknown> | unknown;
   onEvent: (runId: number, event: SpeechEvent) => void;
   onReady: (runId: number) => void;
@@ -121,7 +124,7 @@ type SpeechmaticsSessionCallbacks = {
  * Product glue only: official React providers own the recorder, WebSocket, audio
  * forwarding and cleanup; CueLayer supplies run identity and canonical events.
  */
-export function useSpeechmaticsSession({ traceSessionId, onServerTraceEvents, onEvent, onReady, onTrace }: SpeechmaticsSessionCallbacks) {
+export function useSpeechmaticsSession({ traceSessionId, tracePageInstanceId, onServerTraceEvents, onEvent, onReady, onTrace }: SpeechmaticsSessionCallbacks) {
   const activeRunIdRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
   const sawRecordingRef = useRef(false);
@@ -146,16 +149,17 @@ export function useSpeechmaticsSession({ traceSessionId, onServerTraceEvents, on
   const onProviderMessage = useCallback(({ data }: { data: Parameters<typeof speechEventFromSpeechmatics>[0] }) => {
     const runId = activeRunIdRef.current;
     if (runId === null) return;
-    onTrace({ stage: "speechmatics", type: "speechmatics.raw_message", payload: { runId, message: data } });
+    const sequence = providerSequenceRef.current++;
+    const messageId = `provider-message-${runId}-${sequence}`;
+    onTrace({ stage: "speechmatics", type: "speechmatics.raw_message", correlation: { speechEventId: scopedRunCorrelationId(tracePageInstanceId, runId, "speech-event", messageId) }, payload: { runId, messageId, message: data } });
     const event = speechEventFromSpeechmatics(data);
     if (!event) return;
     if (event.kind === "error") {
       failRun(runId, event.code, event.message);
       return;
     }
-    const sequence = providerSequenceRef.current++;
-    onEvent(runId, event.provider ? { ...event, provider: { ...event.provider, sequence } } : event);
-  }, [failRun, onEvent, onTrace]);
+    onEvent(runId, event.provider ? { ...event, provider: { ...event.provider, sequence, messageId } } : event);
+  }, [failRun, onEvent, onTrace, tracePageInstanceId]);
 
   useRealtimeEventListener("receiveMessage", onProviderMessage);
 
@@ -197,7 +201,7 @@ export function useSpeechmaticsSession({ traceSessionId, onServerTraceEvents, on
         getPermissionState: () => getAudioDevicesStore().permissionState,
       });
       onTrace({ stage: "speechmatics", type: "speechmatics.browser_audio_ready", payload: { runId, sampleRate: browserAudioContext.sampleRate } });
-      const token = await requestRealtimeToken(traceSessionId, `speechmatics-token-${runId}`, onServerTraceEvents);
+      const token = await requestRealtimeToken(traceSessionId, scopedApiRequestId(tracePageInstanceId, "speechmatics-token", runId), onServerTraceEvents);
       onTrace({ stage: "speechmatics", type: "speechmatics.temporary_token_received", payload: { runId, tokenReceived: true } });
       try {
         await startTranscription(token, createSpeechmaticsConfig(browserAudioContext.sampleRate));
@@ -222,7 +226,7 @@ export function useSpeechmaticsSession({ traceSessionId, onServerTraceEvents, on
       void stopTranscription().catch(() => undefined);
       throw error;
     }
-  }, [audioContext, audioDevices, onReady, onServerTraceEvents, onTrace, startRecording, startTranscription, stopRecording, stopTranscription, traceSessionId]);
+  }, [audioContext, audioDevices, onReady, onServerTraceEvents, onTrace, startRecording, startTranscription, stopRecording, stopTranscription, tracePageInstanceId, traceSessionId]);
 
   const stop = useCallback(async () => {
     const runId = activeRunIdRef.current;

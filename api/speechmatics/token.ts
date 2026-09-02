@@ -19,7 +19,6 @@ export default async function handler(request: { method?: string; headers?: Reco
     return;
   }
   const trace = traceHeaders(request);
-  if (!trace.sessionId) { response.status(400).json({ error: "missing-trace-session-id" }); return; }
   try {
     const traced = await traceExternalCall({ sessionId: trace.sessionId, apiRequestId: trace.apiRequestId, provider: "speechmatics", operation: "realtime.temporary_token", requestPayload: { type: "rt", ttlSeconds: 60 }, responsePayload: () => ({ tokenIssued: true, ttlSeconds: 60 }) }, () => createSpeechmaticsJWT({ type: "rt", apiKey, ttl: 60 }));
     response.status(200).json({ token: traced.result, traceEvents: traced.traceDelivery.events });
