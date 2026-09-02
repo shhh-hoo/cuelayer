@@ -10,7 +10,7 @@ vi.mock("openai", () => ({
   },
 }));
 
-import { requestOpenAIPlannerResult } from "./openai-planner";
+import { createOpenAIPlannerRequest, requestOpenAIPlannerResult } from "./openai-planner";
 
 const input: PlannerInput = {
   recentSpeech: [{ id: "speech-span-0", text: "temperature increases", words: [{ text: "temperature", startMs: 0, endMs: 100 }, { text: "increases", startMs: 110, endMs: 200 }] }],
@@ -29,19 +29,26 @@ describe("OpenAI planner boundary", () => {
 
   it("uses one native structured-output Responses call and exposes token usage", async () => {
     mocks.parse.mockResolvedValue({
+      id: "resp_123",
+      model: "gpt-5.6-luna",
       output_parsed: output,
       usage: { input_tokens: 120, output_tokens: 30, total_tokens: 150, input_tokens_details: { cached_tokens: 20 } },
       service_tier: "priority",
     });
     const controller = new AbortController();
-    await expect(requestOpenAIPlannerResult(input, "test-key", "gpt-5.6-luna", { signal: controller.signal, serviceTier: "priority" })).resolves.toEqual({
+    const request = createOpenAIPlannerRequest(input, "gpt-5.6-luna", { serviceTier: "priority" });
+    await expect(requestOpenAIPlannerResult(request, "test-key", { signal: controller.signal })).resolves.toEqual({
       decision: output,
       usage: { inputTokens: 120, cachedInputTokens: 20, outputTokens: 30, totalTokens: 150 },
       serviceTier: "priority",
+      providerResponse: {
+        id: "resp_123", model: "gpt-5.6-luna", service_tier: "priority", output_parsed: output,
+        usage: { input_tokens: 120, output_tokens: 30, total_tokens: 150, input_tokens_details: { cached_tokens: 20 } },
+      },
     });
     expect(mocks.constructor).toHaveBeenCalledWith({ apiKey: "test-key" });
     expect(mocks.parse).toHaveBeenCalledTimes(1);
-    const request = mocks.parse.mock.calls[0]?.[0];
+    expect(mocks.parse.mock.calls[0]?.[0]).toBe(request);
     expect(request.model).toBe("gpt-5.6-luna");
     expect(request.service_tier).toBe("priority");
     expect(request.reasoning).toEqual({ effort: "none" });
@@ -50,6 +57,7 @@ describe("OpenAI planner boundary", () => {
     expect(request.input[0].content).toContain("skills/9701-cuecaption/live-policy.md");
     expect(request.input[0].content).toContain("RELATE requires two or more distinct targets");
     expect(request.input[0].content).toContain('TEXT is exactly { kind: "TEXT" }');
+    expect(request.input[1].content).toBe(JSON.stringify(input));
     expect(request.text.format).toBeDefined();
     expect(mocks.parse.mock.calls[0]?.[1]).toEqual({ signal: controller.signal });
   });

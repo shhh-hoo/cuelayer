@@ -1,7 +1,7 @@
 import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { provisionBrowserTraceSession, TraceOutbox } from "./outbox";
-import type { TraceTransport } from "./trace-client";
+import { flushBrowserTraceSession, provisionBrowserTraceSession, TraceOutbox } from "./outbox";
+import { TraceTransportError, type TraceTransport } from "./trace-client";
 import type { DurableTraceEvent } from "./durable-trace";
 
 const sessionId = "session-outbox-test";
@@ -48,6 +48,48 @@ describe("IndexedDB trace outbox", () => {
     const recovered = await provisionBrowserTraceSession(await TraceOutbox.open(), sessionId, transport, { environment: "test" });
     expect(recovered).toMatchObject({ writeCapability: stored?.writeCapability, readCapability: stored?.readCapability, sourceInstanceId: stored?.sourceInstanceId });
     expect(transport.createSession).toHaveBeenNthCalledWith(2, sessionId, expect.objectContaining({ writeCapability: stored?.writeCapability, readCapability: stored?.readCapability }), { environment: "test" });
+  });
+
+  it("reprovisions a missing remote session after a 403, then flushes the retained events with the same capabilities", async () => {
+    const outbox = await TraceOutbox.open();
+    await outbox.saveSession({ sessionId, sourceInstanceId: "page-a", nextSeq: 1, ...capability });
+    await outbox.enqueue(sessionId, [draft("browser:missing-remote")], "page-a");
+    const transport: TraceTransport = {
+      createSession: vi.fn().mockResolvedValue({ created: true }), load: vi.fn(),
+      append: vi.fn().mockRejectedValueOnce(new TraceTransportError("trace-capability-invalid", "authorization", 403)).mockImplementation(async (_id, _capability, events) => events),
+    };
+    await expect(flushBrowserTraceSession(outbox, sessionId, transport, { environment: "test" })).resolves.toMatchObject({ kind: "reprovisioned", pending: 0 });
+    expect(transport.createSession).toHaveBeenCalledWith(sessionId, expect.objectContaining(capability), { environment: "test" });
+    expect(transport.append).toHaveBeenCalledTimes(2);
+    expect((transport.append as ReturnType<typeof vi.fn>).mock.calls[1]?.[1]).toBe(capability.writeCapability);
+    expect(await outbox.pendingCount(sessionId)).toBe(0);
+  });
+
+  it("retains evidence and returns a permanent authorization state for a capability conflict", async () => {
+    const outbox = await TraceOutbox.open();
+    await outbox.saveSession({ sessionId, sourceInstanceId: "page-a", nextSeq: 1, ...capability });
+    await outbox.enqueue(sessionId, [draft("browser:capability-conflict")], "page-a");
+    const transport: TraceTransport = {
+      createSession: vi.fn().mockRejectedValue(new TraceTransportError("trace-session-capability-conflict", "conflict", 409)), load: vi.fn(),
+      append: vi.fn().mockRejectedValue(new TraceTransportError("trace-capability-invalid", "authorization", 403)),
+    };
+    await expect(flushBrowserTraceSession(outbox, sessionId, transport, { environment: "test" })).resolves.toMatchObject({ kind: "authorization-invalid" });
+    expect(transport.append).toHaveBeenCalledOnce();
+    expect(transport.createSession).toHaveBeenCalledOnce();
+    expect(await outbox.pendingCount(sessionId)).toBe(1);
+  });
+
+  it("backs off a transient 503 without attempting reprovisioning", async () => {
+    const outbox = await TraceOutbox.open();
+    await outbox.saveSession({ sessionId, sourceInstanceId: "page-a", nextSeq: 1, ...capability });
+    await outbox.enqueue(sessionId, [draft("browser:transient")], "page-a");
+    const transport: TraceTransport = {
+      createSession: vi.fn(), load: vi.fn(),
+      append: vi.fn().mockRejectedValue(new TraceTransportError("trace-store-unavailable", "transient", 503)),
+    };
+    await expect(flushBrowserTraceSession(outbox, sessionId, transport, { environment: "test" })).rejects.toMatchObject({ kind: "transient" });
+    expect(transport.createSession).not.toHaveBeenCalled();
+    expect(await outbox.pendingCount(sessionId)).toBe(1);
   });
 
   it("recovers sanitized server API facts through the same idempotent browser outbox", async () => {

@@ -100,6 +100,7 @@ describe("development teaching trace", () => {
     expect(durable.find((event) => event.type === "commit.committed")?.correlation).toMatchObject({ commitId: "provider-final-0", finalId: "provider-final-0" });
     expect(durable.find((event) => event.type === "span.opened")?.correlation).toMatchObject({ finalId: "provider-final-0", spanId: "speech-span-0", spanRevision: 1 });
     expect(durable.find((event) => event.type === "planner.started")?.correlation).toMatchObject({ spanId: "speech-span-0", plannerRequestId: "9" });
+    expect(durable.find((event) => event.type === "planner.completed")?.payload).toMatchObject({ output: focus });
     const cueId = durable.find((event) => event.type === "compile.emit")?.correlation?.cueId;
     expect(cueId).toBe("caption-1-9");
     expect(durable.find((event) => event.type === "render.activated")?.correlation).toMatchObject({ spanId: "speech-span-0", plannerRequestId: "9", cueId });

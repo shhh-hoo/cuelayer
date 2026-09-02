@@ -1,5 +1,5 @@
 import type { PlannerInput } from "../../src/planner/contracts.ts";
-import { requestOpenAIPlannerResult } from "../../server/planner/openai-planner.ts";
+import { createOpenAIPlannerRequest, requestOpenAIPlannerResult } from "../../server/planner/openai-planner.ts";
 import { TracedExternalCallError, traceExternalCall, traceHeaders } from "../../server/trace/api-trace.ts";
 
 declare const process: { env: Record<string, string | undefined> };
@@ -19,7 +19,8 @@ export default async function handler(request: Request, response: Response): Pro
   if (!trace.sessionId) { response.status(400).json({ error: "missing-trace-session-id" }); return; }
   try {
     const model = process.env.OPENAI_MODEL ?? "gpt-5.6-luna";
-    const traced = await traceExternalCall({ sessionId: trace.sessionId, writeCapability: trace.writeCapability, apiRequestId: trace.apiRequestId, provider: "openai", model, operation: "teaching_planner.decision", requestPayload: input, signal: request.signal, correlation: { plannerRequestId: trace.plannerRequestId }, responsePayload: (value) => value }, () => requestOpenAIPlannerResult(input, openAIApiKey, model, { signal: request.signal }));
+    const providerRequest = createOpenAIPlannerRequest(input, model);
+    const traced = await traceExternalCall({ sessionId: trace.sessionId, writeCapability: trace.writeCapability, apiRequestId: trace.apiRequestId, provider: "openai", model, operation: "teaching_planner.decision", requestPayload: providerRequest, signal: request.signal, correlation: { plannerRequestId: trace.plannerRequestId }, responsePayload: (value) => value.providerResponse }, () => requestOpenAIPlannerResult(providerRequest, openAIApiKey, { signal: request.signal }));
     response.status(200).json({ decision: traced.result.decision, traceDelivery: traced.traceDelivery });
   } catch (error) {
     const providerError = error instanceof TracedExternalCallError ? error.providerError : error;

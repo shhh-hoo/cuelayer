@@ -1,5 +1,5 @@
 import { prepareDurableTraceEvent, type DurableTraceEvent, type DurableTraceEventDraft } from "./durable-trace";
-import type { TraceCapabilities, TraceTransport } from "./trace-client";
+import { traceFailureKind, type TraceCapabilities, type TraceTransport } from "./trace-client";
 
 const DATABASE = "cuelayer-trace-outbox-v1";
 const EVENT_STORE = "events";
@@ -73,4 +73,28 @@ export async function provisionBrowserTraceSession(outbox: TraceOutbox, sessionI
   const session = await outbox.ensureLocalSession(sessionId);
   await transport.createSession(sessionId, session, metadata);
   return session;
+}
+
+export type TraceFlushRecovery =
+  | { kind: "flushed" | "reprovisioned"; acknowledged: DurableTraceEvent[]; pending: number }
+  | { kind: "authorization-invalid"; error: unknown };
+
+/**
+ * A missing remote row can happen after an interrupted initial provision. Reuse the
+ * browser's already-durable capabilities once; a different remote capability is a
+ * permanent authorization boundary, never a reason to mint a fresh identity.
+ */
+export async function flushBrowserTraceSession(outbox: TraceOutbox, sessionId: string, transport: TraceTransport, metadata: unknown): Promise<TraceFlushRecovery> {
+  try {
+    return { kind: "flushed", ...(await outbox.flush(sessionId, transport)) };
+  } catch (error) {
+    if (traceFailureKind(error) !== "authorization") throw error;
+  }
+  try {
+    await provisionBrowserTraceSession(outbox, sessionId, transport, metadata);
+  } catch (error) {
+    if (traceFailureKind(error) === "conflict") return { kind: "authorization-invalid", error };
+    throw error;
+  }
+  return { kind: "reprovisioned", ...(await outbox.flush(sessionId, transport)) };
 }

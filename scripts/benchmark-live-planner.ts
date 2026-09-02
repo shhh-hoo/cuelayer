@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { LIVE_PLANNER_GOLDENS, plannerInputForGolden } from "../server/planner/live-planner-golden.ts";
-import { requestOpenAIPlannerResult } from "../server/planner/openai-planner.ts";
+import { createOpenAIPlannerRequest, requestOpenAIPlannerResult } from "../server/planner/openai-planner.ts";
 import type { PlannerProviderResult, PlannerProviderUsage } from "../server/planner/provider-contract.ts";
 import { compileCaptionEpisode } from "../src/planner/caption-compiler.ts";
 import type { RuntimeDecision } from "../src/planner/contracts.ts";
@@ -51,7 +51,7 @@ function benchmarkProvider(): BenchmarkProvider {
   const model = process.env.OPENAI_BENCHMARK_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-5.6-luna";
   const requestedServiceTier = process.argv.slice(2).find((arg) => arg.startsWith("--service-tier="))?.slice("--service-tier=".length);
   if (requestedServiceTier !== undefined && requestedServiceTier !== "default" && requestedServiceTier !== "priority") throw new Error("OpenAI --service-tier must be default or priority.");
-  return { name: "openai", model, ...(requestedServiceTier ? { requestedServiceTier } : {}), request: (input) => requestOpenAIPlannerResult(input, apiKey, model, requestedServiceTier ? { serviceTier: requestedServiceTier } : undefined) };
+  return { name: "openai", model, ...(requestedServiceTier ? { requestedServiceTier } : {}), request: (input) => requestOpenAIPlannerResult(createOpenAIPlannerRequest(input, model, requestedServiceTier ? { serviceTier: requestedServiceTier } : undefined), apiKey) };
 }
 
 function totalUsage(results: CaseResult[]): PlannerProviderUsage | undefined {

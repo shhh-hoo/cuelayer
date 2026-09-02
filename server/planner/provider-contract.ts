@@ -47,15 +47,26 @@ export type PlannerProviderUsage = {
   totalTokens: number;
 };
 
-export type PlannerProviderResult = { decision: RuntimeDecision; usage?: PlannerProviderUsage; serviceTier?: string };
+export type PlannerProviderResponse = {
+  id?: string;
+  model?: string;
+  service_tier?: string;
+  output_parsed: unknown;
+  usage?: unknown;
+};
 
-export function plannerResponseRequest(input: PlannerInput) {
+export type PlannerProviderResult = { decision: RuntimeDecision; usage?: PlannerProviderUsage; serviceTier?: string; providerResponse: PlannerProviderResponse };
+
+/** The one request object used both for the OpenAI SDK call and its factual trace. */
+export function plannerResponseRequest(input: PlannerInput, model: string, options?: { serviceTier?: "default" | "priority" }) {
   return {
+    model,
     reasoning: { effort: "none" as const },
     temperature: 0,
     max_output_tokens: 1_024,
     input: [{ role: "system" as const, content: plannerPolicy }, { role: "user" as const, content: JSON.stringify(input) }],
     text: { format: zodTextFormat(runtimeDecisionSchema, "runtime_decision") },
+    ...(options?.serviceTier ? { service_tier: options.serviceTier } : {}),
   };
 }
 
