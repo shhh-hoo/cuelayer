@@ -55,5 +55,9 @@
   .notation-renderer[data-notation-kind="equation"][data-notation-density="dense"] .notation-katex { font-size: .54em; }
   .notation-renderer[data-notation-kind="reaction"][data-notation-density="regular"] .notation-katex { font-size: .78em; }
   .notation-renderer[data-notation-kind="reaction"][data-notation-density="compact"] .notation-katex { font-size: .56em; }
-  .notation-renderer[data-notation-kind="reaction"][data-notation-density="dense"] .notation-katex { font-size: .36em; }
+  .notation-renderer[data-notation-kind="reaction"][data-notation-density="dense"] .notation-katex { font-size: .54em; }
+}
+@media (max-width: 520px) {
+  .notation-renderer[data-notation-kind="reaction"][data-notation-density="regular"] .notation-katex { font-size: .64em; }
+  .notation-renderer[data-notation-kind="reaction"][data-notation-density="compact"] .notation-katex { font-size: .48em; }
 }
