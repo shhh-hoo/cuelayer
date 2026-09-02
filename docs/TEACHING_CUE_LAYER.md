@@ -18,45 +18,45 @@ The board answers **what teaching content has changed**. Teaching Cue answers **
 
 The board does not use a default title/body/subtitle template. Visual hierarchy comes from semantic role:
 
-- `ACTIVE`: the concept, relation, equation, reaction, or other teaching object currently being established or changed. It owns the strongest visual weight.
-- `SUPPORT`: a condition, annotation, definition, or explanation attached to the active object. It should read as part of that object rather than generic body copy.
-- `RETAINED`: previously established context that is still required for the current reasoning. It remains visible at deliberately lower weight and is not a scrolling transcript history.
+- `ACTIVE`: the concept, relation, equation, reaction, or other teaching object currently being established or changed.
+- `SUPPORT`: a condition, annotation, definition, or explanation attached to the active object.
+- `RETAINED`: previously established context still required for current reasoning.
 
-This is a visual/runtime role model, not a new planner taxonomy. The fixture exercises definition, causal structure, equation, and chemical reaction content using the same three roles.
+This is a visual/runtime role model, not a planner taxonomy. The fixture exercises definition, causal structure, equation, and chemical reaction content using the same roles.
 
-The intended board behaviour is working-memory-like rather than feed-like: useful structure can remain, new meaning can attach or reorganize it, and completed unrelated context can retreat. A topic label is shown only when the teaching content itself requires one; every board state does not receive an artificial heading.
+The board behaves like working memory rather than a scrolling transcript: useful structure may remain; completed unrelated context retreats; a topic label appears only when the teaching content itself needs one.
 
-## Layout contract
+## Deterministic layout contract
 
-Board and Teaching Cue are semantic siblings, but they must not compete for the same pixels. `BoardLayout` first allocates a Board content region and a separate Teaching Cue region. It then measures the remaining Board region and deterministically selects one of three density tiers:
+Board and Teaching Cue are semantic siblings but never compete for the same pixels. `BoardLayout` allocates a Board region and a separate Teaching Cue region using ordinary Grid/Flex layout.
+
+Alpha deliberately avoids runtime geometry observers. Density is derived synchronously from stable content facts:
 
 - `full`: `RETAINED + ACTIVE + SUPPORT`;
-- `compact`: `ACTIVE + SUPPORT`; retained context has yielded;
-- `essential`: `ACTIVE` only; support has yielded as well.
+- `compact`: `ACTIVE + SUPPORT` when retained context should yield;
+- `essential`: `ACTIVE` only for presentation overlays or unusually long learner cues.
 
-The current thresholds are intentionally simple Alpha policy, not pedagogy: under 360px of measured Board height retained context retreats, and under 240px support retreats. The important invariant is the yield order, not the exact threshold values.
+Presentationless mode normally uses `full`; stress content with several retained items uses `compact`; presentation-overlay is always `essential`. This keeps the yield order deterministic without resize/state feedback loops.
 
-Active content is not hidden behind `overflow: hidden`. If notation cannot remain legible in the width available to Active, the notation renderer falls back to wrapped plain text rather than silently cropping either side of an equation or reaction.
+Active content is never hidden behind `overflow: hidden`. Presentationless mode reserves separate Board and Cue rows. Presentation-overlay gives the Board and Teaching Cue separate bounded regions; narrow layouts stack them.
 
-Presentationless mode reserves separate Board and Teaching Cue rows. Presentation-overlay mode gives the Board a bounded lower-left region and Teaching Cue a separate lower-right region; narrow layouts stack them.
+Future spatial connectors may measure already-laid-out DOM boxes and draw SVG relationships, but the semantic objects themselves should not use unconstrained absolute positioning.
 
-The renderer should prefer normal Grid/Flex layout for content. Future spatial connectors may measure already-laid-out DOM boxes and draw SVG relationships; semantic objects themselves should not be positioned through unconstrained absolute coordinates.
-
-## Notation contract
+## Structured notation contract
 
 Equation and reaction content are notation objects, not hand-spaced prose and not free-form LaTeX supplied by a planner.
 
 The Alpha contract is structured and bounded:
 
-- equations contain a limited list of symbols, supported operators and at most bounded fractions;
+- equations contain a limited list of symbols, supported operators and bounded fractions;
 - symbols may carry a small subscript or integer power;
 - reactions contain bounded reactant/product species, optional integer coefficients, state symbols, and an enum arrow;
-- formula strings reject braces and backslashes, so they cannot escape the deterministic `\\ce{...}` wrapper;
-- the compiler produces the KaTeX/mhchem expression and the plain-text fallback;
-- KaTeX renders with `throwOnError: true` and `trust: false`;
-- a browser fit pass scales display notation only to a readability floor; below that floor it uses the wrapped plain-text fallback instead of clipping.
+- formula strings reject braces and backslashes;
+- the deterministic compiler can still produce a TeX/mhchem expression for future renderers, but Alpha rendering does not depend on that expression.
 
-PR #9 intentionally loads pinned KaTeX/mhchem only inside the visual fixture so it does not create a package-lock conflict while PR #8 is changing deployment dependencies. Before live integration, package KaTeX with the application rather than depending on the external CDN.
+The default Alpha renderer is synchronous native structured markup. It renders equation fractions, powers and subscripts directly, and renders reactions with real chemical subscripts, coefficients, state symbols and semantic wrapping boundaries. There is no runtime CDN fetch, KaTeX handoff, DOM replacement, ResizeObserver, or fit-state loop in the default surface.
+
+KaTeX can be reconsidered later as a packaged optional enhancement after live integration. It is not required for correctness or legibility in this Alpha slice.
 
 This notation boundary covers ordinary equations, chemical equations, charges/states and condensed formulae. Full skeletal structures, curved-arrow mechanisms, and stereochemical drawing remain outside this Alpha slice.
 
@@ -77,7 +77,7 @@ Teaching Cue has its own lifecycle. Board updates do not automatically clear it,
 
 ## Stress fixture
 
-`/teaching-cues` includes a `Stress layout` control. It deliberately expands retained context, support text, Teaching Cue text, equations and reactions so the same four scenes can be checked under pressure in both presentationless and presentation-overlay modes. The fixture exists to expose clipping and bad yield behaviour before live integration.
+`/teaching-cues` includes a `Stress layout` control. It deliberately expands retained context, support text, Teaching Cue text, equations and reactions so the four scenes can be checked under pressure in presentationless and presentation-overlay modes.
 
 ## Integration boundary
 
