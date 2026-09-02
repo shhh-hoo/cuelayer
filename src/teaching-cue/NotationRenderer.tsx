@@ -30,6 +30,11 @@ export type EquationNotationSpec = {
   ariaLabel: string;
 };
 
+export type EquationAnnotation = {
+  pieceIndex: number;
+  label: string;
+};
+
 export type ReactionSpecies = {
   formula: string;
   coefficient?: number;
@@ -146,10 +151,13 @@ export function compileNotation(spec: NotationSpec) {
 }
 
 function NativeEquationSymbol({ piece }: { piece: EquationSymbol }) {
-  return <span className="notation-native-symbol" data-roman={piece.roman ? "true" : "false"}>
-    <span>{piece.value}</span>
-    {piece.subscript !== undefined ? <sub>{piece.subscript}</sub> : null}
-    {piece.power !== undefined ? <sup>{piece.power}</sup> : null}
+  const scripted = piece.subscript !== undefined || piece.power !== undefined;
+  return <span className="notation-native-symbol" data-roman={piece.roman ? "true" : "false"} data-scripted={scripted ? "true" : "false"}>
+    <span className="notation-native-base">{piece.value}</span>
+    {scripted ? <span className="notation-native-scripts" aria-hidden="true">
+      {piece.power !== undefined ? <sup>{piece.power}</sup> : null}
+      {piece.subscript !== undefined ? <sub>{piece.subscript}</sub> : null}
+    </span> : null}
   </span>;
 }
 
@@ -213,10 +221,21 @@ function NativeReactionSide({ species }: { species: ReactionSpecies[] }) {
   </span>;
 }
 
-function NativeNotation({ spec }: { spec: NotationSpec }) {
+function annotationFor(index: number, annotations: EquationAnnotation[]) {
+  const candidate = annotations.find((annotation) => annotation.pieceIndex === index)?.label.replace(/\s+/g, " ").trim();
+  return candidate && candidate.length <= 120 ? candidate : undefined;
+}
+
+function NativeNotation({ spec, annotations }: { spec: NotationSpec; annotations: EquationAnnotation[] }) {
   if (spec.kind === "equation") {
     return <span className="notation-native notation-native-equation">
-      {spec.pieces.map((piece, index) => <NativeEquationPiece key={index} piece={piece} />)}
+      {spec.pieces.map((piece, index) => {
+        const annotation = annotationFor(index, annotations);
+        return <span className={annotation ? "notation-native-annotated-piece" : "notation-native-equation-piece"} key={index}>
+          <span className="notation-native-equation-piece"><NativeEquationPiece piece={piece} /></span>
+          {annotation ? <span className="notation-native-annotation">{annotation}</span> : null}
+        </span>;
+      })}
     </span>;
   }
   return <span className="notation-native notation-native-reaction">
@@ -226,7 +245,12 @@ function NativeNotation({ spec }: { spec: NotationSpec }) {
   </span>;
 }
 
-export function NotationRenderer({ spec, displayMode = true, className = "" }: { spec: NotationSpec; displayMode?: boolean; className?: string }) {
+export function NotationRenderer({ spec, annotations = [], displayMode = true, className = "" }: {
+  spec: NotationSpec;
+  annotations?: EquationAnnotation[];
+  displayMode?: boolean;
+  className?: string;
+}) {
   let compiled: CompiledNotation | undefined;
   try { compiled = compileNotation(spec); } catch { compiled = undefined; }
 
@@ -237,6 +261,6 @@ export function NotationRenderer({ spec, displayMode = true, className = "" }: {
     data-notation-status={compiled ? "native" : "fallback"}
     aria-label={compiled?.ariaLabel ?? spec.ariaLabel}
   >
-    {compiled ? <NativeNotation spec={spec} /> : <span className="notation-invalid">{spec.ariaLabel}</span>}
+    {compiled ? <NativeNotation spec={spec} annotations={annotations} /> : <span className="notation-invalid">{spec.ariaLabel}</span>}
   </span>;
 }
