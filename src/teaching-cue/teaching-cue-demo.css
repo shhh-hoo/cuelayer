@@ -76,17 +76,16 @@
 .causal-chain i { color: #809889; font-size: .7em; font-style: normal; font-weight: 430; line-height: .72; }
 .equation-object {
   min-width: 0;
+  width: 100%;
   max-width: 100%;
-  font-size: clamp(50px, 7vw, 98px);
+  font-size: clamp(44px, 5.8vw, 80px);
   line-height: 1;
   text-align: center;
 }
-.equation-object .notation-renderer { max-width: min(100%, 960px); }
-.equation-support { display: grid; justify-items: center; gap: 7px; }
-.equation-support .notation-renderer { padding: 0 6px 4px; border-bottom: 2px solid #d9e469; color: #f5f8f2; font-size: clamp(20px, 2.2vw, 30px); }
-.equation-support b { color: #9aaa9d; font-size: 13px; font-weight: 650; letter-spacing: .02em; }
+.equation-object .notation-renderer { max-width: min(100%, 920px); }
 .reaction-object {
   min-width: 0;
+  width: 100%;
   max-width: 100%;
   font-size: clamp(31px, 4.7vw, 66px);
   line-height: 1;
@@ -112,7 +111,9 @@
 .presentation-overlay .definition-object { grid-template-columns: auto auto; gap: 6px 10px; font-size: clamp(18px, 2vw, 27px); text-align: left; }
 .presentation-overlay .definition-meaning { grid-column: 1 / -1; }
 .presentation-overlay .causal-chain { justify-items: start; gap: 2px; font-size: clamp(15px, 1.6vw, 22px); text-align: left; }
-.presentation-overlay .equation-object { font-size: clamp(27px, 3vw, 44px); text-align: left; }
+.presentation-overlay .equation-object { font-size: clamp(24px, 2.7vw, 38px); text-align: left; }
+.presentation-overlay .equation-object .notation-native-equation { justify-content: flex-start; }
+.presentation-overlay .equation-object .notation-native-annotation { font-size: 10px; }
 .presentation-overlay .reaction-object { font-size: clamp(17px, 1.9vw, 26px); text-align: left; }
 .teaching-cue-demo-principles { width: min(1240px, 100%); margin: 12px auto 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .teaching-cue-demo-principles article { padding: 14px; border: 1px solid #d2d7d0; border-radius: 14px; background: #f7f9f4; }
@@ -129,4 +130,5 @@
   .teaching-cue-demo-stage { min-height: 620px; }
   .teaching-cue-demo-principles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .teaching-cue-demo-slide p { width: 100%; }
+  .equation-object { font-size: clamp(36px, 10vw, 58px); }
 }
