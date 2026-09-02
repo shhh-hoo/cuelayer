@@ -38,11 +38,17 @@ describe("NotationRenderer", () => {
     expect(() => compileEquation({ ...equation, pieces: [{ kind: "symbol", value: "x", power: 99 }] })).toThrow("invalid-equation-power");
   });
 
-  it("renders equations synchronously with semantic superscripts", () => {
-    const html = renderToStaticMarkup(<NotationRenderer spec={equation} />);
+  it("renders equation scripts in a dedicated script box and keeps annotations on the target piece", () => {
+    const html = renderToStaticMarkup(<NotationRenderer
+      spec={equation}
+      annotations={[{ pieceIndex: 3, label: "second order in A" }]}
+    />);
     expect(html).toContain("data-notation-status=\"native\"");
     expect(html).toContain("notation-native-equation");
+    expect(html).toContain("notation-native-scripts");
     expect(html).toContain("<sup>2</sup>");
+    expect(html).toContain("notation-native-annotated-piece");
+    expect(html).toContain("second order in A");
   });
 
   it("renders chemical equations synchronously with wrapping boundaries and real subscripts", () => {
