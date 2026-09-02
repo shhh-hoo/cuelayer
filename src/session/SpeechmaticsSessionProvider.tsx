@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { PCMAudioRecorderProvider } from "@speechmatics/browser-audio-input-react";
 import { RealtimeTranscriptionProvider } from "@speechmatics/real-time-client-react";
-import workletScriptURL from "@speechmatics/browser-audio-input/pcm-audio-worklet.min.js?url";
+// Keep the AudioWorklet as a same-origin asset. Vite otherwise inlines this
+// small module as a data: URL, which is an unnecessary cross-browser risk.
+import workletScriptURL from "@speechmatics/browser-audio-input/pcm-audio-worklet.min.js?url&no-inline";
 
 const SpeechmaticsAudioContext = createContext<(() => void) | null>(null);
 

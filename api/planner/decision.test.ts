@@ -1,12 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlannerInput, RuntimeDecision } from "../../src/planner/contracts";
 
-const mocks = vi.hoisted(() => ({ deepSeek: vi.fn(), openAI: vi.fn() }));
-
-vi.mock("./deepseek-planner.ts", () => ({
-  deepSeekPlannerFailureReason: () => "planner-provider-unavailable",
-  requestDeepSeekPlannerDecision: mocks.deepSeek,
-}));
+const mocks = vi.hoisted(() => ({ openAI: vi.fn() }));
 vi.mock("./openai-planner.ts", () => ({ requestOpenAIPlannerDecision: mocks.openAI }));
 
 import handler from "./decision";
@@ -32,7 +27,6 @@ describe("live planner provider selection", () => {
   const originalOpenAIModel = process.env.OPENAI_MODEL;
 
   beforeEach(() => {
-    mocks.deepSeek.mockReset();
     mocks.openAI.mockReset();
     delete process.env.DEEPSEEK_API_KEY;
     delete process.env.OPENAI_API_KEY;
@@ -45,27 +39,46 @@ describe("live planner provider selection", () => {
     if (originalOpenAIModel === undefined) delete process.env.OPENAI_MODEL; else process.env.OPENAI_MODEL = originalOpenAIModel;
   });
 
-  it("uses OpenAI rather than sending an OpenAI key to DeepSeek", async () => {
+  it("requires the validated OpenAI runtime even when a stale DeepSeek key remains configured", async () => {
+    process.env.DEEPSEEK_API_KEY = "stale-deepseek-key";
+    const captured = responseCapture();
+
+    await handler({ method: "POST", body: input }, captured.response);
+
+    expect(mocks.openAI).not.toHaveBeenCalled();
+    expect(captured.result()).toEqual({ code: 503, body: { error: "planner-not-configured" } });
+  });
+
+  it("uses OpenAI Luna and ignores a stale DeepSeek key", async () => {
+    process.env.DEEPSEEK_API_KEY = "stale-deepseek-key";
     process.env.OPENAI_API_KEY = "openai-key";
     mocks.openAI.mockResolvedValue(decision);
     const captured = responseCapture();
 
     await handler({ method: "POST", body: input }, captured.response);
 
-    expect(mocks.openAI).toHaveBeenCalledWith(input, "openai-key", "gpt-5.6-luna", { signal: undefined });
-    expect(mocks.deepSeek).not.toHaveBeenCalled();
+    expect(mocks.openAI).toHaveBeenCalledWith(input, "openai-key", "gpt-5.6-luna", { signal: expect.any(AbortSignal) });
     expect(captured.result()).toEqual({ code: 200, body: { decision } });
   });
 
-  it("prefers a dedicated DeepSeek key when both providers are configured", async () => {
-    process.env.DEEPSEEK_API_KEY = "deepseek-key";
+  it("honours an explicit OpenAI model override", async () => {
     process.env.OPENAI_API_KEY = "openai-key";
-    mocks.deepSeek.mockResolvedValue(decision);
+    process.env.OPENAI_MODEL = "gpt-5.6-sol";
+    mocks.openAI.mockResolvedValue(decision);
     const captured = responseCapture();
 
     await handler({ method: "POST", body: input }, captured.response);
 
-    expect(mocks.deepSeek).toHaveBeenCalledWith(input, "deepseek-key", "deepseek-v4-flash", { signal: undefined });
-    expect(mocks.openAI).not.toHaveBeenCalled();
+    expect(mocks.openAI).toHaveBeenCalledWith(input, "openai-key", "gpt-5.6-sol", { signal: expect.any(AbortSignal) });
+  });
+
+  it("returns a controlled provider failure instead of an unhandled function error", async () => {
+    process.env.OPENAI_API_KEY = "openai-key";
+    mocks.openAI.mockRejectedValue(Object.assign(new Error("provider failed"), { status: 429 }));
+    const captured = responseCapture();
+
+    await handler({ method: "POST", body: input }, captured.response);
+
+    expect(captured.result()).toEqual({ code: 502, body: { error: "planner-provider-http-429" } });
   });
 });
