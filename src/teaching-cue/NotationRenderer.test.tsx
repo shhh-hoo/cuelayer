@@ -55,7 +55,7 @@ describe("NotationRenderer", () => {
     expect(html).toContain("data-notation-kind=\"reaction\"");
     expect(html).toContain("hydrogen reacts with oxygen to form water");
     expect(html).toContain("notation-native-reaction");
-    expect(html).toContain("H<sub>2</sub>");
+    expect(html).toContain("<span>H</span><sub>2</sub>");
     expect(html).toContain("→");
   });
 });
