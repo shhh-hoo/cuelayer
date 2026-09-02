@@ -1,10 +1,7 @@
 .teaching-cue-layer {
   --teaching-cue-accent: #d9e469;
-  position: absolute;
-  right: clamp(18px, 4vw, 56px);
-  bottom: clamp(18px, 4vw, 48px);
   z-index: 30;
-  width: min(520px, calc(100% - 36px));
+  width: min(520px, 100%);
   padding: 16px 18px 17px;
   border: 1px solid #ffffff26;
   border-radius: 14px;
@@ -13,6 +10,18 @@
   box-shadow: 0 16px 42px #00000038;
   backdrop-filter: blur(12px);
   pointer-events: none;
+}
+.teaching-cue-placement-overlay {
+  position: absolute;
+  right: clamp(18px, 4vw, 56px);
+  bottom: clamp(18px, 4vw, 48px);
+  width: min(520px, calc(100% - 36px));
+}
+.teaching-cue-placement-flow {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  width: min(520px, 100%);
 }
 .teaching-cue-layer[data-kind="question"] { --teaching-cue-accent: #9fc9e0; }
 .teaching-cue-layer[data-kind="task"] { --teaching-cue-accent: #d9e469; }
@@ -47,11 +56,14 @@
   text-wrap: balance;
 }
 .teaching-cue-presentation-overlay {
+  width: min(440px, 100%);
+  padding: 13px 15px 14px;
+  background: #0f1511f2;
+}
+.teaching-cue-presentation-overlay.teaching-cue-placement-overlay {
   right: clamp(14px, 2.8vw, 36px);
   bottom: clamp(14px, 2.8vw, 32px);
   width: min(440px, calc(100% - 28px));
-  padding: 13px 15px 14px;
-  background: #0f1511f2;
 }
 .teaching-cue-presentation-overlay p { font-size: clamp(15px, 1.65vw, 19px); }
 @media (prefers-reduced-motion: no-preference) {
@@ -62,5 +74,6 @@
   to { opacity: 1; transform: translateY(0); }
 }
 @media (max-width: 620px) {
-  .teaching-cue-layer, .teaching-cue-presentation-overlay { right: 14px; bottom: 14px; width: calc(100% - 28px); }
+  .teaching-cue-placement-overlay, .teaching-cue-presentation-overlay.teaching-cue-placement-overlay { right: 14px; bottom: 14px; width: calc(100% - 28px); }
+  .teaching-cue-placement-flow { width: 100%; }
 }
