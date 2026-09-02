@@ -1,11 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { appendTraceEvents } from "./trace-store.ts";
 import { prepareDurableTraceEvent, type DurableTraceEventDraft, type TraceCorrelation } from "../../src/trace/durable-trace.ts";
 
 type ExternalCallOptions<Result> = {
   sessionId: string;
   apiRequestId?: string;
-  writeCapability?: string;
   provider: string;
   model?: string;
   operation: string;
@@ -16,11 +14,7 @@ type ExternalCallOptions<Result> = {
   responsePayload(result: Result): unknown;
 };
 
-export type TraceDelivery = {
-  persisted: boolean;
-  /** Sanitized server facts that the authorized browser outbox must retry. */
-  events: DurableTraceEventDraft[];
-};
+export type TraceDelivery = { events: DurableTraceEventDraft[] };
 
 export type TracedExternalCallResult<Result> = { result: Result; traceDelivery: TraceDelivery };
 
@@ -70,26 +64,18 @@ export function traceHeaders(request: { headers?: Record<string, string | string
 }
 
 /**
- * Records factual provider boundaries without making teaching depend on Neon.
- * Any fact Neon did not accept is returned for the browser's durable outbox.
+ * Records factual provider boundaries for the browser's local durable trace.
  */
 export async function traceExternalCall<Result>(options: ExternalCallOptions<Result>, call: () => Promise<Result>): Promise<TracedExternalCallResult<Result>> {
   const apiRequestId = options.apiRequestId || randomUUID();
   const correlation = { ...options.correlation, apiRequestId };
   const startedAt = Date.now();
   const sourceInstanceId = `server:${apiRequestId}`;
-  const undelivered: DurableTraceEventDraft[] = [];
-  const deliver = async (draft: DurableTraceEventDraft) => {
-    const sanitized = sanitizedDraft(options.sessionId, draft);
-    try {
-      await appendTraceEvents(options.sessionId, options.writeCapability, [sanitized]);
-    } catch {
-      undelivered.push(sanitized);
-    }
-  };
-  const delivery = (): TraceDelivery => ({ persisted: undelivered.length === 0, events: undelivered });
+  const facts: DurableTraceEventDraft[] = [];
+  const deliver = (draft: DurableTraceEventDraft) => { facts.push(sanitizedDraft(options.sessionId, draft)); };
+  const delivery = (): TraceDelivery => ({ events: facts });
 
-  await deliver({
+  deliver({
     id: eventId(apiRequestId, "started"),
     occurredAt: new Date(startedAt).toISOString(),
     stage: "api",
@@ -104,7 +90,7 @@ export async function traceExternalCall<Result>(options: ExternalCallOptions<Res
   try {
     const result = await call();
     const finishedAt = Date.now();
-    await deliver({
+    deliver({
       id: eventId(apiRequestId, "completed"),
       occurredAt: new Date(finishedAt).toISOString(),
       stage: "api",
@@ -121,7 +107,7 @@ export async function traceExternalCall<Result>(options: ExternalCallOptions<Res
     const aborted = options.signal?.aborted || (error instanceof Error && error.name === "AbortError");
     const abortReason = aborted ? String(options.signal?.reason ?? "aborted") : undefined;
     const outcome = aborted && /timeout/i.test(abortReason ?? "") ? "timed_out" : aborted ? "aborted" : "failed";
-    await deliver({
+    deliver({
       id: eventId(apiRequestId, outcome),
       occurredAt: new Date(finishedAt).toISOString(),
       stage: "api",

@@ -17,7 +17,7 @@ export function createInitialSessionState(traceEnabled = false, traceForwardingL
 /** The browser-side trace is only a forwarding queue; durable storage owns retention. */
 export function createDurableSessionState(): SessionState {
   // The durable event store, not React, owns session retention. This is only
-  // a bounded hand-off window for the browser outbox and live viewer.
+  // a bounded hand-off window for the local trace store and live viewer.
   return createInitialSessionState(true, 500);
 }
 

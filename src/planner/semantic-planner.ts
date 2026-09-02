@@ -2,10 +2,10 @@ import type { PlannerInput } from "./contracts";
 import type { DurableTraceEventDraft } from "../trace/durable-trace";
 
 export type SemanticPlanner = {
-  decide(input: PlannerInput, options?: { signal?: AbortSignal; traceSessionId?: string; traceWriteCapability?: string; apiRequestId?: string; plannerRequestId?: number; onTraceDelivery?(events: DurableTraceEventDraft[]): Promise<unknown> | unknown }): Promise<unknown>;
+  decide(input: PlannerInput, options?: { signal?: AbortSignal; traceSessionId?: string; apiRequestId?: string; plannerRequestId?: number; onTraceEvents?(events: DurableTraceEventDraft[]): Promise<unknown> | unknown }): Promise<unknown>;
 };
 
-type PlannerResponse = { decision?: unknown; error?: string; traceDelivery?: { persisted?: boolean; events?: DurableTraceEventDraft[] } };
+type PlannerResponse = { decision?: unknown; error?: string; traceEvents?: DurableTraceEventDraft[] };
 
 /** Browser code knows the product input/output boundary, never provider response objects. */
 export function createHttpSemanticPlanner(endpoint = "/api/planner/decision"): SemanticPlanner {
@@ -17,7 +17,6 @@ export function createHttpSemanticPlanner(endpoint = "/api/planner/decision"): S
           "Content-Type": "application/json",
           Accept: "application/json",
           ...(options?.traceSessionId ? { "X-CueLayer-Session-Id": options.traceSessionId } : {}),
-          ...(options?.traceWriteCapability ? { "X-CueLayer-Trace-Write-Capability": options.traceWriteCapability } : {}),
           ...(options?.apiRequestId ? { "X-CueLayer-Api-Request-Id": options.apiRequestId } : {}),
           ...(options?.plannerRequestId === undefined ? {} : { "X-CueLayer-Planner-Request-Id": String(options.plannerRequestId) }),
         },
@@ -25,7 +24,7 @@ export function createHttpSemanticPlanner(endpoint = "/api/planner/decision"): S
         signal: options?.signal,
       });
       const body = await response.json().catch(() => ({})) as PlannerResponse;
-      if (body.traceDelivery?.events?.length) await options?.onTraceDelivery?.(body.traceDelivery.events);
+      if (body.traceEvents?.length) await options?.onTraceEvents?.(body.traceEvents);
       if (!response.ok || !body.decision) throw new Error(body.error ?? "Planner is temporarily unavailable.");
       return body.decision;
     },

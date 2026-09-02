@@ -7,12 +7,10 @@ function files(directory: string): string[] {
 }
 
 describe("Vercel deployment boundary", () => {
-  it("keeps only the four HTTP entrypoints under api", () => {
+  it("keeps only the two teaching HTTP entrypoints under api", () => {
     expect(files(resolve("api")).sort()).toEqual([
       "planner/decision.ts",
       "speechmatics/token.ts",
-      "trace/events.ts",
-      "trace/session.ts",
     ]);
   });
 

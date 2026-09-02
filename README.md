@@ -51,15 +51,11 @@ Live verification requires a configured Speechmatics key and browser microphone 
 
 ## Durable teaching-session trace
 
-Every `/session` URL receives a `sessionId`. The live path writes one sanitized, append-only execution trace that connects Speechmatics text events to canonical commits, planner/API calls, validation, compiler output, and the final renderer state. `/session?debug=speech` loads that persisted trace for the current authorized session and exports the complete session as JSONL.
+Every `/session` URL receives a `sessionId`. The live path writes one sanitized, append-only execution trace into browser IndexedDB, connecting Speechmatics text events to canonical commits, planner/API calls, validation, compiler output, and final renderer state. `/session?debug=speech` reads that local persistent evidence and exports the complete session as `cuelayer-session-<sessionId>.jsonl`; no database connectivity is involved.
 
-Neon Postgres is the only durable source of truth in local, preview, and deployed environments. Configure the Vercel Marketplace Neon integration so `DATABASE_URL` targets the matching Neon branch. Browser-originated events first enter a bounded IndexedDB outbox, then upload in batches; temporary Event Store failure shows a degraded trace state but never disables teaching, speech, planning, or rendering.
+IndexedDB is the First Usable Alpha durable trace source of truth. It retains the current active session and the five most recent explicitly completed sessions. Server APIs return sanitized, stable provider facts with their normal result; the authorized browser persists those facts into the same local session. IndexedDB failure is visible as trace degradation but never disables teaching, speech, planning, or rendering.
 
-Apply `npm run migrate:session-event-store` with the target environment's `DATABASE_URL` before serving that environment. The checked-in SQL migration is the only schema authority; request handlers never create or alter database objects.
-
-`sessionId` is only an identifier. Session creation returns separate write and read capabilities, retained only in that browser's IndexedDB. Trace ingestion requires the write capability; reads, JSONL export, and pagination require the read capability. There is intentionally no unauthenticated recent-session enumeration endpoint.
-
-Browser-originated facts first enter IndexedDB and are retried in bounded, ordered batches. Server API facts are attempted against Neon before and after a provider call, but they never block teaching. If Neon is temporarily unavailable, the response returns only sanitized, stable event drafts; the authorized browser places those drafts in the same IndexedDB outbox for idempotent retry. A successful Luna decision remains successful even when its trace delivery is degraded.
+Completed sessions can be serialized as immutable diagnostic bundles (`session` plus ordered `events`). There is deliberately no configured remote sink in Alpha. External dogfood can later upload one completed bundle for support without changing trace creation or introducing continuous synchronization.
 
 Trace sanitization removes credentials and all audio-shaped or binary values. Speechmatics PCM/audio frames remain transient and are never submitted to the trace endpoint. Only transcript text and connection lifecycle metadata are persisted. The trace drawer presents a deterministic Teaching Narrative that collapses ASR revisions into Teaching Moments, while the raw-event section keeps forensic evidence accessible.
 
@@ -67,6 +63,6 @@ Trace sanitization removes credentials and all audio-shaped or binary values. Sp
 
 `/api` contains only the four Vercel HTTP entrypoints: planner decision, Speechmatics token, trace events, and trace session. Server implementation, generated policy, fixtures, and tests live under `/server`. Deployment directories contain deployment entrypoints, not implementation modules.
 
-`npm run dev` is frontend-only Vite development for renderer and fixture work. Use `npm run dev:full` (`vercel dev`) for Speechmatics, OpenAI Luna, Neon, trace APIs, and real microphone sessions; this executes the same endpoint implementations as Preview and deployment.
+`npm run dev` is frontend-only Vite development for renderer and fixture work. Use `npm run dev:full` (`vercel dev`) for Speechmatics, OpenAI Luna, local trace capture, Human Trace, export, and real microphone sessions; this executes the same endpoint implementations as Preview and deployment.
 
 Teaching availability must not depend on observability availability. Trace degradation is visible and recoverable, but it never disables speech, canonical captions, Luna planning, or rendering.

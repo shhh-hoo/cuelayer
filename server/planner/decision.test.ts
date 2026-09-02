@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlannerInput, RuntimeDecision } from "../../src/planner/contracts";
 
-const mocks = vi.hoisted(() => ({ openAI: vi.fn(), buildRequest: vi.fn(), trace: vi.fn(), traceResponse: vi.fn(), traceDelivery: { persisted: true, events: [] as unknown[] } }));
+const mocks = vi.hoisted(() => ({ openAI: vi.fn(), buildRequest: vi.fn(), trace: vi.fn(), traceResponse: vi.fn(), traceDelivery: { events: [] as unknown[] } }));
 vi.mock("./openai-planner.ts", () => ({ requestOpenAIPlannerResult: mocks.openAI, createOpenAIPlannerRequest: mocks.buildRequest }));
 vi.mock("../trace/api-trace.ts", () => ({
   traceHeaders: () => ({ sessionId: "session-api-test", apiRequestId: "api-test", plannerRequestId: "planner-test", writeCapability: "w".repeat(43) }),
@@ -18,7 +18,7 @@ function responseCapture() { let code = 0; let body: unknown; return { response:
 
 describe("live planner OpenAI contract", () => {
   const originalOpenAI = process.env.OPENAI_API_KEY; const originalModel = process.env.OPENAI_MODEL;
-  beforeEach(() => { mocks.openAI.mockReset(); mocks.buildRequest.mockReset(); mocks.trace.mockReset(); mocks.traceResponse.mockReset(); mocks.buildRequest.mockImplementation((plannerInput, model) => ({ model, input: plannerInput })); mocks.traceDelivery = { persisted: true, events: [] }; delete process.env.OPENAI_API_KEY; delete process.env.OPENAI_MODEL; });
+  beforeEach(() => { mocks.openAI.mockReset(); mocks.buildRequest.mockReset(); mocks.trace.mockReset(); mocks.traceResponse.mockReset(); mocks.buildRequest.mockImplementation((plannerInput, model) => ({ model, input: plannerInput })); mocks.traceDelivery = { events: [] }; delete process.env.OPENAI_API_KEY; delete process.env.OPENAI_MODEL; });
   afterEach(() => { if (originalOpenAI === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalOpenAI; if (originalModel === undefined) delete process.env.OPENAI_MODEL; else process.env.OPENAI_MODEL = originalModel; });
 
   it("reports planner-not-configured without an OpenAI key", async () => {
@@ -32,7 +32,7 @@ describe("live planner OpenAI contract", () => {
     const providerRequest = mocks.buildRequest.mock.results[0]?.value;
     expect(mocks.openAI).toHaveBeenCalledWith(providerRequest, "openai-key", { signal: undefined });
     expect(mocks.trace).toHaveBeenCalledWith(expect.objectContaining({ provider: "openai", model: "gpt-5.6-luna", operation: "teaching_planner.decision", requestPayload: providerRequest }));
-    expect(captured.result()).toEqual({ code: 200, body: { decision, traceDelivery: { persisted: true, events: [] } } });
+    expect(captured.result()).toEqual({ code: 200, body: { decision, traceEvents: [] } });
   });
 
   it("honours an explicit OpenAI model override", async () => {
@@ -41,11 +41,11 @@ describe("live planner OpenAI contract", () => {
     expect(mocks.openAI).toHaveBeenCalledWith(expect.objectContaining({ model: "gpt-5.6-sol" }), "openai-key", { signal: undefined });
   });
 
-  it("returns unpersisted sanitized API facts for the browser outbox", async () => {
+  it("returns sanitized API facts for the browser local trace store", async () => {
     process.env.OPENAI_API_KEY = "openai-key"; mocks.openAI.mockResolvedValue({ decision, providerResponse: { output_parsed: decision } });
-    mocks.traceDelivery = { persisted: false, events: [{ id: "server:api-test:started", stage: "api", type: "api_call.started", source: "server", sourceInstanceId: "server:api-test", sourceSeq: 1, payload: { provider: "openai" } }] };
+    mocks.traceDelivery = { events: [{ id: "server:api-test:started", stage: "api", type: "api_call.started", source: "server", sourceInstanceId: "server:api-test", sourceSeq: 1, payload: { provider: "openai" } }] };
     const captured = responseCapture(); await handler({ method: "POST", body: input }, captured.response);
-    expect(captured.result()).toMatchObject({ code: 200, body: { decision, traceDelivery: { persisted: false, events: [{ id: "server:api-test:started" }] } } });
+    expect(captured.result()).toMatchObject({ code: 200, body: { decision, traceEvents: [{ id: "server:api-test:started" }] } });
   });
 
   it("keeps raw provider output separate from CueLayer's normalized planner completion", async () => {

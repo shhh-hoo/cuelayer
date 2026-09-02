@@ -55,8 +55,7 @@ export function SessionPage() {
 
   const { start: startSpeechmatics, stop: stopSpeechmatics, pause: pauseSpeechmatics, resume: resumeSpeechmatics } = useSpeechmaticsSession({
     traceSessionId: traceIdentity.sessionId,
-    traceWriteCapability: durableTrace.writeCapability,
-    onServerTraceDelivery: durableTrace.append,
+    onServerTraceEvents: durableTrace.append,
     onEvent: onSpeechEvent,
     onReady: onSpeechReady,
     onTrace: onSpeechTrace,
@@ -70,8 +69,7 @@ export function SessionPage() {
     planner: state.planner,
     tracingEnabled: true,
     traceSessionId: traceIdentity.sessionId,
-    traceWriteCapability: durableTrace.writeCapability,
-    onServerTraceDelivery: durableTrace.append,
+    onServerTraceEvents: durableTrace.append,
     dispatch,
   });
 

@@ -7,7 +7,6 @@
     "generate:cuecaption-policy": "node --experimental-strip-types scripts/generate-cuecaption-policy.ts",
     "check:cuecaption-policy": "node --experimental-strip-types scripts/generate-cuecaption-policy.ts --check",
     "benchmark:planner": "node --experimental-strip-types scripts/benchmark-live-planner.ts",
-    "migrate:session-event-store": "node --experimental-strip-types scripts/migrate-session-event-store.ts",
     "predev": "npm run check:cuecaption-policy",
     "dev": "vite",
     "dev:full": "vercel dev",
@@ -20,7 +19,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.1.0",
     "@speechmatics/auth": "^0.1.0",
     "@speechmatics/browser-audio-input": "^2.0.4",
     "@speechmatics/browser-audio-input-react": "^2.0.4",

@@ -20,11 +20,11 @@ export default async function handler(request: Request, response: Response): Pro
   try {
     const model = process.env.OPENAI_MODEL ?? "gpt-5.6-luna";
     const providerRequest = createOpenAIPlannerRequest(input, model);
-    const traced = await traceExternalCall({ sessionId: trace.sessionId, writeCapability: trace.writeCapability, apiRequestId: trace.apiRequestId, provider: "openai", model, operation: "teaching_planner.decision", requestPayload: providerRequest, signal: request.signal, correlation: { plannerRequestId: trace.plannerRequestId }, responsePayload: (value) => value.providerResponse }, () => requestOpenAIPlannerResult(providerRequest, openAIApiKey, { signal: request.signal }));
-    response.status(200).json({ decision: traced.result.decision, traceDelivery: traced.traceDelivery });
+    const traced = await traceExternalCall({ sessionId: trace.sessionId, apiRequestId: trace.apiRequestId, provider: "openai", model, operation: "teaching_planner.decision", requestPayload: providerRequest, signal: request.signal, correlation: { plannerRequestId: trace.plannerRequestId }, responsePayload: (value) => value.providerResponse }, () => requestOpenAIPlannerResult(providerRequest, openAIApiKey, { signal: request.signal }));
+    response.status(200).json({ decision: traced.result.decision, traceEvents: traced.traceDelivery.events });
   } catch (error) {
     const providerError = error instanceof TracedExternalCallError ? error.providerError : error;
     const reason = providerError instanceof SyntaxError ? "planner-invalid-structured-output" : "planner-provider-unavailable";
-    response.status(502).json({ error: reason, ...(error instanceof TracedExternalCallError ? { traceDelivery: error.traceDelivery } : {}) });
+    response.status(502).json({ error: reason, ...(error instanceof TracedExternalCallError ? { traceEvents: error.traceDelivery.events } : {}) });
   }
 }
