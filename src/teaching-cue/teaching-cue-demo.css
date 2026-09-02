@@ -14,7 +14,7 @@
 }
 .teaching-cue-demo-eyebrow { color: #677268; font-size: 11px; font-weight: 780; letter-spacing: .12em; text-transform: uppercase; }
 .teaching-cue-demo-header h1 { max-width: 780px; margin: 7px 0 0; font-size: clamp(34px, 4.2vw, 58px); line-height: .98; letter-spacing: -.052em; }
-.teaching-cue-demo-header p { max-width: 760px; margin: 11px 0 0; color: #5d685f; font-size: 14px; line-height: 1.55; }
+.teaching-cue-demo-header p { max-width: 790px; margin: 11px 0 0; color: #5d685f; font-size: 14px; line-height: 1.55; }
 .teaching-cue-demo-back { flex: 0 0 auto; padding: 9px 13px; border: 1px solid #bdc6bc; border-radius: 999px; color: #324237; background: #f8faf5; text-decoration: none; font-size: 13px; }
 .teaching-cue-demo-toolbar {
   width: min(1240px, 100%);
@@ -35,42 +35,163 @@
   border: 1px solid #263029;
   border-radius: 24px;
   color: #f8faf6;
-  background: linear-gradient(145deg, #25352a, #0f1712 68%);
+  background: linear-gradient(145deg, #233128, #0d1410 72%);
   isolation: isolate;
 }
-.teaching-cue-demo-stage::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .7; background-image: linear-gradient(#ffffff08 1px, transparent 1px), linear-gradient(90deg, #ffffff08 1px, transparent 1px); background-size: 38px 38px; }
-.teaching-cue-demo-board {
+.teaching-cue-demo-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: .46;
+  background-image: linear-gradient(#ffffff07 1px, transparent 1px), linear-gradient(90deg, #ffffff07 1px, transparent 1px);
+  background-size: 42px 42px;
+}
+.teaching-cue-demo-board { position: absolute; inset: 0; }
+.board-scene {
   position: absolute;
   inset: 0;
   display: grid;
-  place-content: center;
+  place-items: center;
+  padding: 64px clamp(40px, 7vw, 96px) 150px;
+}
+.board-active { color: #fbfcf8; }
+.board-support {
+  position: absolute;
+  color: #c9d3ca;
+  font-size: clamp(16px, 1.65vw, 21px);
+  line-height: 1.35;
+  letter-spacing: -.018em;
+}
+.board-retained {
+  position: absolute;
+  top: clamp(34px, 6vw, 64px);
+  left: clamp(34px, 6vw, 70px);
+  max-width: 300px;
+  color: #7f9082;
+  font-size: clamp(15px, 1.55vw, 19px);
+  font-weight: 560;
+  letter-spacing: -.015em;
+}
+.definition-object {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: baseline;
+  gap: clamp(14px, 2vw, 28px);
+  max-width: 1040px;
+  font-size: clamp(36px, 5vw, 68px);
+  line-height: 1.02;
+  letter-spacing: -.052em;
+  font-weight: 610;
+}
+.definition-equals { color: #7f9485; font-weight: 430; }
+.definition-meaning { color: #e4ebe4; font-weight: 535; }
+.definition-support { top: 63%; max-width: 520px; text-align: center; }
+.causal-chain {
+  display: grid;
   justify-items: center;
-  padding: 60px 70px 150px;
+  gap: 8px;
+  font-size: clamp(31px, 4.3vw, 59px);
+  line-height: 1.02;
+  letter-spacing: -.048em;
+  font-weight: 600;
   text-align: center;
 }
-.teaching-cue-demo-board-label { margin-bottom: 20px; color: #b7c5b9; font-size: 11px; font-weight: 780; letter-spacing: .12em; text-transform: uppercase; }
-.teaching-cue-demo-board strong { max-width: 900px; font-size: clamp(40px, 5.4vw, 76px); line-height: 1; letter-spacing: -.055em; font-weight: 610; }
-.teaching-cue-demo-relation { margin: 30px 0 0; color: #dbe4dc; font-size: clamp(20px, 2.7vw, 34px); line-height: 1.25; letter-spacing: -.025em; }
-.teaching-cue-demo-context { margin: 23px 0 0; color: #a8b6aa; font-size: clamp(15px, 1.7vw, 20px); }
-.teaching-cue-demo-stage.presentation-overlay { background: #dfe5dd; }
+.causal-chain i { color: #809889; font-size: .7em; font-style: normal; font-weight: 430; line-height: .72; }
+.cause-support { right: clamp(36px, 7vw, 92px); top: 54%; max-width: 280px; text-align: left; }
+.equation-object {
+  display: flex;
+  align-items: baseline;
+  gap: clamp(16px, 2vw, 30px);
+  font-family: "Times New Roman", Cambria, Georgia, serif;
+  font-size: clamp(52px, 7.2vw, 102px);
+  line-height: 1;
+  letter-spacing: -.045em;
+}
+.equation-object sup { font-size: .48em; vertical-align: .75em; }
+.equation-support {
+  top: 62%;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  color: #d4ddd5;
+}
+.equation-support span { padding: 0 5px 4px; border-bottom: 2px solid #d9e469; color: #f5f8f2; font: 600 clamp(22px, 2.3vw, 31px)/1 "Times New Roman", Cambria, Georgia, serif; }
+.equation-support b { color: #9aaa9d; font-size: 13px; font-weight: 650; letter-spacing: .02em; }
+.reaction-object {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(15px, 2vw, 30px);
+  max-width: 1100px;
+  font-family: "Times New Roman", Cambria, Georgia, serif;
+  font-size: clamp(34px, 5vw, 70px);
+  line-height: 1;
+  letter-spacing: -.035em;
+  white-space: nowrap;
+}
+.reaction-plus, .reaction-arrow { color: #87988a; font-weight: 430; }
+.reaction-focus { position: relative; padding-bottom: 9px; }
+.reaction-focus::after {
+  content: "";
+  position: absolute;
+  right: 18%;
+  bottom: 0;
+  left: 18%;
+  height: 3px;
+  border-radius: 99px;
+  background: #d9e469;
+}
+.reaction-support { top: 61%; color: #aebcaf; }
+.teaching-cue-demo-stage.presentation-overlay { background: #e2e7df; }
 .teaching-cue-demo-stage.presentation-overlay::before { display: none; }
-.teaching-cue-demo-slide { position: absolute; inset: 0; padding: clamp(38px, 6vw, 80px); color: #1f2922; background: linear-gradient(135deg, #f6f7f2, #dfe5dd); }
-.teaching-cue-demo-slide span { display: block; color: #667368; font-size: 12px; font-weight: 780; letter-spacing: .12em; text-transform: uppercase; }
-.teaching-cue-demo-slide strong { display: block; max-width: 800px; margin-top: 20px; font-size: clamp(42px, 5vw, 70px); line-height: .98; letter-spacing: -.05em; }
-.teaching-cue-demo-slide p { max-width: 720px; margin: 24px 0 0; color: #566258; font-size: clamp(18px, 2.2vw, 27px); line-height: 1.45; }
-.teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-board { inset: auto auto 28px 28px; width: min(460px, 52%); display: block; padding: 18px 20px; border: 1px solid #ffffff1f; border-radius: 14px; color: #f8faf6; background: #101712e8; text-align: left; backdrop-filter: blur(10px); }
-.teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-board-label { display: block; margin-bottom: 8px; }
-.teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-board strong { font-size: clamp(18px, 2vw, 26px); }
-.teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-relation { margin-top: 10px; font-size: 16px; }
-.teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-context { display: none; }
+.teaching-cue-demo-slide {
+  position: absolute;
+  inset: 0;
+  padding: clamp(38px, 6vw, 78px);
+  color: #1f2922;
+  background: linear-gradient(135deg, #f5f6f1, #dfe5dd);
+}
+.teaching-cue-demo-slide p { width: min(650px, 65%); margin: 36px 0 0; color: #667168; font-size: clamp(18px, 2vw, 25px); line-height: 1.5; }
+.slide-figure { width: min(720px, 72%); height: 250px; display: flex; align-items: flex-end; gap: 24px; border-bottom: 2px solid #778279; }
+.slide-figure span { flex: 1; border-radius: 14px 14px 0 0; background: #b7c4b8; }
+.slide-figure span:nth-child(1) { height: 42%; }
+.slide-figure span:nth-child(2) { height: 78%; }
+.slide-figure span:nth-child(3) { height: 58%; }
+.teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-board {
+  inset: auto auto 28px 28px;
+  width: min(500px, 48%);
+  height: 170px;
+  border: 1px solid #ffffff1d;
+  border-radius: 16px;
+  background: #101712e8;
+  backdrop-filter: blur(10px);
+}
+.teaching-cue-demo-stage.presentation-overlay .board-scene { padding: 20px 24px; place-items: center start; }
+.teaching-cue-demo-stage.presentation-overlay .board-retained { top: 15px; left: 20px; font-size: 11px; }
+.teaching-cue-demo-stage.presentation-overlay .board-support { display: none; }
+.teaching-cue-demo-stage.presentation-overlay .definition-object { grid-template-columns: auto auto; gap: 8px 12px; margin-top: 24px; font-size: clamp(19px, 2vw, 28px); }
+.teaching-cue-demo-stage.presentation-overlay .definition-meaning { grid-column: 1 / -1; }
+.teaching-cue-demo-stage.presentation-overlay .causal-chain { justify-items: start; gap: 2px; margin-top: 20px; font-size: clamp(16px, 1.7vw, 23px); text-align: left; }
+.teaching-cue-demo-stage.presentation-overlay .equation-object { margin-top: 22px; font-size: clamp(30px, 3.4vw, 48px); }
+.teaching-cue-demo-stage.presentation-overlay .reaction-object { flex-wrap: wrap; justify-content: flex-start; gap: 7px 12px; margin-top: 20px; font-size: clamp(19px, 2vw, 27px); white-space: normal; }
 .teaching-cue-demo-principles { width: min(1240px, 100%); margin: 12px auto 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .teaching-cue-demo-principles article { padding: 14px; border: 1px solid #d2d7d0; border-radius: 14px; background: #f7f9f4; }
 .teaching-cue-demo-principles strong { font-size: 13px; color: #304037; }
 .teaching-cue-demo-principles p { margin: 6px 0 0; color: #69746c; font-size: 12px; line-height: 1.45; }
+@media (max-width: 860px) {
+  .definition-object { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .definition-equals { line-height: .6; }
+  .cause-support { display: none; }
+  .reaction-object { flex-wrap: wrap; white-space: normal; }
+}
 @media (max-width: 760px) {
   .teaching-cue-demo-header, .teaching-cue-demo-toolbar { align-items: flex-start; flex-direction: column; }
-  .teaching-cue-demo-stage { min-height: 580px; }
-  .teaching-cue-demo-board { padding: 54px 24px 150px; }
+  .teaching-cue-demo-stage { min-height: 600px; }
+  .board-scene { padding: 70px 24px 170px; }
+  .board-retained { top: 26px; left: 26px; }
+  .definition-support, .equation-support, .reaction-support { top: 66%; padding: 0 26px; text-align: center; }
   .teaching-cue-demo-principles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-board { left: 16px; bottom: 100px; width: calc(100% - 32px); }
+  .teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-board { left: 16px; bottom: 104px; width: calc(100% - 32px); height: 150px; }
+  .teaching-cue-demo-slide p { width: 100%; }
 }
