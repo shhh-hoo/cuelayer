@@ -1,0 +1,79 @@
+.teaching-cue-layer {
+  --teaching-cue-accent: #d9e469;
+  z-index: 30;
+  width: min(520px, 100%);
+  padding: 16px 18px 17px;
+  border: 1px solid #ffffff26;
+  border-radius: 14px;
+  color: #f8faf6;
+  background: #111813ed;
+  box-shadow: 0 16px 42px #00000038;
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+.teaching-cue-placement-overlay {
+  position: absolute;
+  right: clamp(18px, 4vw, 56px);
+  bottom: clamp(18px, 4vw, 48px);
+  width: min(520px, calc(100% - 36px));
+}
+.teaching-cue-placement-flow {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  width: min(520px, 100%);
+}
+.teaching-cue-layer[data-kind="question"] { --teaching-cue-accent: #9fc9e0; }
+.teaching-cue-layer[data-kind="task"] { --teaching-cue-accent: #d9e469; }
+.teaching-cue-layer[data-kind="note"] { --teaching-cue-accent: #e5bf79; }
+.teaching-cue-layer[data-kind="hint"] { --teaching-cue-accent: #8fcbb7; }
+.teaching-cue-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  color: #cfd7cf;
+  font-size: 11px;
+  font-weight: 780;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.teaching-cue-marker {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--teaching-cue-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--teaching-cue-accent) 16%, transparent);
+}
+.teaching-cue-layer p {
+  margin: 0;
+  color: #f7f9f5;
+  font-size: clamp(17px, 2vw, 22px);
+  font-weight: 570;
+  line-height: 1.32;
+  letter-spacing: -.018em;
+  text-wrap: balance;
+}
+.teaching-cue-presentation-overlay {
+  width: min(440px, 100%);
+  padding: 13px 15px 14px;
+  background: #0f1511f2;
+}
+.teaching-cue-presentation-overlay.teaching-cue-placement-overlay {
+  right: clamp(14px, 2.8vw, 36px);
+  bottom: clamp(14px, 2.8vw, 32px);
+  width: min(440px, calc(100% - 28px));
+}
+.teaching-cue-presentation-overlay p { font-size: clamp(15px, 1.65vw, 19px); }
+@media (prefers-reduced-motion: no-preference) {
+  .teaching-cue-layer { animation: teaching-cue-enter 180ms ease-out both; }
+}
+@keyframes teaching-cue-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 620px) {
+  .teaching-cue-placement-overlay, .teaching-cue-presentation-overlay.teaching-cue-placement-overlay { right: 14px; bottom: 14px; width: calc(100% - 28px); }
+  .teaching-cue-placement-flow { width: 100%; }
+}
