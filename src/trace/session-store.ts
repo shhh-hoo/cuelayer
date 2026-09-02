@@ -29,7 +29,7 @@ export class LocalTraceStore {
   async ensureSession(sessionId: string) {
     const existing = await this.session(sessionId); if (existing) return existing;
     const transaction = this.db.transaction(SESSIONS, "readwrite"); const store = transaction.objectStore(SESSIONS); const now = new Date().toISOString(); const created = newSession(sessionId); store.put(created);
-    await new Promise<void>((resolve, reject) => { const cursor = store.openCursor(); cursor.onerror = () => reject(cursor.error); cursor.onsuccess = () => { const active = cursor.result; if (!active) { resolve(); return; } const value = active.value as LocalTraceSession; if (!value.completedAt) active.update({ ...value, completedAt: now, updatedAt: now }); active.continue(); }; });
+    await new Promise<void>((resolve, reject) => { const cursor = store.openCursor(); cursor.onerror = () => reject(cursor.error); cursor.onsuccess = () => { const active = cursor.result; if (!active) { resolve(); return; } const value = active.value as LocalTraceSession; if (value.sessionId !== sessionId && !value.completedAt) active.update({ ...value, completedAt: now, updatedAt: now }); active.continue(); }; });
     await done(transaction); await this.pruneCompleted(); return created;
   }
   async append(sessionId: string, drafts: DurableTraceEventDraft[], sourceInstanceId: string) {
