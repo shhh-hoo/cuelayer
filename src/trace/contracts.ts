@@ -5,13 +5,21 @@ export type TraceSource = "browser" | "synthetic";
 
 export type TraceCorrelation = {
   rootId?: string;
+  lessonSequence?: number;
   runId?: number;
   speechEventId?: string;
   finalId?: string;
   spanId?: string;
   spanRevision?: number;
   plannerRequestId?: string;
+  checkpointId?: string;
+  interpretationId?: string;
+  stepIndex?: number;
+  boardRevision?: number;
+  cueRevision?: number;
+  boardItemId?: string;
   cueId?: string;
+  renderId?: string;
 };
 
 export type SessionTracePayloads = {
@@ -135,6 +143,38 @@ export type SessionTracePayloads = {
     sourceSegmentIds: string[];
   };
   "renderer.expired": { episodeId: string };
+  "evidence.checkpoint_opened": { runId: number; spanId: string; spanRevision: number };
+  "evidence.checkpoint_committed": { runId: number; checkpointId: string; lessonSequence: number; sourceFinalIds: string[]; warningCodes: string[] };
+  "evidence.checkpoint_pending": { checkpointId: string; pendingCount: number; oldestPendingAgeMs: number; estimatedTokens: number };
+  "interpretation.request_started": { requestId: string; checkpointIds: string[]; pendingCount: number; projectedInputTokens: number };
+  "interpretation.request_completed": { requestId: string; latencyMs: number; inputTokens?: number; cachedInputTokens?: number; outputTokens?: number; estimatedCostUsd?: number; costStatus: "estimated" | "rates_unconfigured" };
+  "interpretation.request_timeout": { requestId: string; latencyMs: number; pendingCount: number };
+  "interpretation.output_rejected": { requestId: string; reason: string; pendingCount: number };
+  "interpretation.channel_conflict": { requestId: string; channel: "board" | "cue" };
+  "interpretation.step_accepted": { requestId: string; interpretationId: string; stepIndex: number; checkpointIds: string[]; boardAction: string; cueAction: string };
+  "board.keep": { reason: string };
+  "board.active_set": { boardItemId: string; continuity: string };
+  "board.support_added": { boardItemId: string; supportId: string };
+  "board.context_retained": { boardItemIds: string[] };
+  "board.context_retired": { boardItemIds: string[] };
+  "board.content_invalidated": { boardItemIds: string[] };
+  "teaching_cue.keep": Record<string, never>;
+  "teaching_cue.set": { cueId: string; kind: string };
+  "teaching_cue.resolved": { cueId: string; reason: string };
+  "teaching_cue.expired": { cueId: string };
+  "teaching_surface.rendered": { renderId: string; boardRevision: number; cueRevision: number; presentationMode: string };
+  "teaching_surface.layout_changed": { presentationMode: string; density: string };
+  "teaching_surface.render_failed": { message: string };
+  "context_projection.created": {
+    requestId: string;
+    policyTokens: number;
+    timelineTokens: number;
+    stateTokens: number;
+    newEvidenceTokens: number;
+    projectedInputTokens: number;
+    pendingCount: number;
+    oldestPendingAgeMs: number;
+  };
   "trace.gap": {
     reason: "queue_pressure" | "initialization_pressure";
     dropped: Record<string, number>;
