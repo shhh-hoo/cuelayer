@@ -1,5 +1,5 @@
 import type { PlannerInput } from "../../src/planner/contracts.ts";
-import { requestOpenAIPlannerDecision } from "./openai-planner.ts";
+import { requestOpenAIPlannerDecision } from "../../server/planner/openai-planner.ts";
 
 declare const process: { env: Record<string, string | undefined> };
 

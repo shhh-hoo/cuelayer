@@ -4,7 +4,7 @@ import type { PlannerInput, RuntimeDecision } from "../../src/planner/contracts"
 const mocks = vi.hoisted(() => ({ openAI: vi.fn() }));
 vi.mock("./openai-planner.ts", () => ({ requestOpenAIPlannerDecision: mocks.openAI }));
 
-import handler from "./decision";
+import handler from "../../api/planner/decision";
 
 const input: PlannerInput = { recentSpeech: [{ id: "speech-span-0", text: "A useful proposition.", words: [] }] };
 const decision: RuntimeDecision = { display: { kind: "TEXT" }, learner: { kind: "NONE" } };
