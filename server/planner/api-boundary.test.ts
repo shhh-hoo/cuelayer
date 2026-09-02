@@ -16,4 +16,11 @@ describe("Vercel planner function boundary", () => {
     expect(viteConfig).toContain('from "./server/planner/openai-planner.ts"');
     expect(viteConfig).not.toContain('from "./api/planner/');
   });
+
+  it("forces Vercel to package the TypeScript runtime imported by the transpiled function", async () => {
+    const config = JSON.parse(await readFile(resolve(process.cwd(), "vercel.json"), "utf8")) as {
+      functions?: Record<string, { includeFiles?: string }>;
+    };
+    expect(config.functions?.["api/planner/decision.ts"]?.includeFiles).toBe("server/planner/**");
+  });
 });
