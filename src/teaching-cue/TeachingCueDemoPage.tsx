@@ -62,12 +62,6 @@ const STRESS_RATE_EQUATION: EquationNotationSpec = {
   ],
 };
 
-const ORDER_TERM: EquationNotationSpec = {
-  kind: "equation",
-  ariaLabel: "concentration of A squared",
-  pieces: [{ kind: "symbol", value: "[A]", power: 2 }],
-};
-
 const BROMINATION: ReactionNotationSpec = {
   kind: "reaction",
   ariaLabel: "ethene plus bromine forms 1,2-dibromoethane",
@@ -113,7 +107,12 @@ function CauseActive() {
 }
 
 function EquationActive({ stress }: { stress: boolean }) {
-  return <div className="equation-object"><NotationRenderer spec={stress ? STRESS_RATE_EQUATION : RATE_EQUATION} /></div>;
+  return <div className="equation-object">
+    <NotationRenderer
+      spec={stress ? STRESS_RATE_EQUATION : RATE_EQUATION}
+      annotations={[{ pieceIndex: 3, label: stress ? "second order in A · keep this attached to the term" : "second order in A" }]}
+    />
+  </div>;
 }
 
 function ReactionActive({ stress }: { stress: boolean }) {
@@ -164,7 +163,6 @@ function BoardScene({ kind, cue, presentationMode, stress, onCueExpire }: {
     onCueExpire={onCueExpire}
     retained={retained ?? [<span key="rate">rate depends on concentration</span>]}
     active={<EquationActive stress={stress} />}
-    support={<div className="equation-support"><NotationRenderer displayMode={false} spec={ORDER_TERM} /><b>{stress ? "retain the order annotation only while it helps the rearrangement" : "second order in A"}</b></div>}
   />;
 
   return <BoardLayout
@@ -197,7 +195,7 @@ export function TeachingCueDemoPage() {
       <div>
         <span className="teaching-cue-demo-eyebrow">CueLayer · learner surface study</span>
         <h1>Meaning sets the hierarchy.</h1>
-        <p>The board allocates space before rendering. Retained context yields first, Support yields next, and Active keeps the readability budget. Equation and reaction notation now comes from a bounded structured contract rather than free-form TeX.</p>
+        <p>The Board uses stable content-priority rules rather than runtime geometry loops. Equation annotations stay attached to the exact term they explain, and equation/reaction notation renders synchronously from a bounded structured contract.</p>
       </div>
       <a href="/session" className="teaching-cue-demo-back">Live session</a>
     </header>
@@ -222,10 +220,10 @@ export function TeachingCueDemoPage() {
     </section>
 
     <section className="teaching-cue-demo-principles">
-      <article><strong>Real yield order</strong><p>Measured height drives Full → Compact → Essential density. Retained disappears before Support.</p></article>
-      <article><strong>No silent crop</strong><p>Wide notation scales only to a readability floor; below it, the renderer falls back to wrapped plain text.</p></article>
-      <article><strong>Structured notation</strong><p>Equation pieces and reaction species compile deterministically to KaTeX/mhchem. Free TeX is not a planner contract.</p></article>
-      <article><strong>One cue, one task</strong><p>An instruction that contains a question remains one TASK cue instead of becoming two competing learner prompts.</p></article>
+      <article><strong>Stable layout</strong><p>Content priority is deterministic; the page has no resize-driven render loop.</p></article>
+      <article><strong>Attached support</strong><p>Equation annotations stay on the term they explain instead of drifting into a generic footer.</p></article>
+      <article><strong>Structured notation</strong><p>Equation pieces and reaction species render synchronously; free TeX is not a planner contract.</p></article>
+      <article><strong>One cue, one task</strong><p>An instruction containing a question remains one TASK cue instead of two competing prompts.</p></article>
     </section>
   </main>;
 }
