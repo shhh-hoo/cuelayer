@@ -8,9 +8,12 @@ describe("Vercel planner function boundary", () => {
     expect(entries).toEqual(["decision.ts"]);
   });
 
-  it("loads the planner implementation from the server module boundary", async () => {
-    const source = await readFile(resolve(process.cwd(), "api/planner/decision.ts"), "utf8");
-    expect(source).toContain('from "../../server/planner/openai-planner.ts"');
-    expect(source).not.toContain('from "./openai-planner.ts"');
+  it("loads planner implementations from the server module boundary", async () => {
+    const endpoint = await readFile(resolve(process.cwd(), "api/planner/decision.ts"), "utf8");
+    const viteConfig = await readFile(resolve(process.cwd(), "vite.config.ts"), "utf8");
+    expect(endpoint).toContain('from "../../server/planner/openai-planner.ts"');
+    expect(endpoint).not.toContain('from "./openai-planner.ts"');
+    expect(viteConfig).toContain('from "./server/planner/openai-planner.ts"');
+    expect(viteConfig).not.toContain('from "./api/planner/');
   });
 });

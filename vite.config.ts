@@ -1,8 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { createSpeechmaticsJWT } from "@speechmatics/auth";
-import { deepSeekPlannerFailureReason, requestDeepSeekPlannerDecision } from "./api/planner/deepseek-planner.ts";
-import { requestOpenAIPlannerDecision } from "./api/planner/openai-planner.ts";
+import { requestOpenAIPlannerDecision } from "./server/planner/openai-planner.ts";
 
 async function requestBody(request: import("http").IncomingMessage): Promise<unknown> {
   const chunks: Uint8Array[] = [];
@@ -11,6 +10,15 @@ async function requestBody(request: import("http").IncomingMessage): Promise<unk
   let offset = 0;
   for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength; }
   return JSON.parse(new TextDecoder().decode(body));
+}
+
+function plannerFailureReason(error: unknown) {
+  const value = error && typeof error === "object" ? error as { status?: unknown; code?: unknown; message?: unknown } : undefined;
+  if (typeof value?.message === "string" && value.message.includes("invalid structured output JSON")) return "planner-invalid-structured-output";
+  if (value?.message === "planner-empty-response") return "planner-empty-response";
+  if (typeof value?.status === "number") return `planner-provider-http-${value.status}`;
+  if (typeof value?.code === "string" && /^[a-z0-9_-]{1,80}$/i.test(value.code)) return `planner-provider-${value.code}`;
+  return "planner-provider-unavailable";
 }
 
 export default defineConfig(({ mode }) => {
@@ -30,16 +38,13 @@ export default defineConfig(({ mode }) => {
       server.middlewares.use("/api/planner/decision", async (request, response) => {
         response.setHeader("Cache-Control", "no-store");
         if (request.method !== "POST") { response.statusCode = 405; response.end(JSON.stringify({ error: "method-not-allowed" })); return; }
-        const deepSeekApiKey = env.DEEPSEEK_API_KEY;
         const openAIApiKey = env.OPENAI_API_KEY;
-        if (!deepSeekApiKey && !openAIApiKey) { response.statusCode = 503; response.end(JSON.stringify({ error: "planner-not-configured" })); return; }
+        if (!openAIApiKey) { response.statusCode = 503; response.end(JSON.stringify({ error: "planner-not-configured" })); return; }
         try {
           const input = await requestBody(request);
-          const decision = deepSeekApiKey
-            ? await requestDeepSeekPlannerDecision(input as never, deepSeekApiKey, env.DEEPSEEK_MODEL || "deepseek-v4-flash")
-            : await requestOpenAIPlannerDecision(input as never, openAIApiKey!, env.OPENAI_MODEL || "gpt-5.6-luna");
+          const decision = await requestOpenAIPlannerDecision(input as never, openAIApiKey, env.OPENAI_MODEL || "gpt-5.6-luna");
           response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ decision }));
-        } catch (error) { response.statusCode = 502; response.end(JSON.stringify({ error: deepSeekPlannerFailureReason(error) })); }
+        } catch (error) { response.statusCode = 502; response.end(JSON.stringify({ error: plannerFailureReason(error) })); }
       });
     },
   }],
