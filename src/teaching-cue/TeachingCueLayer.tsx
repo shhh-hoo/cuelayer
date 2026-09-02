@@ -10,9 +10,10 @@ const LABEL: Record<ActiveTeachingCue["kind"], string> = {
   HINT: "Hint",
 };
 
-export function TeachingCueLayer({ cue, presentationMode, onExpire }: {
+export function TeachingCueLayer({ cue, presentationMode, placement = "overlay", onExpire }: {
   cue?: ActiveTeachingCue;
   presentationMode: PresentationMode;
+  placement?: "overlay" | "flow";
   onExpire?(cueId: string, now: number): void;
 }) {
   useEffect(() => {
@@ -24,7 +25,7 @@ export function TeachingCueLayer({ cue, presentationMode, onExpire }: {
   if (!cue) return null;
 
   return <aside
-    className={`teaching-cue-layer teaching-cue-${presentationMode}`}
+    className={`teaching-cue-layer teaching-cue-${presentationMode} teaching-cue-placement-${placement}`}
     data-kind={cue.kind.toLowerCase()}
     aria-label={`${LABEL[cue.kind]} teaching cue`}
     aria-live="polite"
