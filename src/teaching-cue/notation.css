@@ -1,0 +1,19 @@
+.notation-renderer {
+  display: inline-block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  vertical-align: middle;
+}
+.notation-renderer > span { display: inline-block; max-width: 100%; }
+.notation-renderer .katex-display { margin: 0; overflow: hidden; }
+.notation-renderer .katex { max-width: 100%; font-size: 1em; }
+.notation-renderer[data-notation-status="fallback"] > span,
+.notation-renderer[data-notation-status="loading"] > span {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .78em;
+  opacity: .78;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
