@@ -1,4 +1,13 @@
 {
+  "functions": {
+    "api/**/*.ts": {
+      "includeFiles": [
+        "server/**",
+        "src/planner/contracts.ts",
+        "src/trace/durable-trace.ts"
+      ]
+    }
+  },
   "routes": [
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }

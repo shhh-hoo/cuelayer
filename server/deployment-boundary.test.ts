@@ -21,4 +21,13 @@ describe("Vercel deployment boundary", () => {
     expect(config).not.toContain("middlewares.use");
     expect(config).not.toContain("/api/");
   });
+
+  it("includes the non-entrypoint server modules in each deployed Function bundle", () => {
+    const config = JSON.parse(readFileSync(resolve("vercel.json"), "utf8")) as { functions?: Record<string, { includeFiles?: string[] }> };
+    expect(config.functions?.["api/**/*.ts"]?.includeFiles).toEqual([
+      "server/**",
+      "src/planner/contracts.ts",
+      "src/trace/durable-trace.ts",
+    ]);
+  });
 });
