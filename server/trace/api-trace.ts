@@ -25,9 +25,14 @@ export type TraceDelivery = {
 export type TracedExternalCallResult<Result> = { result: Result; traceDelivery: TraceDelivery };
 
 export class TracedExternalCallError extends Error {
-  constructor(readonly providerError: unknown, readonly traceDelivery: TraceDelivery) {
+  readonly providerError: unknown;
+  readonly traceDelivery: TraceDelivery;
+
+  constructor(providerError: unknown, traceDelivery: TraceDelivery) {
     super(providerError instanceof Error ? providerError.message : "external-api-call-failed");
     this.name = "TracedExternalCallError";
+    this.providerError = providerError;
+    this.traceDelivery = traceDelivery;
   }
 }
 

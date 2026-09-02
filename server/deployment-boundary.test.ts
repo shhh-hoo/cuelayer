@@ -26,4 +26,11 @@ describe("Vercel deployment boundary", () => {
     const config = JSON.parse(readFileSync(resolve("vercel.json"), "utf8")) as { functions?: Record<string, { includeFiles?: string[] }> };
     expect(config.functions?.["api/**/*.ts"]?.includeFiles).toBe("{server/**,src/planner/contracts.ts,src/trace/durable-trace.ts}");
   });
+
+  it("keeps server modules compatible with Vercel's TypeScript strip-only runtime", () => {
+    for (const file of files(resolve("server"))) {
+      const source = readFileSync(resolve("server", file), "utf8");
+      expect(source).not.toMatch(/constructor\([^)]*\b(?:readonly|public|private|protected)\b/);
+    }
+  });
 });
