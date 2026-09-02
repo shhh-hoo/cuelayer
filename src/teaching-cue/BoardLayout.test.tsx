@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ActiveTeachingCue } from "./contracts";
-import { BoardLayout, boardDensityForHeight } from "./BoardLayout";
+import { BoardLayout, boardDensityForContent } from "./BoardLayout";
 
 const cue: ActiveTeachingCue = {
   id: "task-1",
@@ -12,13 +12,14 @@ const cue: ActiveTeachingCue = {
 };
 
 describe("BoardLayout", () => {
-  it("implements deterministic yield tiers from the measured content height", () => {
-    expect(boardDensityForHeight(500)).toBe("full");
-    expect(boardDensityForHeight(359)).toBe("compact");
-    expect(boardDensityForHeight(239)).toBe("essential");
+  it("uses a deterministic content policy without runtime measurement", () => {
+    expect(boardDensityForContent({ presentationMode: "presentationless", retainedCount: 1, cueTextLength: 40 })).toBe("full");
+    expect(boardDensityForContent({ presentationMode: "presentationless", retainedCount: 3, cueTextLength: 40 })).toBe("compact");
+    expect(boardDensityForContent({ presentationMode: "presentationless", retainedCount: 1, cueTextLength: 181 })).toBe("essential");
+    expect(boardDensityForContent({ presentationMode: "presentation-overlay", retainedCount: 0, cueTextLength: 0 })).toBe("essential");
   });
 
-  it("allocates separate content and Teaching Cue regions instead of overlapping layers", () => {
+  it("allocates separate content and Teaching Cue regions", () => {
     const html = renderToStaticMarkup(<BoardLayout
       presentationMode="presentationless"
       retained={[<span key="retained">Ea unchanged</span>]}
@@ -30,13 +31,12 @@ describe("BoardLayout", () => {
     expect(html).toContain("board-layout-cue-slot");
     expect(html).toContain("teaching-cue-placement-flow");
     expect(html).toContain("data-density=\"full\"");
-    expect(html).toContain("data-has-cue=\"true\"");
   });
 
-  it("keeps the same semantic slots when a presentation owns the background", () => {
+  it("keeps presentation overlays essential and bounded", () => {
     const html = renderToStaticMarkup(<BoardLayout presentationMode="presentation-overlay" active={<span>rate = k[A]²</span>} cue={cue} />);
     expect(html).toContain("board-layout-presentation-overlay");
-    expect(html).toContain("board-layout-active");
+    expect(html).toContain("data-density=\"essential\"");
     expect(html).toContain("board-layout-cue-slot");
   });
 });

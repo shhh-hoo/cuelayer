@@ -1,43 +1,13 @@
 .notation-renderer {
-  position: relative;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   color: inherit;
   vertical-align: middle;
 }
-.notation-renderer[data-display="block"] {
-  display: block;
-  min-height: 1em;
-  text-align: center;
-}
+.notation-renderer[data-display="block"] { display: block; text-align: center; }
 .notation-renderer[data-display="inline"] { display: inline-block; width: auto; }
-.notation-katex-target { display: inline-block; }
-.notation-renderer[data-display="block"] .notation-katex-target {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform-origin: top center;
-  white-space: nowrap;
-  visibility: hidden;
-}
-.notation-renderer[data-display="block"][data-notation-status="ready"] .notation-katex-target { visibility: visible; }
-.notation-renderer[data-display="inline"] .notation-katex-target { visibility: hidden; }
-.notation-renderer[data-display="inline"][data-notation-status="ready"] .notation-katex-target { visibility: visible; }
-.notation-renderer .katex { font-size: 1em; }
-.notation-fallback {
-  display: inline-block;
-  width: 100%;
-  max-width: 100%;
-  font-family: Cambria, "Times New Roman", Georgia, serif;
-  font-size: .82em;
-  line-height: 1.16;
-  opacity: .94;
-}
-.notation-native {
-  width: 100%;
-  max-width: 100%;
-}
+.notation-native { width: 100%; max-width: 100%; }
 .notation-native-equation {
   display: flex;
   flex-wrap: wrap;
@@ -86,8 +56,15 @@
 .notation-native-species { display: inline-flex; align-items: baseline; white-space: nowrap; font-style: normal; }
 .notation-native-coefficient { margin-right: .04em; }
 .notation-native-state { margin-left: .04em; font-size: .62em; opacity: .78; }
-/* A centered grid child can otherwise shrink to max-content and make the
-   structured fallback wider than the Board region. */
+.notation-invalid {
+  display: inline-block;
+  width: 100%;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: .55em;
+  line-height: 1.25;
+  opacity: .72;
+  overflow-wrap: anywhere;
+}
 .equation-object,
 .reaction-object { width: 100%; }
 .equation-object .notation-renderer,

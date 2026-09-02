@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { PresentationMode } from "../session/presentation-mode";
 import type { ActiveTeachingCue } from "./contracts";
 import { TeachingCueLayer } from "./TeachingCueLayer";
@@ -6,15 +6,14 @@ import "./board-layout.css";
 
 export type BoardDensity = "full" | "compact" | "essential";
 
-/**
- * The content region is measured after the Teaching Cue has taken its own row.
- * Retained context yields first; support yields only when the active object needs
- * nearly the whole remaining region.
- */
-export function boardDensityForHeight(height: number): BoardDensity {
-  if (!Number.isFinite(height) || height <= 0) return "full";
-  if (height < 240) return "essential";
-  if (height < 360) return "compact";
+export function boardDensityForContent({ presentationMode, retainedCount, cueTextLength }: {
+  presentationMode: PresentationMode;
+  retainedCount: number;
+  cueTextLength: number;
+}): BoardDensity {
+  if (presentationMode === "presentation-overlay") return "essential";
+  if (cueTextLength > 180) return "essential";
+  if (retainedCount > 2 || cueTextLength > 110) return "compact";
   return "full";
 }
 
@@ -26,18 +25,11 @@ export function BoardLayout({ active, support, retained = [], cue, presentationM
   presentationMode: PresentationMode;
   onCueExpire?(cueId: string, now: number): void;
 }) {
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [density, setDensity] = useState<BoardDensity>("full");
-
-  useEffect(() => {
-    const element = contentRef.current;
-    if (!element || typeof ResizeObserver === "undefined") return;
-    const update = () => setDensity(boardDensityForHeight(element.clientHeight));
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
+  const density = boardDensityForContent({
+    presentationMode,
+    retainedCount: retained.length,
+    cueTextLength: cue?.text.length ?? 0,
+  });
 
   return <div
     className={`board-layout board-layout-${presentationMode}`}
@@ -45,7 +37,7 @@ export function BoardLayout({ active, support, retained = [], cue, presentationM
     data-has-cue={cue ? "true" : "false"}
     data-retained-count={retained.length}
   >
-    <div className="board-layout-content" ref={contentRef}>
+    <div className="board-layout-content">
       {retained.length ? <div className="board-layout-retained" aria-label="Retained teaching context">{retained.map((item, index) => <div key={index}>{item}</div>)}</div> : null}
       <div className="board-layout-active">{active}</div>
       {support ? <div className="board-layout-support">{support}</div> : null}

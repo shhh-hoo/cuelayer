@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { NotationRenderer, compileEquation, compileReaction, notationFitForWidths, type EquationNotationSpec, type ReactionNotationSpec } from "./NotationRenderer";
+import { NotationRenderer, compileEquation, compileReaction, type EquationNotationSpec, type ReactionNotationSpec } from "./NotationRenderer";
 
 const equation: EquationNotationSpec = {
   kind: "equation",
@@ -38,22 +38,17 @@ describe("NotationRenderer", () => {
     expect(() => compileEquation({ ...equation, pieces: [{ kind: "symbol", value: "x", power: 99 }] })).toThrow("invalid-equation-power");
   });
 
-  it("scales notation only to a readability floor, then falls back instead of clipping", () => {
-    expect(notationFitForWidths(800, 1000)).toEqual({ mode: "fit", scale: 0.8 });
-    expect(notationFitForWidths(400, 1000)).toEqual({ mode: "fallback", scale: 1 });
-  });
-
-  it("server-renders a structured equation fallback before KaTeX loads", () => {
+  it("renders equations synchronously with semantic superscripts", () => {
     const html = renderToStaticMarkup(<NotationRenderer spec={equation} />);
+    expect(html).toContain("data-notation-status=\"native\"");
     expect(html).toContain("notation-native-equation");
     expect(html).toContain("<sup>2</sup>");
-    expect(html).not.toContain("rate = k [A]^2");
   });
 
-  it("server-renders a wrapping chemical fallback with real subscripts", () => {
+  it("renders chemical equations synchronously with wrapping boundaries and real subscripts", () => {
     const html = renderToStaticMarkup(<NotationRenderer spec={reaction} />);
     expect(html).toContain("data-notation-kind=\"reaction\"");
-    expect(html).toContain("hydrogen reacts with oxygen to form water");
+    expect(html).toContain("data-notation-status=\"native\"");
     expect(html).toContain("notation-native-reaction");
     expect(html).toContain("<span>H</span><sub>2</sub>");
     expect(html).toContain("→");

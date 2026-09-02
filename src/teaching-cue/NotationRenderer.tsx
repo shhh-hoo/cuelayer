@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import "./notation.css";
 
 export type EquationSymbol = {
@@ -53,27 +53,11 @@ export type CompiledNotation = {
   ariaLabel: string;
 };
 
-type KatexApi = {
-  render(source: string, element: HTMLElement, options: { displayMode: boolean; throwOnError: boolean; trust: boolean; strict: "ignore" }): void;
-};
-
-declare global {
-  interface Window { katex?: KatexApi; }
-}
-
-const useSafeLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
-const KATEX_VERSION = "0.18.5";
-const KATEX_CSS = `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.min.css`;
-const KATEX_JS = `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.min.js`;
-const MHCHEM_JS = `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/contrib/mhchem.min.js`;
 const SYMBOL = /^(?:[A-Za-z][A-Za-z0-9]*|\[[A-Za-z][A-Za-z0-9]*\])$/;
 const SUBSCRIPT = /^[A-Za-z0-9]{1,8}$/;
 const FORMULA = /^[A-Za-z0-9()[\].=+\-^]+$/;
 const MAX_EQUATION_PIECES = 14;
 const MAX_REACTION_SPECIES = 6;
-export const MIN_NOTATION_SCALE = 0.62;
-let katexReady: Promise<KatexApi> | undefined;
-let katexStylesReady: Promise<void> | undefined;
 
 function checkedLabel(label: string) {
   const normalized = label.replace(/\s+/g, " ").trim();
@@ -161,69 +145,6 @@ export function compileNotation(spec: NotationSpec) {
   return spec.kind === "equation" ? compileEquation(spec) : compileReaction(spec);
 }
 
-export function notationFitForWidths(availableWidth: number, naturalWidth: number) {
-  if (!Number.isFinite(availableWidth) || !Number.isFinite(naturalWidth) || availableWidth <= 0 || naturalWidth <= 0) {
-    return { mode: "fallback" as const, scale: 1 };
-  }
-  const scale = Math.min(1, availableWidth / naturalWidth);
-  return scale < MIN_NOTATION_SCALE ? { mode: "fallback" as const, scale: 1 } : { mode: "fit" as const, scale };
-}
-
-function ensureStylesheet() {
-  if (katexStylesReady) return katexStylesReady;
-  katexStylesReady = new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLLinkElement>(`link[data-cuelayer-katex=\"${KATEX_VERSION}\"]`);
-    if (existing?.sheet) { resolve(); return; }
-    if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error("notation-style-load-failed")), { once: true });
-      return;
-    }
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = KATEX_CSS;
-    link.crossOrigin = "anonymous";
-    link.dataset.cuelayerKatex = KATEX_VERSION;
-    link.addEventListener("load", () => resolve(), { once: true });
-    link.addEventListener("error", () => reject(new Error("notation-style-load-failed")), { once: true });
-    document.head.append(link);
-  });
-  return katexStylesReady;
-}
-
-function script(src: string, key: string) {
-  return new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(`script[data-cuelayer-notation=\"${key}\"]`);
-    if (existing?.dataset.loaded === "true") { resolve(); return; }
-    if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error("notation-script-load-failed")), { once: true });
-      return;
-    }
-    const element = document.createElement("script");
-    element.src = src;
-    element.defer = true;
-    element.crossOrigin = "anonymous";
-    element.dataset.cuelayerNotation = key;
-    element.addEventListener("load", () => { element.dataset.loaded = "true"; resolve(); }, { once: true });
-    element.addEventListener("error", () => reject(new Error("notation-script-load-failed")), { once: true });
-    document.head.append(element);
-  });
-}
-
-function ensureKatex() {
-  if (!katexReady) {
-    katexReady = (async () => {
-      await ensureStylesheet();
-      if (!window.katex) await script(KATEX_JS, `katex-${KATEX_VERSION}`);
-      await script(MHCHEM_JS, `mhchem-${KATEX_VERSION}`);
-      if (!window.katex) throw new Error("notation-renderer-unavailable");
-      return window.katex;
-    })();
-  }
-  return katexReady;
-}
-
 function NativeEquationSymbol({ piece }: { piece: EquationSymbol }) {
   return <span className="notation-native-symbol" data-roman={piece.roman ? "true" : "false"}>
     <span>{piece.value}</span>
@@ -306,100 +227,16 @@ function NativeNotation({ spec }: { spec: NotationSpec }) {
 }
 
 export function NotationRenderer({ spec, displayMode = true, className = "" }: { spec: NotationSpec; displayMode?: boolean; className?: string }) {
-  const hostRef = useRef<HTMLSpanElement>(null);
-  const targetRef = useRef<HTMLSpanElement>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "fallback">("loading");
-  const [scale, setScale] = useState(1);
-  const [height, setHeight] = useState<number | undefined>(undefined);
-  const scaleRef = useRef(1);
-  const compiled = useMemo(() => {
-    try { return compileNotation(spec); } catch { return undefined; }
-  }, [spec]);
-
-  useSafeLayoutEffect(() => {
-    let cancelled = false;
-    let observer: ResizeObserver | undefined;
-    let frame = 0;
-    let lastObservedWidth = -1;
-    const host = hostRef.current;
-    const target = targetRef.current;
-    setStatus("loading");
-    setScale(1);
-    scaleRef.current = 1;
-    setHeight(undefined);
-    if (!compiled || !host || !target) { setStatus("fallback"); return; }
-
-    void ensureKatex().then((katex) => {
-      if (cancelled || !hostRef.current || !targetRef.current) return;
-      const liveHost = hostRef.current;
-      const liveTarget = targetRef.current;
-      liveTarget.replaceChildren();
-      const source = displayMode ? `\\displaystyle ${compiled.expression}` : compiled.expression;
-      // Always render inline KaTeX. CueLayer owns block placement itself; using
-      // KaTeX display mode makes the inner display box stretch to the host width,
-      // which prevents reliable intrinsic-width measurement.
-      katex.render(source, liveTarget, { displayMode: false, throwOnError: true, trust: false, strict: "ignore" });
-
-      const applyFit = (force = false) => {
-        if (cancelled) return;
-        const availableWidth = liveHost.clientWidth;
-        if (!force && Math.abs(availableWidth - lastObservedWidth) < 0.5) return;
-        lastObservedWidth = availableWidth;
-        const renderedRect = liveTarget.getBoundingClientRect();
-        const naturalWidth = renderedRect.width / Math.max(scaleRef.current, 0.001);
-        const naturalHeight = renderedRect.height / Math.max(scaleRef.current, 0.001);
-        const fit = displayMode ? notationFitForWidths(availableWidth, naturalWidth) : { mode: "fit" as const, scale: 1 };
-        if (fit.mode === "fallback") {
-          scaleRef.current = 1;
-          setStatus((value) => value === "fallback" ? value : "fallback");
-          setScale((value) => value === 1 ? value : 1);
-          setHeight((value) => value === undefined ? value : undefined);
-          return;
-        }
-        scaleRef.current = fit.scale;
-        setScale((value) => Math.abs(value - fit.scale) < 0.005 ? value : fit.scale);
-        const nextHeight = displayMode ? Math.ceil(naturalHeight * fit.scale) : undefined;
-        setHeight((value) => value === nextHeight ? value : nextHeight);
-        setStatus((value) => value === "ready" ? value : "ready");
-      };
-
-      applyFit(true);
-      if (typeof ResizeObserver !== "undefined" && displayMode) {
-        observer = new ResizeObserver((entries) => {
-          const width = entries[0]?.contentRect.width;
-          if (width === undefined || Math.abs(width - lastObservedWidth) < 0.5) return;
-          window.cancelAnimationFrame(frame);
-          frame = window.requestAnimationFrame(() => applyFit());
-        });
-        observer.observe(liveHost);
-      }
-      if (document.fonts) {
-        void document.fonts.ready.then(() => { if (!cancelled) applyFit(true); });
-      }
-    }).catch(() => { if (!cancelled) setStatus("fallback"); });
-
-    return () => {
-      cancelled = true;
-      window.cancelAnimationFrame(frame);
-      observer?.disconnect();
-    };
-  }, [compiled, displayMode]);
+  let compiled: CompiledNotation | undefined;
+  try { compiled = compileNotation(spec); } catch { compiled = undefined; }
 
   return <span
-    ref={hostRef}
     className={`notation-renderer ${className}`.trim()}
     data-display={displayMode ? "block" : "inline"}
     data-notation-kind={spec.kind}
-    data-notation-status={status}
+    data-notation-status={compiled ? "native" : "fallback"}
     aria-label={compiled?.ariaLabel ?? spec.ariaLabel}
-    style={displayMode && height !== undefined ? { height } : undefined}
   >
-    <span
-      ref={targetRef}
-      className="notation-katex-target"
-      aria-hidden="true"
-      style={displayMode ? { transform: `translateX(-50%) scale(${scale})` } : undefined}
-    />
-    {status === "ready" ? null : <span className="notation-fallback" aria-hidden="true"><NativeNotation spec={spec} /></span>}
+    {compiled ? <NativeNotation spec={spec} /> : <span className="notation-invalid">{spec.ariaLabel}</span>}
   </span>;
 }
