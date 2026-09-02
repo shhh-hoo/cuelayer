@@ -14,6 +14,15 @@ describe("Vercel deployment boundary", () => {
     ]);
   });
 
+  it("does not retain a continuous remote trace-store runtime dependency", () => {
+    const manifest = readFileSync(resolve("package.json"), "utf8");
+    const exampleEnvironment = readFileSync(resolve(".env.example"), "utf8");
+    expect(manifest).not.toContain("@neondatabase/serverless");
+    expect(exampleEnvironment).not.toContain("DATABASE_URL");
+    expect(files(resolve("api"))).not.toContain("trace/events.ts");
+    expect(files(resolve("api"))).not.toContain("trace/session.ts");
+  });
+
   it("does not duplicate Vercel endpoint behavior in Vite", () => {
     const config = readFileSync(resolve("vite.config.ts"), "utf8");
     expect(config).not.toContain("middlewares.use");

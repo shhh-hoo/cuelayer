@@ -4,7 +4,7 @@ import type { PlannerInput, RuntimeDecision } from "../../src/planner/contracts"
 const mocks = vi.hoisted(() => ({ openAI: vi.fn(), buildRequest: vi.fn(), trace: vi.fn(), traceResponse: vi.fn(), traceDelivery: { events: [] as unknown[] } }));
 vi.mock("./openai-planner.ts", () => ({ requestOpenAIPlannerResult: mocks.openAI, createOpenAIPlannerRequest: mocks.buildRequest }));
 vi.mock("../trace/api-trace.ts", () => ({
-  traceHeaders: () => ({ sessionId: "session-api-test", apiRequestId: "api-test", plannerRequestId: "planner-test", writeCapability: "w".repeat(43) }),
+  traceHeaders: () => ({ sessionId: "session-api-test", apiRequestId: "api-test", plannerRequestId: "planner-test" }),
   traceExternalCall: async (options: { responsePayload(value: unknown): unknown }, call: () => Promise<unknown>) => {
     mocks.trace(options); const result = await call(); mocks.traceResponse(options.responsePayload(result)); return { result, traceDelivery: mocks.traceDelivery };
   },

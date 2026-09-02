@@ -57,11 +57,11 @@ IndexedDB is the First Usable Alpha durable trace source of truth. It retains th
 
 Completed sessions can be serialized as immutable diagnostic bundles (`session` plus ordered `events`). There is deliberately no configured remote sink in Alpha. External dogfood can later upload one completed bundle for support without changing trace creation or introducing continuous synchronization.
 
-Trace sanitization removes credentials and all audio-shaped or binary values. Speechmatics PCM/audio frames remain transient and are never submitted to the trace endpoint. Only transcript text and connection lifecycle metadata are persisted. The trace drawer presents a deterministic Teaching Narrative that collapses ASR revisions into Teaching Moments, while the raw-event section keeps forensic evidence accessible.
+Trace sanitization removes credentials and all audio-shaped or binary values. Speechmatics PCM/audio frames remain transient and are never placed in the local trace. Only transcript text and connection lifecycle metadata are persisted. The trace drawer presents a deterministic Teaching Narrative that collapses ASR revisions into Teaching Moments, while the raw-event section keeps forensic evidence accessible.
 
 ## Development and deployment boundary
 
-`/api` contains only the four Vercel HTTP entrypoints: planner decision, Speechmatics token, trace events, and trace session. Server implementation, generated policy, fixtures, and tests live under `/server`. Deployment directories contain deployment entrypoints, not implementation modules.
+`/api` contains only two Vercel HTTP entrypoints: planner decision and Speechmatics token. They return their sanitized trace facts to the browser with their normal results; neither writes or reads a remote trace store. Server implementation, generated policy, fixtures, and tests live under `/server`. Deployment directories contain deployment entrypoints, not implementation modules.
 
 `npm run dev` is frontend-only Vite development for renderer and fixture work. Use `npm run dev:full` (`vercel dev`) for Speechmatics, OpenAI Luna, local trace capture, Human Trace, export, and real microphone sessions; this executes the same endpoint implementations as Preview and deployment.
 

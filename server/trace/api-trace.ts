@@ -59,7 +59,6 @@ export function traceHeaders(request: { headers?: Record<string, string | string
     sessionId: header("x-cuelayer-session-id"),
     apiRequestId: header("x-cuelayer-api-request-id"),
     plannerRequestId: header("x-cuelayer-planner-request-id"),
-    writeCapability: header("x-cuelayer-trace-write-capability"),
   };
 }
 
