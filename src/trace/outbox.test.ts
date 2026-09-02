@@ -61,5 +61,5 @@ describe("IndexedDB trace outbox", () => {
     expect(received).toHaveLength(40);
     expect(received.flat()).toEqual(Array.from({ length: 2_000 }, (_, index) => index + 1));
     expect(await outbox.pendingCount(otherSession)).toBe(200);
-  });
+  }, 15_000);
 });

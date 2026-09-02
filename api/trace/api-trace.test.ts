@@ -18,7 +18,7 @@ describe("external API trace boundary", () => {
   });
 
   it("persists failed and aborted calls", async () => {
-    await expect(traceExternalCall({ sessionId: "session-api-trace", apiRequestId: "api-request-failure", provider: "deepseek", operation: "planner", requestPayload: {}, responsePayload: () => ({}) }, async () => { throw new Error("provider failed"); })).rejects.toThrow("provider failed");
+    await expect(traceExternalCall({ sessionId: "session-api-trace", apiRequestId: "api-request-failure", provider: "example-provider", operation: "planner", requestPayload: {}, responsePayload: () => ({}) }, async () => { throw new Error("provider failed"); })).rejects.toThrow("provider failed");
     const controller = new AbortController();
     controller.abort("live_budget_timeout");
     await expect(traceExternalCall({ sessionId: "session-api-trace", apiRequestId: "api-request-abort", provider: "openai", operation: "planner", requestPayload: {}, signal: controller.signal, responsePayload: () => ({}) }, async () => { throw new DOMException("Aborted", "AbortError"); })).rejects.toThrow();

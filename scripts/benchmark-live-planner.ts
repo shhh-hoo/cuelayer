@@ -1,6 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { requestDeepSeekPlannerResult } from "../api/planner/deepseek-planner.ts";
 import { LIVE_PLANNER_GOLDENS, plannerInputForGolden } from "../api/planner/live-planner-golden.ts";
 import { requestOpenAIPlannerResult } from "../api/planner/openai-planner.ts";
 import type { PlannerProviderResult, PlannerProviderUsage } from "../api/planner/provider-contract.ts";
@@ -28,7 +27,7 @@ type CaseResult = {
 };
 
 type BenchmarkProvider = {
-  name: "deepseek" | "openai";
+  name: "openai";
   model: string;
   requestedServiceTier?: "default" | "priority";
   request(input: ReturnType<typeof plannerInputForGolden>): Promise<PlannerProviderResult>;
@@ -47,20 +46,12 @@ function rate(count: number, total: number) { return { count, total, rate: total
 const relates = (intent: string | undefined) => intent?.startsWith("RELATE/") ?? false;
 
 function benchmarkProvider(): BenchmarkProvider {
-  const provider = process.argv.slice(2).find((arg) => arg.startsWith("--provider="))?.slice("--provider=".length) ?? "deepseek";
-  if (provider === "openai") {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error("OPENAI_API_KEY is required to run the OpenAI planner benchmark.");
-    const model = process.env.OPENAI_BENCHMARK_MODEL ?? "gpt-5.6-luna";
-    const requestedServiceTier = process.argv.slice(2).find((arg) => arg.startsWith("--service-tier="))?.slice("--service-tier=".length);
-    if (requestedServiceTier !== undefined && requestedServiceTier !== "default" && requestedServiceTier !== "priority") throw new Error("OpenAI --service-tier must be default or priority.");
-    return { name: "openai", model, ...(requestedServiceTier ? { requestedServiceTier } : {}), request: (input) => requestOpenAIPlannerResult(input, apiKey, model, requestedServiceTier ? { serviceTier: requestedServiceTier } : undefined) };
-  }
-  if (provider !== "deepseek") throw new Error(`Unsupported benchmark provider: ${provider}`);
-  const apiKey = process.env.DEEPSEEK_API_KEY ?? process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("DEEPSEEK_API_KEY (or legacy OPENAI_API_KEY) is required to run the DeepSeek planner benchmark.");
-  const model = process.env.DEEPSEEK_MODEL ?? "deepseek-v4-flash";
-  return { name: "deepseek", model, request: (input) => requestDeepSeekPlannerResult(input, apiKey, model) };
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is required to run the OpenAI planner benchmark.");
+  const model = process.env.OPENAI_BENCHMARK_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-5.6-luna";
+  const requestedServiceTier = process.argv.slice(2).find((arg) => arg.startsWith("--service-tier="))?.slice("--service-tier=".length);
+  if (requestedServiceTier !== undefined && requestedServiceTier !== "default" && requestedServiceTier !== "priority") throw new Error("OpenAI --service-tier must be default or priority.");
+  return { name: "openai", model, ...(requestedServiceTier ? { requestedServiceTier } : {}), request: (input) => requestOpenAIPlannerResult(input, apiKey, model, requestedServiceTier ? { serviceTier: requestedServiceTier } : undefined) };
 }
 
 function totalUsage(results: CaseResult[]): PlannerProviderUsage | undefined {

@@ -42,7 +42,7 @@ Transient episodes hold for five seconds; learner cues hold briefly on their own
 
 ## Planner transport and concurrency
 
-The only provider-specific code points the OpenAI-compatible Node SDK at DeepSeek's official Responses endpoint and uses `responses.parse` with `zodTextFormat`. CueLayer still applies deterministic product validation after structured parsing, because schema shape alone cannot prove speech grounding or whether an operation is semantically allowed.
+CueLayer's live planner uses OpenAI Responses with `responses.parse` and `zodTextFormat`, defaulting to `gpt-5.6-luna`. CueLayer still applies deterministic product validation after structured parsing, because schema shape alone cannot prove speech grounding or whether an operation is semantically allowed.
 
 Committed Speechmatics segments enter a tiny single-flight scheduler. One planner request runs at a time; finals arriving while it runs accumulate. Each planner window can look backward from the last dequeued segment, but cannot include later still-pending speech. The single 2.5-second live budget aborts timed-out work; when newer work is waiting after that budget, it aborts the obsolete request and schedules the newest closed/latest revision. Aborted work is traced and cannot compile or replace the learner-visible caption. This keeps short cross-turn moments possible without concurrent request races, duplicate semantic handling, or a generic workflow system.
 
@@ -50,7 +50,7 @@ Planner failure does not affect presentation transport or speech grounding. It e
 
 ## Provider contract screen
 
-`npm run benchmark:planner -- --output=artifacts/planner-benchmark.json` runs the configured DeepSeek endpoint once for each of 50 representative committed-speech cases, then passes every parsed response through the real runtime validator, deterministic degradation, and caption compiler. It reports structured-parse success, runtime-validation success, degradation kind, raw and effective intents, non-QUIET compile success, effective-intent accuracy, QUIET rate, and provider round-trip p50/p95. It exits non-zero for malformed output, unexpected runtime degradation, any non-QUIET compile failure, or less than 95% effective display-category accuracy; it intentionally has no retry or JSON-repair layer. Only the real browser microphone trace may report committed/final-to-planner and committed/final-to-render p50/p95.
+`npm run benchmark:planner -- --output=artifacts/planner-benchmark.json` runs OpenAI once for each of 50 representative committed-speech cases, then passes every parsed response through the real runtime validator, deterministic degradation, and caption compiler. It reports structured-parse success, runtime-validation success, degradation kind, raw and effective intents, non-QUIET compile success, effective-intent accuracy, QUIET rate, and provider round-trip p50/p95. It exits non-zero for malformed output, unexpected runtime degradation, any non-QUIET compile failure, or less than 95% effective display-category accuracy; it intentionally has no retry or JSON-repair layer. Only the real browser microphone trace may report committed/final-to-planner and committed/final-to-render p50/p95.
 
 ## Development trace
 
@@ -75,7 +75,7 @@ stable recording point                       → NOTE
 
 ## Reuse audit
 
-Reused: Speechmatics realtime/canonical grounding, the existing 9701 CueCaption skill/references/data, DeepSeek's OpenAI-compatible structured output, Zod, the existing FOCUS/RELATE/TRANSFORM renderer, the existing single-flight scheduler and caption lifecycle, and existing Vite/Vercel endpoint patterns.
+Reused: Speechmatics realtime/canonical grounding, the existing 9701 CueCaption skill/references/data, OpenAI structured output, Zod, the existing FOCUS/RELATE/TRANSFORM renderer, the existing single-flight scheduler and caption lifecycle, and existing Vite/Vercel endpoint patterns.
 
 CueLayer-owned: the live semantic integration contract, provenance and transform-truth validation, mapping CueCaption semantics into bounded DisplayIntent, deterministic use of authorized symbolic rewrites, and explicit debug visibility policy.
 
@@ -83,4 +83,4 @@ No generic agent, model router, RAG/vector store, memory system, graph/layout en
 
 ## Live test prerequisite
 
-Set server-only `SPEECHMATICS_API_KEY` and either `DEEPSEEK_API_KEY` or `OPENAI_API_KEY` to perform the real microphone/model smoke test. A dedicated DeepSeek key selects DeepSeek and defaults to `deepseek-v4-flash`; otherwise the OpenAI key selects OpenAI Responses and defaults to `gpt-5.6-luna`. This workspace may still be used without them; the planner reports unavailable while presentation and speech remain independent.
+Set server-only `SPEECHMATICS_API_KEY` and `OPENAI_API_KEY` to perform the real microphone/model smoke test. OpenAI Responses defaults to `gpt-5.6-luna` and can be overridden with `OPENAI_MODEL`. This workspace may still be used without them; the planner reports unavailable while presentation and speech remain independent.

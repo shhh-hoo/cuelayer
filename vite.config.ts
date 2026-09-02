@@ -1,7 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { createSpeechmaticsJWT } from "@speechmatics/auth";
-import { deepSeekPlannerFailureReason, requestDeepSeekPlannerResult } from "./api/planner/deepseek-planner.ts";
 import { requestOpenAIPlannerResult } from "./api/planner/openai-planner.ts";
 import { appendTraceEvents, createTraceSession, readTraceEvents } from "./api/trace/trace-store.ts";
 import { traceExternalCall, traceHeaders } from "./api/trace/api-trace.ts";
@@ -83,21 +82,17 @@ export default defineConfig(({ mode }) => {
       server.middlewares.use("/api/planner/decision", async (request, response) => {
         response.setHeader("Cache-Control", "no-store");
         if (request.method !== "POST") { response.statusCode = 405; response.end(JSON.stringify({ error: "method-not-allowed" })); return; }
-        const deepSeekApiKey = env.DEEPSEEK_API_KEY;
         const openAIApiKey = env.OPENAI_API_KEY;
-        if (!deepSeekApiKey && !openAIApiKey) { response.statusCode = 503; response.end(JSON.stringify({ error: "planner-not-configured" })); return; }
+        if (!openAIApiKey) { response.statusCode = 503; response.end(JSON.stringify({ error: "planner-not-configured" })); return; }
         const trace = traceHeaders({ headers: request.headers as Record<string, string | string[] | undefined> });
         if (!trace.sessionId) { response.statusCode = 400; response.end(JSON.stringify({ error: "missing-trace-session-id" })); return; }
         try {
           const input = await requestBody(request);
-          const provider = deepSeekApiKey ? "deepseek" : "openai";
-          const model = deepSeekApiKey ? env.DEEPSEEK_MODEL || "deepseek-v4-flash" : env.OPENAI_MODEL || "gpt-5.6-luna";
-          const result = await traceExternalCall({ sessionId: trace.sessionId, writeCapability: trace.writeCapability, apiRequestId: trace.apiRequestId, provider, model, operation: "teaching_planner.decision", requestPayload: input, correlation: { plannerRequestId: trace.plannerRequestId }, responsePayload: (value) => value }, () => deepSeekApiKey
-            ? requestDeepSeekPlannerResult(input as never, deepSeekApiKey, model)
-            : requestOpenAIPlannerResult(input as never, openAIApiKey!, model));
+          const model = env.OPENAI_MODEL || "gpt-5.6-luna";
+          const result = await traceExternalCall({ sessionId: trace.sessionId, writeCapability: trace.writeCapability, apiRequestId: trace.apiRequestId, provider: "openai", model, operation: "teaching_planner.decision", requestPayload: input, correlation: { plannerRequestId: trace.plannerRequestId }, responsePayload: (value) => value }, () => requestOpenAIPlannerResult(input as never, openAIApiKey, model));
           response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ decision: result.decision }));
         } catch (error) {
-          const reason = error instanceof Error && error.message.startsWith("trace-") ? error.message : deepSeekPlannerFailureReason(error);
+          const reason = error instanceof Error && error.message.startsWith("trace-") ? error.message : error instanceof SyntaxError ? "planner-invalid-structured-output" : "planner-provider-unavailable";
           response.statusCode = reason.startsWith("trace-") ? 503 : 502; response.end(JSON.stringify({ error: reason }));
         }
       });
