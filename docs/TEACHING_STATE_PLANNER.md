@@ -1,5 +1,7 @@
 # Semantic Caption Planner
 
+> **Legacy implementation note.** This document describes the pre-PR10 semantic-caption runtime and is retained for implementation history, renderer/planner reuse, and migration reference. It no longer defines CueLayer's target live product architecture. For current live-teaching execution semantics, use [`LIVE_TEACHING_SYSTEM_SPEC.md`](./LIVE_TEACHING_SYSTEM_SPEC.md), subordinate to [`PRODUCT_CHARTER.md`](./PRODUCT_CHARTER.md).
+
 CueLayer remains a semantic subtitle product. This slice lets a short moment of committed teacher speech become a temporary caption using the existing renderer, while keeping the presentation primary.
 
 ```text
