@@ -19,16 +19,21 @@ function episodeForCanonicalSpan(span: CanonicalSpeechSpan): CaptionEpisode {
   return { id: `canonical-${span.id}-${span.revision}`, clip: canonicalClipFor(span), status: "live", sourceSegmentIds: [span.id], activatedAt: span.updatedAtMs };
 }
 
+export function episodeNeedsClock(episode: CaptionEpisode, locked = false) {
+  return !locked && Boolean(episode.cue);
+}
+
 function EpisodeCaption({ episode, presentationMode, locked }: { episode: CaptionEpisode; presentationMode: PresentationMode; locked?: boolean }) {
   const reducedMotion = Boolean(useReducedMotion());
   const [now, setNow] = useState(Date.now());
+  const needsClock = episodeNeedsClock(episode, locked);
   useEffect(() => {
-    if (locked) return;
+    if (!needsClock) return;
     const interval = window.setInterval(() => setNow(Date.now()), 100);
     return () => window.clearInterval(interval);
-  }, [locked]);
+  }, [needsClock]);
   const cueEnd = episode.cue ? episode.cue.startMs + episode.cue.durationMs + episode.cue.holdMs - 1 : 0;
-  const currentMs = locked ? cueEnd : Math.min(cueEnd, Math.max(0, now - episode.activatedAt));
+  const currentMs = locked ? cueEnd : needsClock ? Math.min(cueEnd, Math.max(0, now - episode.activatedAt)) : 0;
   return <div className={locked ? "semantic-caption semantic-caption-locked" : "semantic-caption"}>
     <CaptionRenderer clip={episode.clip} cue={episode.cue} currentMs={currentMs} mode="fx" reducedMotion={reducedMotion} embedded presentationMode={presentationMode} />
   </div>;
