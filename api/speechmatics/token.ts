@@ -1,5 +1,5 @@
 import { createSpeechmaticsJWT } from "@speechmatics/auth";
-import { traceExternalCall, traceHeaders } from "../trace/api-trace.ts";
+import { TracedExternalCallError, traceExternalCall, traceHeaders } from "../../server/trace/api-trace.ts";
 
 type Response = {
   setHeader(name: string, value: string): void;
@@ -21,10 +21,9 @@ export default async function handler(request: { method?: string; headers?: Reco
   const trace = traceHeaders(request);
   if (!trace.sessionId) { response.status(400).json({ error: "missing-trace-session-id" }); return; }
   try {
-    const token = await traceExternalCall({ sessionId: trace.sessionId, writeCapability: trace.writeCapability, apiRequestId: trace.apiRequestId, provider: "speechmatics", operation: "realtime.temporary_token", requestPayload: { type: "rt", ttlSeconds: 60 }, responsePayload: () => ({ tokenIssued: true, ttlSeconds: 60 }) }, () => createSpeechmaticsJWT({ type: "rt", apiKey, ttl: 60 }));
-    response.status(200).json({ token });
+    const traced = await traceExternalCall({ sessionId: trace.sessionId, writeCapability: trace.writeCapability, apiRequestId: trace.apiRequestId, provider: "speechmatics", operation: "realtime.temporary_token", requestPayload: { type: "rt", ttlSeconds: 60 }, responsePayload: () => ({ tokenIssued: true, ttlSeconds: 60 }) }, () => createSpeechmaticsJWT({ type: "rt", apiKey, ttl: 60 }));
+    response.status(200).json({ token: traced.result, traceDelivery: traced.traceDelivery });
   } catch (error) {
-    const reason = error instanceof Error && error.message.startsWith("trace-") ? error.message : "speech-token-unavailable";
-    response.status(reason.startsWith("trace-") ? 503 : 502).json({ error: reason });
+    response.status(502).json({ error: "speech-token-unavailable", ...(error instanceof TracedExternalCallError ? { traceDelivery: error.traceDelivery } : {}) });
   }
 }

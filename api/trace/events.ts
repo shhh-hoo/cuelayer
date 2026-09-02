@@ -1,4 +1,4 @@
-import { appendTraceEvents } from "./trace-store.ts";
+import { appendTraceEvents } from "../../server/trace/trace-store.ts";
 import type { DurableTraceEventDraft } from "../../src/trace/durable-trace.ts";
 
 type Request = { method?: string; body?: unknown; headers?: Record<string, string | string[] | undefined> };

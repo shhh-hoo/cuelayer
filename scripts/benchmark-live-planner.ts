@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { LIVE_PLANNER_GOLDENS, plannerInputForGolden } from "../api/planner/live-planner-golden.ts";
-import { requestOpenAIPlannerResult } from "../api/planner/openai-planner.ts";
-import type { PlannerProviderResult, PlannerProviderUsage } from "../api/planner/provider-contract.ts";
+import { LIVE_PLANNER_GOLDENS, plannerInputForGolden } from "../server/planner/live-planner-golden.ts";
+import { requestOpenAIPlannerResult } from "../server/planner/openai-planner.ts";
+import type { PlannerProviderResult, PlannerProviderUsage } from "../server/planner/provider-contract.ts";
 import { compileCaptionEpisode } from "../src/planner/caption-compiler.ts";
 import type { RuntimeDecision } from "../src/planner/contracts.ts";
 import { validateRuntimeDecision, type ValidationDegradation } from "../src/planner/validation.ts";

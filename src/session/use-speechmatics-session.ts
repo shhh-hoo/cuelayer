@@ -92,17 +92,19 @@ export function speechStartFailureFrom(error: unknown): SpeechStartFailure {
   return { code: "realtime-connection-failed", message: "CueLayer could not connect to Speechmatics realtime. You can reconnect speech without ending the session." };
 }
 
-async function requestRealtimeToken(sessionId: string, apiRequestId: string, writeCapability?: string): Promise<string> {
+async function requestRealtimeToken(sessionId: string, apiRequestId: string, writeCapability?: string, onTraceDelivery?: (events: DurableTraceEventDraft[]) => Promise<unknown> | unknown): Promise<string> {
   let response: Response;
   try {
     response = await fetch(TOKEN_ENDPOINT, { method: "POST", headers: { Accept: "application/json", "X-CueLayer-Session-Id": sessionId, "X-CueLayer-Api-Request-Id": apiRequestId, ...(writeCapability ? { "X-CueLayer-Trace-Write-Capability": writeCapability } : {}) } });
   } catch {
     throw failure("speech-token-failed", "CueLayer could not request a short-lived Speechmatics access token. Check the server connection and try again.");
   }
-  if (response.status === 503) throw failure("speech-not-configured", "Speechmatics is not configured on this deployment. Add SPEECHMATICS_API_KEY to the server environment.");
-  if (!response.ok) throw failure("speech-token-failed", "CueLayer could not create a short-lived Speechmatics access token. Check the server configuration and try again.");
   let payload: unknown;
   try { payload = await response.json(); } catch { throw failure("speech-token-failed", "CueLayer received an invalid Speechmatics access token response. Please try again."); }
+  const delivery = payload && typeof payload === "object" && "traceDelivery" in payload ? (payload as { traceDelivery?: { events?: DurableTraceEventDraft[] } }).traceDelivery : undefined;
+  if (delivery?.events?.length) await onTraceDelivery?.(delivery.events);
+  if (response.status === 503) throw failure("speech-not-configured", "Speechmatics is not configured on this deployment. Add SPEECHMATICS_API_KEY to the server environment.");
+  if (!response.ok) throw failure("speech-token-failed", "CueLayer could not create a short-lived Speechmatics access token. Check the server configuration and try again.");
   if (!payload || typeof payload !== "object" || !("token" in payload) || typeof payload.token !== "string") throw failure("speech-token-failed", "CueLayer received an invalid Speechmatics access token response. Please try again.");
   return payload.token;
 }
@@ -110,6 +112,7 @@ async function requestRealtimeToken(sessionId: string, apiRequestId: string, wri
 type SpeechmaticsSessionCallbacks = {
   traceSessionId: string;
   traceWriteCapability?: string;
+  onServerTraceDelivery?: (events: DurableTraceEventDraft[]) => Promise<unknown> | unknown;
   onEvent: (runId: number, event: SpeechEvent) => void;
   onReady: (runId: number) => void;
   onTrace: (event: Omit<DurableTraceEventDraft, "id" | "timestamp" | "source">) => void;
@@ -119,7 +122,7 @@ type SpeechmaticsSessionCallbacks = {
  * Product glue only: official React providers own the recorder, WebSocket, audio
  * forwarding and cleanup; CueLayer supplies run identity and canonical events.
  */
-export function useSpeechmaticsSession({ traceSessionId, traceWriteCapability, onEvent, onReady, onTrace }: SpeechmaticsSessionCallbacks) {
+export function useSpeechmaticsSession({ traceSessionId, traceWriteCapability, onServerTraceDelivery, onEvent, onReady, onTrace }: SpeechmaticsSessionCallbacks) {
   const activeRunIdRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
   const sawRecordingRef = useRef(false);
@@ -195,7 +198,7 @@ export function useSpeechmaticsSession({ traceSessionId, traceWriteCapability, o
         getPermissionState: () => getAudioDevicesStore().permissionState,
       });
       onTrace({ stage: "speechmatics", type: "speechmatics.browser_audio_ready", payload: { runId, sampleRate: browserAudioContext.sampleRate } });
-      const token = await requestRealtimeToken(traceSessionId, `speechmatics-token-${runId}`, traceWriteCapability);
+      const token = await requestRealtimeToken(traceSessionId, `speechmatics-token-${runId}`, traceWriteCapability, onServerTraceDelivery);
       onTrace({ stage: "speechmatics", type: "speechmatics.temporary_token_received", payload: { runId, tokenReceived: true } });
       try {
         await startTranscription(token, createSpeechmaticsConfig(browserAudioContext.sampleRate));
@@ -220,7 +223,7 @@ export function useSpeechmaticsSession({ traceSessionId, traceWriteCapability, o
       void stopTranscription().catch(() => undefined);
       throw error;
     }
-  }, [audioContext, audioDevices, onReady, onTrace, startRecording, startTranscription, stopRecording, stopTranscription, traceSessionId, traceWriteCapability]);
+  }, [audioContext, audioDevices, onReady, onServerTraceDelivery, onTrace, startRecording, startTranscription, stopRecording, stopTranscription, traceSessionId, traceWriteCapability]);
 
   const stop = useCallback(async () => {
     const runId = activeRunIdRef.current;

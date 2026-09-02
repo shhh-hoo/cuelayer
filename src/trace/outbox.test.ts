@@ -50,6 +50,24 @@ describe("IndexedDB trace outbox", () => {
     expect(transport.createSession).toHaveBeenNthCalledWith(2, sessionId, expect.objectContaining({ writeCapability: stored?.writeCapability, readCapability: stored?.readCapability }), { environment: "test" });
   });
 
+  it("recovers sanitized server API facts through the same idempotent browser outbox", async () => {
+    const outbox = await TraceOutbox.open();
+    await outbox.saveSession({ sessionId, sourceInstanceId: "page-a", nextSeq: 1, ...capability });
+    await outbox.enqueue(sessionId, [
+      { id: "server:planner-7:started", occurredAt: "2026-09-01T10:00:01.000Z", stage: "api", type: "api_call.started", source: "server", sourceInstanceId: "server:planner-7", sourceSeq: 1, payload: { provider: "openai", request: { text: "canonical" } } },
+      { id: "server:planner-7:completed", occurredAt: "2026-09-01T10:00:02.000Z", stage: "api", type: "api_call.completed", source: "server", sourceInstanceId: "server:planner-7", sourceSeq: 2, payload: { provider: "openai", status: "completed" } },
+    ], "page-a");
+    const unavailable: TraceTransport = { createSession: vi.fn(), load: vi.fn(), append: vi.fn().mockRejectedValue(new Error("neon-down")) };
+    await expect(outbox.flush(sessionId, unavailable)).rejects.toThrow("neon-down");
+    const recovered: TraceTransport = { createSession: vi.fn(), load: vi.fn(), append: vi.fn(async (_id, _capability, events) => events) };
+    await outbox.flush(sessionId, recovered);
+    expect(recovered.append).toHaveBeenCalledWith(sessionId, capability.writeCapability, [
+      expect.objectContaining({ id: "server:planner-7:started", source: "server", sourceInstanceId: "server:planner-7", sourceSeq: 1 }),
+      expect.objectContaining({ id: "server:planner-7:completed", source: "server", sourceInstanceId: "server:planner-7", sourceSeq: 2 }),
+    ]);
+    expect(await outbox.pendingCount(sessionId)).toBe(0);
+  });
+
   it("drains a multi-thousand-event backlog in ordered, single-flight session batches", async () => {
     const outbox = await TraceOutbox.open(); const otherSession = "session-outbox-other";
     await outbox.saveSession({ sessionId, sourceInstanceId: "page-a", nextSeq: 1, ...capability }); await outbox.saveSession({ sessionId: otherSession, sourceInstanceId: "page-b", nextSeq: 1, ...capability });

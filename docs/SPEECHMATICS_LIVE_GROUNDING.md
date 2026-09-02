@@ -12,7 +12,7 @@ This slice adds a live speech subsystem to `/session` without coupling it to Pre
 - Transcript delivery: `enable_partials: true`
 - Vocabulary: `additional_vocab` fixture for nine representative Chemistry terms
 
-The temporary token endpoint uses `SPEECHMATICS_API_KEY` only on the server to mint 60-second Realtime JWTs. It is implemented for Vercel at `api/speechmatics/token.ts`, with equivalent Vite development middleware. Vite explicitly loads `.env*` through `loadEnv`; no `VITE_` credential is used. `.env*` is ignored while `.env.example` remains committed.
+The temporary token endpoint uses `SPEECHMATICS_API_KEY` only on the server to mint 60-second Realtime JWTs. It is implemented for Vercel at `api/speechmatics/token.ts`; use `npm run dev:full` (`vercel dev`) for local live-speech testing so local and deployed code execute the same endpoint. No `VITE_` credential is used. `.env*` is ignored while `.env.example` remains committed.
 
 For Alpha, deploy behind private-preview or deployment-level access protection. The endpoint deliberately does not introduce accounts, rate limits, or a wider authentication system, so a public deployment could otherwise be used to mint temporary keys and consume ASR credit.
 

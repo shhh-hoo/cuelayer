@@ -1,4 +1,4 @@
-import { createTraceSession, readTraceEvents, type TraceQuery } from "./trace-store.ts";
+import { createTraceSession, readTraceEvents, type TraceQuery } from "../../server/trace/trace-store.ts";
 import { traceEventsToJsonl } from "../../src/trace/durable-trace.ts";
 
 type Request = { method?: string; body?: unknown; query?: Record<string, string | string[] | undefined>; headers?: Record<string, string | string[] | undefined> };

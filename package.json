@@ -10,6 +10,7 @@
     "migrate:session-event-store": "node --experimental-strip-types scripts/migrate-session-event-store.ts",
     "predev": "npm run check:cuecaption-policy",
     "dev": "vite",
+    "dev:full": "vercel dev",
     "prebuild": "npm run check:cuecaption-policy",
     "build": "tsc -b && vite build",
     "pretypecheck": "npm run check:cuecaption-policy",

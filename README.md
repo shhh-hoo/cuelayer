@@ -43,7 +43,7 @@ The renderer is designed to become the deterministic execution layer beneath liv
 
 `/session` can now enable a separate live speech subsystem beside Presentation Proxy. It uses Speechmatics Realtime with the `enhanced` model, the `cmn_en` Mandarin/English bilingual pack, partial transcripts, flexible punctuation formatting, a 1.5-second final delay, and a compact Chemistry custom dictionary.
 
-The permanent Speechmatics key stays server-side. Set `SPEECHMATICS_API_KEY` from [`.env.example`](.env.example); the browser requests a 60-second Realtime temporary key from `/api/speechmatics/token`. The repository includes a Vercel-compatible endpoint at [`api/speechmatics/token.ts`](api/speechmatics/token.ts) and the same endpoint for local Vite development.
+The permanent Speechmatics key stays server-side. Set `SPEECHMATICS_API_KEY` from [`.env.example`](.env.example); the browser requests a 60-second Realtime temporary key from `/api/speechmatics/token`, implemented only by [`api/speechmatics/token.ts`](api/speechmatics/token.ts).
 
 The browser uses Speechmatics' current official React realtime and PCM AudioWorklet integrations. Provider messages terminate in [`speechmatics-adapter.ts`](src/session/speechmatics-adapter.ts), then CueLayer stores speech-faithful `CanonicalSpeechState` as planner provenance. Presentation capture stays independent if speech cannot start or disconnects.
 
@@ -59,6 +59,14 @@ Apply `npm run migrate:session-event-store` with the target environment's `DATAB
 
 `sessionId` is only an identifier. Session creation returns separate write and read capabilities, retained only in that browser's IndexedDB. Trace ingestion requires the write capability; reads, JSONL export, and pagination require the read capability. There is intentionally no unauthenticated recent-session enumeration endpoint.
 
-Browser-originated facts first enter IndexedDB and are retried in bounded, ordered batches. Server provider calls are intentionally stricter: `api_call.started` must persist before a provider is invoked, and its terminal fact must persist before CueLayer can consume a provider result. If terminal persistence fails after a provider succeeds, CueLayer rejects that semantic result and deterministically falls back to canonical speech rather than rendering an untraceable decision.
+Browser-originated facts first enter IndexedDB and are retried in bounded, ordered batches. Server API facts are attempted against Neon before and after a provider call, but they never block teaching. If Neon is temporarily unavailable, the response returns only sanitized, stable event drafts; the authorized browser places those drafts in the same IndexedDB outbox for idempotent retry. A successful Luna decision remains successful even when its trace delivery is degraded.
 
 Trace sanitization removes credentials and all audio-shaped or binary values. Speechmatics PCM/audio frames remain transient and are never submitted to the trace endpoint. Only transcript text and connection lifecycle metadata are persisted. The trace drawer presents a deterministic Teaching Narrative that collapses ASR revisions into Teaching Moments, while the raw-event section keeps forensic evidence accessible.
+
+## Development and deployment boundary
+
+`/api` contains only the four Vercel HTTP entrypoints: planner decision, Speechmatics token, trace events, and trace session. Server implementation, generated policy, fixtures, and tests live under `/server`. Deployment directories contain deployment entrypoints, not implementation modules.
+
+`npm run dev` is frontend-only Vite development for renderer and fixture work. Use `npm run dev:full` (`vercel dev`) for Speechmatics, OpenAI Luna, Neon, trace APIs, and real microphone sessions; this executes the same endpoint implementations as Preview and deployment.
+
+Teaching availability must not depend on observability availability. Trace degradation is visible and recoverable, but it never disables speech, canonical captions, Luna planning, or rendering.

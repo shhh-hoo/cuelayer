@@ -35,7 +35,16 @@ export class TraceOutbox {
   async ensureLocalSession(sessionId: string) { const existing = await this.session(sessionId); if (existing) return existing; const created = createBrowserTraceSession(sessionId); await this.saveSession(created); return created; }
   async enqueue(sessionId: string, drafts: DurableTraceEventDraft[], sourceInstanceId: string) {
     const current = await this.session(sessionId); let sequence = current?.nextSeq ?? 1;
-    const events = drafts.map((draft) => prepareDurableTraceEvent(sessionId, { ...draft, sourceInstanceId, sourceSeq: sequence++ }));
+    const events = drafts.map((draft) => {
+      const nextSeq = sequence++;
+      // Reserve a local sequence for every accepted draft without rewriting
+      // factual server source identity when it is recovered through this outbox.
+      return prepareDurableTraceEvent(sessionId, {
+        ...draft,
+        sourceInstanceId: draft.sourceInstanceId ?? sourceInstanceId,
+        sourceSeq: draft.sourceSeq ?? nextSeq,
+      });
+    });
     const transaction = this.db.transaction([EVENT_STORE, SESSION_STORE], "readwrite"); const eventStore = transaction.objectStore(EVENT_STORE);
     events.forEach((event) => eventStore.put(event)); transaction.objectStore(SESSION_STORE).put({ ...(current ?? createBrowserTraceSession(sessionId)), nextSeq: sequence, sourceInstanceId });
     await complete(transaction); return events;
