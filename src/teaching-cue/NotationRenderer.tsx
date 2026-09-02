@@ -61,10 +61,12 @@ export type ReactionAnnotation = {
 export type NotationSpec = EquationNotationSpec | ReactionNotationSpec;
 export type NotationAnnotation = EquationAnnotation | ReactionAnnotation;
 export type NotationDensity = "regular" | "compact" | "dense";
+type AnnotationAlignment = "center" | "start" | "end";
 
 export type CompiledNotation = {
   kind: NotationSpec["kind"];
   expression: string;
+  stackedExpression?: string;
   plainText: string;
   ariaLabel: string;
 };
@@ -109,15 +111,16 @@ function wrapAnnotationLabel(label: string) {
   return [lines[0]!, lines[1]!, lines.slice(2).join(" ")];
 }
 
-function annotationExpression(label: string) {
+function annotationExpression(label: string, alignment: AnnotationAlignment = "center") {
   const rows = wrapAnnotationLabel(checkedAnnotationLabel(label))
     .map((line) => `\\scriptstyle\\textsf{${line}}`)
     .join("\\\\");
-  return `\\mathclap{\\color{#9aaa9d}{\\substack{${rows}}}}`;
+  const lap = alignment === "start" ? "\\mathrlap" : alignment === "end" ? "\\mathllap" : "\\mathclap";
+  return `${lap}{\\color{#9aaa9d}{\\substack{${rows}}}}`;
 }
 
-function annotatedExpression(expression: string, label: string) {
-  return `\\underbrace{${expression}}_{${annotationExpression(label)}}`;
+function annotatedExpression(expression: string, label: string, alignment: AnnotationAlignment = "center") {
+  return `\\underbrace{${expression}}_{${annotationExpression(label, alignment)}}`;
 }
 
 function symbolExpression(piece: EquationSymbol) {
@@ -219,10 +222,18 @@ function compileAnnotatedSpecies(species: ReactionSpecies, annotation: ReactionA
   const after = `${species.formula.slice(position + 1)}${state}`;
   const pieces = [
     before ? `\\ce{${before}}` : "",
-    annotatedExpression(`\\mathord{${bond}}`, annotation.label),
+    annotatedExpression(`\\mathord{${bond}}`, annotation.label, "start"),
     after ? `\\ce{${after}}` : "",
   ];
   return pieces.join("");
+}
+
+function compileReactionSide(species: ReactionSpecies[], sideName: ReactionAnnotation["side"], annotation?: ReactionAnnotation) {
+  return species
+    .map((item, index) => sideName === annotation?.side && index === annotation.speciesIndex
+      ? compileAnnotatedSpecies(item, annotation)
+      : `\\ce{${compileSpecies(item)}}`)
+    .join(" + ");
 }
 
 function compileAnnotatedReaction(spec: ReactionNotationSpec, annotation: ReactionAnnotation) {
@@ -231,14 +242,14 @@ function compileAnnotatedReaction(spec: ReactionNotationSpec, annotation: Reacti
     throw new Error("invalid-reaction-annotation-target");
   }
 
-  const compileSide = (species: ReactionSpecies[], sideName: ReactionAnnotation["side"]) => species
-    .map((item, index) => sideName === annotation.side && index === annotation.speciesIndex
-      ? compileAnnotatedSpecies(item, annotation)
-      : `\\ce{${compileSpecies(item)}}`)
-    .join(" + ");
-
+  const reactants = compileReactionSide(spec.reactants, "reactant", annotation);
+  const products = compileReactionSide(spec.products, "product", annotation);
   const arrow = spec.arrow === "equilibrium" ? "\\rightleftharpoons" : "\\longrightarrow";
-  return `${compileSide(spec.reactants, "reactant")} ${arrow} ${compileSide(spec.products, "product")}`;
+  const stackedArrow = spec.arrow === "equilibrium" ? "\\updownarrow" : "\\downarrow";
+  return {
+    expression: `${reactants} ${arrow} ${products}`,
+    stackedExpression: `\\begin{gathered}${reactants} \\\\[0.18em] ${stackedArrow} \\\\[0.18em] ${products}\\end{gathered}`,
+  };
 }
 
 export function compileReaction(spec: ReactionNotationSpec, annotations: ReactionAnnotation[] = []): CompiledNotation {
@@ -252,9 +263,16 @@ export function compileReaction(spec: ReactionNotationSpec, annotations: Reactio
   const products = spec.products.map(compileSpecies);
   const arrow = spec.arrow === "equilibrium" ? "<=>" : "->";
   const source = `${reactants.join(" + ")} ${arrow} ${products.join(" + ")}`;
+  const compiled = annotations[0]
+    ? compileAnnotatedReaction(spec, annotations[0])
+    : {
+        expression: `\\ce{${source}}`,
+        stackedExpression: `\\begin{gathered}\\ce{${reactants.join(" + ")}} \\\\[0.18em] ${spec.arrow === "equilibrium" ? "\\updownarrow" : "\\downarrow"} \\\\[0.18em] \\ce{${products.join(" + ")}}\\end{gathered}`,
+      };
   return {
     kind: "reaction",
-    expression: annotations[0] ? compileAnnotatedReaction(spec, annotations[0]) : `\\ce{${source}}`,
+    expression: compiled.expression,
+    stackedExpression: compiled.stackedExpression,
     plainText: source.replace("<=>", "⇌").replace("->", "→"),
     ariaLabel: checkedLabel(spec.ariaLabel),
   };
@@ -303,9 +321,12 @@ export function NotationRenderer({ spec, annotations = [], displayMode = true, c
 }) {
   let compiled: CompiledNotation | undefined;
   let markup: string | undefined;
+  let density: NotationDensity = "regular";
   try {
     compiled = compileNotation(spec, annotations);
-    markup = renderNotation(compiled.expression, displayMode);
+    density = notationDensity(compiled);
+    const expression = density === "dense" && compiled.stackedExpression ? compiled.stackedExpression : compiled.expression;
+    markup = renderNotation(expression, displayMode);
   } catch {
     markup = undefined;
   }
@@ -314,7 +335,8 @@ export function NotationRenderer({ spec, annotations = [], displayMode = true, c
     className={`notation-renderer ${className}`.trim()}
     data-display={displayMode ? "block" : "inline"}
     data-notation-kind={spec.kind}
-    data-notation-density={compiled ? notationDensity(compiled) : "regular"}
+    data-notation-density={density}
+    data-notation-layout={density === "dense" && compiled?.stackedExpression ? "stacked" : "inline"}
     data-notation-status={markup ? "katex" : "fallback"}
     aria-label={compiled?.ariaLabel ?? spec.ariaLabel}
   >
