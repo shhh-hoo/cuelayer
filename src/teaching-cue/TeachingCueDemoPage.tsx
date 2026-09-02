@@ -1,7 +1,8 @@
 import { useReducer, useState } from "react";
 import type { PresentationMode } from "../session/presentation-mode";
+import { BoardLayout } from "./BoardLayout";
 import type { TeachingCueDraft } from "./contracts";
-import { TeachingCueLayer } from "./TeachingCueLayer";
+import { NotationRenderer } from "./NotationRenderer";
 import { createInitialTeachingCueState, teachingCueReducer } from "./runtime";
 import "./teaching-cue-demo.css";
 
@@ -40,63 +41,77 @@ function stateFor(cue: TeachingCueDraft) {
   return teachingCueReducer(createInitialTeachingCueState(), { type: "set", cue, now: Date.now() });
 }
 
-function DefinitionBoard() {
-  return <div className="board-scene definition-scene">
-    <div className="board-retained">successful collision</div>
-    <div className="definition-object board-active">
-      <span className="definition-term">Activation energy</span>
-      <span className="definition-equals">=</span>
-      <span className="definition-meaning">minimum energy required</span>
-    </div>
-    <div className="board-support definition-support">for particles to collide successfully</div>
+function DefinitionActive() {
+  return <div className="definition-object">
+    <span className="definition-term">Activation energy</span>
+    <span className="definition-equals">=</span>
+    <span className="definition-meaning">minimum energy required</span>
   </div>;
 }
 
-function CauseBoard() {
-  return <div className="board-scene cause-scene">
-    <div className="board-retained retained-fact">Eₐ unchanged</div>
-    <div className="causal-chain board-active" aria-label="Temperature increases, increasing particles above activation energy, increasing successful collisions">
-      <span>Temperature ↑</span>
-      <i>↓</i>
-      <span>particles with E ≥ Eₐ ↑</span>
-      <i>↓</i>
-      <span>successful collisions ↑</span>
-    </div>
-    <div className="board-support cause-support">more particles can react when they collide</div>
+function CauseActive() {
+  return <div className="causal-chain" aria-label="Temperature increases, increasing particles above activation energy, increasing successful collisions">
+    <span>Temperature ↑</span>
+    <i>↓</i>
+    <span>particles with E ≥ Eₐ ↑</span>
+    <i>↓</i>
+    <span>successful collisions ↑</span>
   </div>;
 }
 
-function EquationBoard() {
-  return <div className="board-scene equation-scene">
-    <div className="board-retained">rate depends on concentration</div>
-    <div className="equation-object board-active">
-      <span>rate</span>
-      <span>=</span>
-      <span>k[A]<sup>2</sup></span>
-    </div>
-    <div className="board-support equation-support"><span>[A]<sup>2</sup></span><b>second order in A</b></div>
+function EquationActive() {
+  return <div className="equation-object">
+    <NotationRenderer spec={{ kind: "equation", source: "\\mathrm{rate}=k[A]^2", ariaLabel: "rate equals k times concentration of A squared" }} />
   </div>;
 }
 
-function ReactionBoard() {
-  return <div className="board-scene reaction-scene">
-    <div className="board-retained">π bond present</div>
-    <div className="reaction-object board-active">
-      <span className="reaction-species reaction-focus">CH₂=CH₂</span>
-      <span className="reaction-plus">+</span>
-      <span className="reaction-species">Br₂</span>
-      <span className="reaction-arrow">→</span>
-      <span className="reaction-species">CH₂Br–CH₂Br</span>
-    </div>
-    <div className="board-support reaction-support">the C=C bond is the changing part</div>
+function ReactionActive() {
+  return <div className="reaction-object">
+    <NotationRenderer spec={{ kind: "reaction", source: "CH2=CH2 + Br2 -> CH2Br-CH2Br", ariaLabel: "ethene plus bromine forms 1,2-dibromoethane" }} />
   </div>;
 }
 
-function BoardScene({ kind }: { kind: BoardKind }) {
-  if (kind === "definition") return <DefinitionBoard />;
-  if (kind === "cause") return <CauseBoard />;
-  if (kind === "equation") return <EquationBoard />;
-  return <ReactionBoard />;
+function BoardScene({ kind, cue, presentationMode, onCueExpire }: {
+  kind: BoardKind;
+  cue: ReturnType<typeof stateFor>["active"];
+  presentationMode: PresentationMode;
+  onCueExpire(cueId: string, now: number): void;
+}) {
+  if (kind === "definition") return <BoardLayout
+    presentationMode={presentationMode}
+    cue={cue}
+    onCueExpire={onCueExpire}
+    retained={[<span key="collision">successful collision</span>]}
+    active={<DefinitionActive />}
+    support={<span>for particles to collide successfully</span>}
+  />;
+
+  if (kind === "cause") return <BoardLayout
+    presentationMode={presentationMode}
+    cue={cue}
+    onCueExpire={onCueExpire}
+    retained={[<span key="ea">Eₐ unchanged</span>]}
+    active={<CauseActive />}
+    support={<span>more particles can react when they collide</span>}
+  />;
+
+  if (kind === "equation") return <BoardLayout
+    presentationMode={presentationMode}
+    cue={cue}
+    onCueExpire={onCueExpire}
+    retained={[<span key="rate">rate depends on concentration</span>]}
+    active={<EquationActive />}
+    support={<div className="equation-support"><NotationRenderer displayMode={false} spec={{ kind: "equation", source: "[A]^2", ariaLabel: "concentration of A squared" }} /><b>second order in A</b></div>}
+  />;
+
+  return <BoardLayout
+    presentationMode={presentationMode}
+    cue={cue}
+    onCueExpire={onCueExpire}
+    retained={[<span key="pi">π bond present</span>]}
+    active={<ReactionActive />}
+    support={<span>the C=C bond is the changing part</span>}
+  />;
 }
 
 export function TeachingCueDemoPage() {
@@ -111,13 +126,14 @@ export function TeachingCueDemoPage() {
   };
 
   const restore = () => dispatchCue({ type: "set", cue: { ...scenario.cue, id: `${scenario.cue.id}-${Date.now()}` }, now: Date.now() });
+  const expireCue = (cueId: string, now: number) => dispatchCue({ type: "expire", cueId, now });
 
   return <main className="teaching-cue-demo-shell">
     <header className="teaching-cue-demo-header">
       <div>
         <span className="teaching-cue-demo-eyebrow">CueLayer · learner surface study</span>
         <h1>Meaning sets the hierarchy.</h1>
-        <p>The board has no default title/body template. The active teaching object dominates; attached meaning supports it; only still-useful context is retained. Teaching Cue remains an independent classroom-task layer.</p>
+        <p>The board now allocates space before rendering: Active, Support and Retained occupy bounded regions, while Teaching Cue owns a separate safe area. Equations and reactions render as notation objects rather than hand-spaced text.</p>
       </div>
       <a href="/session" className="teaching-cue-demo-back">Live session</a>
     </header>
@@ -135,19 +151,16 @@ export function TeachingCueDemoPage() {
     <section className={`teaching-cue-demo-stage ${presentationMode}`} aria-label="Teaching Cue stage demo">
       {presentationMode === "presentation-overlay" ? <div className="teaching-cue-demo-slide">
         <div className="slide-figure" aria-hidden="true"><span /><span /><span /></div>
-        <p>Existing presentation remains the primary canvas. CueLayer borrows only enough space for the current semantic object and Teaching Cue.</p>
+        <p>Existing presentation remains the primary canvas. CueLayer uses separate lower safe regions for the current board object and Teaching Cue.</p>
       </div> : null}
-      <div className="teaching-cue-demo-board">
-        <BoardScene kind={scenario.id} />
-      </div>
-      <TeachingCueLayer cue={cueState.active} presentationMode={presentationMode} onExpire={(cueId, now) => dispatchCue({ type: "expire", cueId, now })} />
+      <BoardScene kind={scenario.id} cue={cueState.active} presentationMode={presentationMode} onCueExpire={expireCue} />
     </section>
 
     <section className="teaching-cue-demo-principles">
-      <article><strong>Active</strong><p>The concept, relation, equation or reaction currently being established is the visual centre.</p></article>
-      <article><strong>Support</strong><p>Conditions and explanations attach to the active object instead of becoming generic body copy.</p></article>
-      <article><strong>Retained</strong><p>Only context still needed for the current reasoning remains visible, with deliberately lower weight.</p></article>
-      <article><strong>Teaching Cue</strong><p>Question, Task, Note and teacher-given Hint keep their own lifecycle and never become board content.</p></article>
+      <article><strong>Safe regions</strong><p>Teaching Cue occupies layout space. Active content can no longer extend underneath it.</p></article>
+      <article><strong>Yield order</strong><p>Retained context is lowest priority; Active remains readable instead of shrinking everything equally.</p></article>
+      <article><strong>Notation</strong><p>Equation uses TeX and reaction uses mhchem syntax through one bounded renderer with plain-text fallback.</p></article>
+      <article><strong>Independent state</strong><p>Question, Task, Note and teacher-given Hint keep their own lifecycle without becoming board content.</p></article>
     </section>
   </main>;
 }
