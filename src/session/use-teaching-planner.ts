@@ -5,6 +5,7 @@ import type { CaptionEpisode, DisplayIntent, PlannerDebugState, PlannerInput } f
 import { duePlannerCheckpoint, LIVE_PLANNER_BUDGET_MS, SPEECH_SPAN_ASSEMBLY, type PlannerCheckpointCursor } from "./canonical-speech";
 import type { CanonicalSpeechState, SpeechStatus } from "./speech-types";
 import type { SessionAction, SessionStatus } from "./session-types";
+import { traceDraft, type TraceEmitter } from "../trace/contracts";
 
 type TeachingPlannerCallbacks = {
   sessionStatus: SessionStatus;
@@ -15,12 +16,21 @@ type TeachingPlannerCallbacks = {
   tracingEnabled?: boolean;
   dispatch(action: SessionAction): void;
   semanticPlanner?: SemanticPlanner;
+  onTrace?: TraceEmitter;
 };
 
 const captionContext = (episode?: CaptionEpisode): { sourceSegmentIds: string[]; displayKind: DisplayIntent["kind"] } | undefined => episode ? { sourceSegmentIds: episode.sourceSegmentIds, displayKind: episode.cue?.kind ?? "TEXT" } : undefined;
+const traceRoot = (runId: number, spanId: string, spanRevision: number) => `speech:${runId}:span:${spanId}@${spanRevision}`;
+const traceCorrelation = (runId: number, spanId: string, spanRevision: number, requestId?: number) => ({
+  rootId: traceRoot(runId, spanId, spanRevision),
+  runId,
+  spanId,
+  spanRevision,
+  ...(requestId === undefined ? {} : { plannerRequestId: String(requestId) }),
+});
 
 /** Coalesces Speechmatics finals into one bounded planner request at a time. */
-export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, canonicalSpeech, planner, tracingEnabled = false, dispatch, semanticPlanner }: TeachingPlannerCallbacks) {
+export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, canonicalSpeech, planner, tracingEnabled = false, dispatch, semanticPlanner, onTrace }: TeachingPlannerCallbacks) {
   const defaultPlanner = useMemo(() => createHttpSemanticPlanner(), []);
   const scheduler = useRef(new SingleFlightPlanner());
   const observed = useRef({ runId: -1, checkpoints: new Map<string, PlannerCheckpointCursor>() });
@@ -50,7 +60,11 @@ export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, c
     if (checkpoints.length) scheduler.current.enqueue(checkpoints.map(({ spanId, spanRevision }) => ({ spanId, spanRevision, closed: canonicalSpeech.spans.find((span) => span.id === spanId)?.status === "closed" })));
     scheduler.current.coalescePending(canonicalSpeech.spans.map((span) => ({ spanId: span.id, spanRevision: span.revision, closed: span.status === "closed" })));
     if (sessionStatus !== "active" || speechStatus !== "ready") {
-      if (tracingEnabled) checkpoints.forEach((checkpoint) => dispatch({ type: "planner-gate", runId: speechRunId, spanId: checkpoint.spanId, spanRevision: checkpoint.spanRevision, segmentIds: [checkpoint.spanId], decision: "skip", reason: sessionStatus !== "active" ? "session_not_active" : "speech_not_ready", now: Date.now() }));
+      const reason = sessionStatus !== "active" ? "session_not_active" : "speech_not_ready";
+      checkpoints.forEach((checkpoint) => {
+        if (tracingEnabled) dispatch({ type: "planner-gate", runId: speechRunId, spanId: checkpoint.spanId, spanRevision: checkpoint.spanRevision, segmentIds: [checkpoint.spanId], decision: "skip", reason, now: Date.now() });
+        onTrace?.(traceDraft("planner.gate", { runId: speechRunId, spanId: checkpoint.spanId, spanRevision: checkpoint.spanRevision, decision: "skip", reason }, { priority: "critical", correlation: traceCorrelation(speechRunId, checkpoint.spanId, checkpoint.spanRevision) }));
+      });
       return;
     }
     const inFlight = scheduler.current.currentWork;
@@ -60,7 +74,11 @@ export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, c
     }
     const work = scheduler.current.next(speechRunId, Date.now());
     if (!work) {
-      if (tracingEnabled) checkpoints.forEach((checkpoint) => dispatch({ type: "planner-gate", runId: speechRunId, spanId: checkpoint.spanId, spanRevision: checkpoint.spanRevision, segmentIds: [checkpoint.spanId], decision: "skip", reason: "planner_in_flight_queued_latest_revision", now: Date.now() }));
+      checkpoints.forEach((checkpoint) => {
+        const reason = "planner_in_flight_queued_latest_revision";
+        if (tracingEnabled) dispatch({ type: "planner-gate", runId: speechRunId, spanId: checkpoint.spanId, spanRevision: checkpoint.spanRevision, segmentIds: [checkpoint.spanId], decision: "skip", reason, now: Date.now() });
+        onTrace?.(traceDraft("planner.gate", { runId: speechRunId, spanId: checkpoint.spanId, spanRevision: checkpoint.spanRevision, decision: "skip", reason }, { priority: "critical", correlation: traceCorrelation(speechRunId, checkpoint.spanId, checkpoint.spanRevision) }));
+      });
       return;
     }
     const input: PlannerInput = {
@@ -70,7 +88,9 @@ export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, c
     };
     const startedAt = work.startedAtMs;
     if (tracingEnabled) dispatch({ type: "planner-gate", runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, segmentIds: work.segmentIds, decision: "run", reason: "canonical_span_checkpoint", requestId: work.requestId, input, now: startedAt });
+    onTrace?.(traceDraft("planner.gate", { runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, decision: "run", reason: "canonical_span_checkpoint", requestId: work.requestId }, { priority: "critical", correlation: traceCorrelation(speechRunId, work.spanId, work.spanRevision, work.requestId) }));
     dispatch({ type: "planner-requested", requestId: work.requestId, runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, input, segmentIds: work.segmentIds, now: startedAt });
+    onTrace?.(traceDraft("planner.started", { runId: speechRunId, requestId: work.requestId, spanId: work.spanId, spanRevision: work.spanRevision, input }, { priority: "critical", correlation: traceCorrelation(speechRunId, work.spanId, work.spanRevision, work.requestId) }));
     const controller = new AbortController();
     let settled = false;
     let timeout: number | undefined;
@@ -81,7 +101,9 @@ export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, c
       scheduler.current.cancel(work.requestId, speechRunId);
       controller.abort(reason);
       if (activeRequest.current?.requestId === work.requestId) activeRequest.current = undefined;
-      dispatch({ type: "planner-aborted", requestId: work.requestId, runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, input, reason, now: Date.now(), startedAt, segmentIds: work.segmentIds });
+      const now = Date.now();
+      onTrace?.(traceDraft("planner.aborted", { runId: speechRunId, requestId: work.requestId, spanId: work.spanId, spanRevision: work.spanRevision, latencyMs: Math.max(0, now - startedAt), reason }, { priority: "critical", correlation: traceCorrelation(speechRunId, work.spanId, work.spanRevision, work.requestId) }));
+      dispatch({ type: "planner-aborted", requestId: work.requestId, runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, input, reason, now, startedAt, segmentIds: work.segmentIds });
     };
     activeRequest.current = { requestId: work.requestId, abort };
     timeout = window.setTimeout(() => abort("live_budget_timeout"), LIVE_PLANNER_BUDGET_MS);
@@ -92,7 +114,9 @@ export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, c
         if (timeout !== undefined) window.clearTimeout(timeout);
         scheduler.current.complete(work.requestId, speechRunId);
         if (activeRequest.current?.requestId === work.requestId) activeRequest.current = undefined;
-        dispatch({ type: "planner-decision", requestId: work.requestId, runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, input, decision, now: Date.now(), startedAt, segmentIds: work.segmentIds });
+        const now = Date.now();
+        onTrace?.(traceDraft("planner.completed", { runId: speechRunId, requestId: work.requestId, spanId: work.spanId, spanRevision: work.spanRevision, latencyMs: Math.max(0, now - startedAt), decision }, { priority: "critical", correlation: traceCorrelation(speechRunId, work.spanId, work.spanRevision, work.requestId) }));
+        dispatch({ type: "planner-decision", requestId: work.requestId, runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, input, decision, now, startedAt, segmentIds: work.segmentIds });
       },
       (error: unknown) => {
         if (settled) return;
@@ -100,8 +124,11 @@ export function useTeachingPlanner({ sessionStatus, speechStatus, speechRunId, c
         if (timeout !== undefined) window.clearTimeout(timeout);
         scheduler.current.complete(work.requestId, speechRunId);
         if (activeRequest.current?.requestId === work.requestId) activeRequest.current = undefined;
-        dispatch({ type: "planner-failed", requestId: work.requestId, runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, input, message: error instanceof Error ? error.message : "Planner is temporarily unavailable.", now: Date.now(), startedAt, segmentIds: work.segmentIds });
+        const now = Date.now();
+        const message = error instanceof Error ? error.message : "Planner is temporarily unavailable.";
+        onTrace?.(traceDraft("planner.failed", { runId: speechRunId, requestId: work.requestId, spanId: work.spanId, spanRevision: work.spanRevision, latencyMs: Math.max(0, now - startedAt), message }, { priority: "critical", correlation: traceCorrelation(speechRunId, work.spanId, work.spanRevision, work.requestId) }));
+        dispatch({ type: "planner-failed", requestId: work.requestId, runId: speechRunId, spanId: work.spanId, spanRevision: work.spanRevision, input, message, now, startedAt, segmentIds: work.segmentIds });
       },
     );
-  }, [canonicalSpeech.spans, dispatch, planner.runtime, planner.status, plannerClient, sessionStatus, speechRunId, speechStatus, tracingEnabled]);
+  }, [canonicalSpeech.spans, dispatch, onTrace, planner.runtime, planner.status, plannerClient, sessionStatus, speechRunId, speechStatus, tracingEnabled]);
 }

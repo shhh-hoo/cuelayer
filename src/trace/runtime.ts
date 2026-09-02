@@ -103,7 +103,8 @@ export class SessionTraceRuntime {
   }
 
   async readRecent(limit = 240): Promise<SessionTraceEvent[]> {
-    try { await this.writer.flush(); } catch { /* The durable prefix remains readable while storage is degraded. */ }
+    // The viewer reads the latest durable prefix. It never forces the live
+    // writer to flush outside its normal batching schedule.
     return this.store.readRecent(this.sessionId, limit);
   }
 
@@ -115,16 +116,13 @@ export class SessionTraceRuntime {
   async complete(reason: string) {
     if (this.closed || this.completed) return;
     this.writer.emit(traceDraft("session.ended", { reason }, { priority: "critical" }));
-    try {
-      await this.writer.flush();
-      await this.store.completeSession(this.sessionId);
-      this.completed = true;
-      await this.store.pruneCompleted();
-    } finally {
-      // Completion seals writes but deliberately keeps IndexedDB readable so the
-      // ended session can still be inspected and exported until the page closes.
-      this.writer.close();
-    }
+    await this.writer.flush();
+    await this.store.completeSession(this.sessionId);
+    this.completed = true;
+    // Completion seals writes but deliberately keeps IndexedDB readable so the
+    // ended session can still be inspected and exported until the page closes.
+    this.writer.close();
+    await this.store.pruneCompleted();
   }
 
   close() {

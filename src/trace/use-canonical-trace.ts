@@ -6,14 +6,15 @@ export function canonicalRootId(runId: number, spanId: string, revision?: number
   return `speech:${runId}:span:${spanId}${revision === undefined ? "" : `@${revision}`}`;
 }
 
-export function useCanonicalTrace(runId: number, canonical: CanonicalSpeechState, emit: TraceEmitter) {
-  const observedRunId = useRef<number | undefined>(undefined);
+export function useCanonicalTrace(sessionId: string, runId: number, canonical: CanonicalSpeechState, emit: TraceEmitter) {
+  const observedScope = useRef<string | undefined>(undefined);
   const finalIds = useRef(new Set<string>());
   const spanRevisions = useRef(new Map<string, number>());
 
   useEffect(() => {
-    if (observedRunId.current !== runId) {
-      observedRunId.current = runId;
+    const scope = `${sessionId}:${runId}`;
+    if (observedScope.current !== scope) {
+      observedScope.current = scope;
       finalIds.current = new Set();
       spanRevisions.current = new Map();
     }
@@ -57,5 +58,5 @@ export function useCanonicalTrace(runId: number, canonical: CanonicalSpeechState
         },
       }));
     }
-  }, [canonical.finals, canonical.spans, emit, runId]);
+  }, [canonical.finals, canonical.spans, emit, runId, sessionId]);
 }

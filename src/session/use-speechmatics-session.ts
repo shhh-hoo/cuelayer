@@ -4,6 +4,8 @@ import { useRealtimeEventListener, useRealtimeTranscription } from "@speechmatic
 import { getAudioDevicesStore, useAudioDevices, usePCMAudioListener, usePCMAudioRecorderContext } from "@speechmatics/browser-audio-input-react";
 import { speechEventFromSpeechmatics } from "./speechmatics-adapter";
 import type { SpeechEvent } from "./speech-types";
+import { AudioDeliveryMonitor } from "./audio-delivery-window";
+import { traceDraft, type SessionTraceDraft, type SessionTracePayloads, type TraceEmitter } from "../trace/contracts";
 
 const TOKEN_ENDPOINT = "/api/speechmatics/token";
 
@@ -109,42 +111,115 @@ async function requestRealtimeToken(): Promise<string> {
 type SpeechmaticsSessionCallbacks = {
   onEvent: (runId: number, event: SpeechEvent) => void;
   onReady: (runId: number) => void;
+  onTrace?: TraceEmitter;
 };
+
+function wordBounds(event: Exclude<SpeechEvent, { kind: "error" }>) {
+  if (!event.words.length) return {};
+  return {
+    startMs: Math.min(...event.words.map((word) => word.startMs)),
+    endMs: Math.max(...event.words.map((word) => word.endMs)),
+  };
+}
 
 /**
  * Product glue only: official React providers own the recorder, WebSocket, audio
  * forwarding and cleanup; CueLayer supplies run identity and canonical events.
  */
-export function useSpeechmaticsSession({ onEvent, onReady }: SpeechmaticsSessionCallbacks) {
+export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: SpeechmaticsSessionCallbacks) {
   const activeRunIdRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
   const sawRecordingRef = useRef(false);
+  const providerMessageSequenceRef = useRef(0);
+  const deliveryMonitorRef = useRef<AudioDeliveryMonitor | undefined>(undefined);
+  const deliveryTimerRef = useRef<number | undefined>(undefined);
+  const onTraceRef = useRef<TraceEmitter | undefined>(onTrace);
+  onTraceRef.current = onTrace;
   const { startTranscription, stopTranscription, sendAudio, socketState } = useRealtimeTranscription();
   const { startRecording, stopRecording, mute, unmute, isRecording, audioContext } = usePCMAudioRecorderContext();
   const audioDevices = useAudioDevices();
 
-  // This is Speechmatics' documented React audio handoff.
+  const emitTrace = useCallback((draft: SessionTraceDraft) => onTraceRef.current?.(draft), []);
+
+  // Deliberate invariant: no measurement, persistence, allocation, or React update
+  // may run in front of the official live PCM transport callback.
   usePCMAudioListener(sendAudio);
+
+  const stopDeliveryMonitor = useCallback((final = false) => {
+    if (deliveryTimerRef.current !== undefined) {
+      window.clearInterval(deliveryTimerRef.current);
+      deliveryTimerRef.current = undefined;
+    }
+    const monitor = deliveryMonitorRef.current;
+    if (!monitor) return;
+    const now = Date.now();
+    if (final) {
+      emitTrace(traceDraft("speech.transport_window", monitor.takeWindow(now, true), {
+        priority: "aggregate",
+        correlation: { rootId: `speech:${monitor.runId}`, runId: monitor.runId },
+      }));
+      emitTrace(traceDraft("speech.transport_window", monitor.runSummary(now), {
+        priority: "aggregate",
+        correlation: { rootId: `speech:${monitor.runId}`, runId: monitor.runId },
+      }));
+    }
+    deliveryMonitorRef.current = undefined;
+  }, [emitTrace]);
+
+  const startDeliveryMonitor = useCallback((runId: number) => {
+    stopDeliveryMonitor(false);
+    const monitor = new AudioDeliveryMonitor(runId, Date.now());
+    deliveryMonitorRef.current = monitor;
+    deliveryTimerRef.current = window.setInterval(() => {
+      if (deliveryMonitorRef.current !== monitor) return;
+      emitTrace(traceDraft("speech.transport_window", monitor.takeWindow(Date.now()), {
+        priority: "aggregate",
+        correlation: { rootId: `speech:${runId}`, runId },
+      }));
+    }, 1_000);
+  }, [emitTrace, stopDeliveryMonitor]);
+
+  const lifecycle = useCallback((runId: number, state: SessionTracePayloads["speech.lifecycle"]["state"], details: Omit<SessionTracePayloads["speech.lifecycle"], "runId" | "state"> = {}) => {
+    emitTrace(traceDraft("speech.lifecycle", { runId, state, ...details }, {
+      priority: "critical",
+      correlation: { rootId: `speech:${runId}`, runId },
+    }));
+  }, [emitTrace]);
 
   const failRun = useCallback((runId: number, code: string, message: string) => {
     if (activeRunIdRef.current !== runId) return;
     activeRunIdRef.current = null;
+    stoppingRef.current = true;
     stopRecording();
-    void stopTranscription().catch(() => undefined);
+    stopDeliveryMonitor(true);
+    void stopTranscription().catch(() => undefined).finally(() => { stoppingRef.current = false; });
+    lifecycle(runId, "failed", { code, message });
     onEvent(runId, { kind: "error", code, message });
-  }, [onEvent, stopRecording, stopTranscription]);
+  }, [lifecycle, onEvent, stopDeliveryMonitor, stopRecording, stopTranscription]);
 
   const onProviderMessage = useCallback(({ data }: { data: Parameters<typeof speechEventFromSpeechmatics>[0] }) => {
     const runId = activeRunIdRef.current;
     if (runId === null) return;
+    if (data.message === "AudioAdded") {
+      const seqNo = (data as { seq_no?: unknown }).seq_no;
+      if (typeof seqNo === "number") deliveryMonitorRef.current?.observe(seqNo);
+      return;
+    }
     const event = speechEventFromSpeechmatics(data);
     if (!event) return;
+    const speechEventId = `speech-event-${runId}-${providerMessageSequenceRef.current++}`;
     if (event.kind === "error") {
       failRun(runId, event.code, event.message);
       return;
     }
+    const correlation = { rootId: `speech:${runId}`, runId, speechEventId };
+    if (event.kind === "provisional") {
+      emitTrace(traceDraft("speech.partial", { runId, transcript: event.text, wordCount: event.words.length }, { priority: "raw", correlation }));
+    } else {
+      emitTrace(traceDraft("speech.final_received", { runId, transcript: event.text, wordCount: event.words.length, ...wordBounds(event) }, { priority: "critical", correlation }));
+    }
     onEvent(runId, event);
-  }, [failRun, onEvent]);
+  }, [emitTrace, failRun, onEvent]);
 
   useRealtimeEventListener("receiveMessage", onProviderMessage);
 
@@ -170,6 +245,8 @@ export function useSpeechmaticsSession({ onEvent, onReady }: SpeechmaticsSession
     activeRunIdRef.current = runId;
     stoppingRef.current = false;
     sawRecordingRef.current = false;
+    providerMessageSequenceRef.current = 0;
+    lifecycle(runId, "starting");
     try {
       const browserAudioContext = audioContext;
       if (!browserAudioContext) throw failure("audio-context-failed", "CueLayer could not create browser audio. Reload the page and try again.");
@@ -179,34 +256,61 @@ export function useSpeechmaticsSession({ onEvent, onReady }: SpeechmaticsSession
         promptPermissions: "promptPermissions" in audioDevices ? audioDevices.promptPermissions : undefined,
         getPermissionState: () => getAudioDevicesStore().permissionState,
       });
+      lifecycle(runId, "browser_audio_ready", { sampleRate: browserAudioContext.sampleRate });
+      lifecycle(runId, "token_requested");
       const token = await requestRealtimeToken();
+      lifecycle(runId, "token_received");
       try {
         await startTranscription(token, createSpeechmaticsConfig(browserAudioContext.sampleRate));
       } catch (error) {
         if (import.meta.env.DEV) console.warn("Speechmatics realtime startup failed", error);
         throw failure("realtime-connection-failed", "CueLayer could not connect to Speechmatics realtime. You can reconnect speech without ending the session.");
       }
+      lifecycle(runId, "transcription_started", { sampleRate: browserAudioContext.sampleRate });
+      startDeliveryMonitor(runId);
       try {
         await startRecording({});
       } catch (error) {
         throw new SpeechStartError(speechStartFailureFrom(error));
       }
-      if (activeRunIdRef.current === runId) onReady(runId);
+      lifecycle(runId, "capture_started", { sampleRate: browserAudioContext.sampleRate });
+      if (activeRunIdRef.current === runId) {
+        onReady(runId);
+        lifecycle(runId, "ready", { sampleRate: browserAudioContext.sampleRate });
+      }
     } catch (error) {
+      const startFailure = speechStartFailureFrom(error);
+      stopDeliveryMonitor(true);
       activeRunIdRef.current = null;
       stopRecording();
       void stopTranscription().catch(() => undefined);
+      lifecycle(runId, "failed", { code: startFailure.code, message: startFailure.message });
       throw error;
     }
-  }, [audioContext, audioDevices, onReady, startRecording, startTranscription, stopRecording, stopTranscription]);
+  }, [audioContext, audioDevices, lifecycle, onReady, startDeliveryMonitor, startRecording, startTranscription, stopDeliveryMonitor, stopRecording, stopTranscription]);
 
   const stop = useCallback(async () => {
+    const runId = activeRunIdRef.current;
     activeRunIdRef.current = null;
     stoppingRef.current = true;
     stopRecording();
     try { await stopTranscription(); } catch { /* Official client already closed the socket. */ }
+    stopDeliveryMonitor(true);
     stoppingRef.current = false;
-  }, [stopRecording, stopTranscription]);
+    if (runId !== null) lifecycle(runId, "stopped");
+  }, [lifecycle, stopDeliveryMonitor, stopRecording, stopTranscription]);
 
-  return { start, stop, pause: mute, resume: unmute };
+  const pause = useCallback(() => {
+    mute();
+    const runId = activeRunIdRef.current;
+    if (runId !== null) lifecycle(runId, "paused");
+  }, [lifecycle, mute]);
+
+  const resume = useCallback(() => {
+    unmute();
+    const runId = activeRunIdRef.current;
+    if (runId !== null) lifecycle(runId, "resumed");
+  }, [lifecycle, unmute]);
+
+  return { start, stop, pause, resume };
 }

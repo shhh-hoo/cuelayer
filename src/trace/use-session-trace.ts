@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { defaultTracePriority, traceDraft, type SessionTraceDraft, type SessionTraceEvent, type TraceEmitter } from "./contracts";
-import { replaceTraceSessionId, resolveTraceSessionIdentity } from "./session-identity";
+import { createTraceSessionId, replaceTraceSessionId, resolveTraceSessionIdentity } from "./session-identity";
 import { SessionTraceRuntime, type SessionTraceRuntimeSnapshot } from "./runtime";
 
 const INITIAL_PENDING_LIMIT = 256;
@@ -11,6 +11,7 @@ export type SessionTraceController = {
   emit: TraceEmitter;
   flush(): Promise<void>;
   complete(reason: string): Promise<void>;
+  startNewSession(): string;
   readRecent(limit?: number): Promise<SessionTraceEvent[]>;
   exportJsonlBlob(): Promise<Blob>;
 };
@@ -32,9 +33,10 @@ function queueBeforeRuntime(pending: PendingState, draft: SessionTraceDraft) {
   pending.drafts.push(draft);
 }
 
-export function useSessionTrace(): SessionTraceController {
-  const [requestedIdentity] = useState(() => resolveTraceSessionIdentity(window.location, window.history));
-  const [sessionId, setSessionId] = useState(requestedIdentity.sessionId);
+export function useSessionTrace({ observeStatus = false }: { observeStatus?: boolean } = {}): SessionTraceController {
+  const [initialIdentity] = useState(() => resolveTraceSessionIdentity(window.location, window.history));
+  const [requestedSessionId, setRequestedSessionId] = useState(initialIdentity.sessionId);
+  const [sessionId, setSessionId] = useState(initialIdentity.sessionId);
   const runtimeRef = useRef<SessionTraceRuntime | undefined>(undefined);
   const pendingRef = useRef<PendingState>({ drafts: [], dropped: new Map() });
   const [snapshot, setSnapshot] = useState<SessionTraceController["snapshot"]>(initialSnapshot);
@@ -52,7 +54,7 @@ export function useSessionTrace(): SessionTraceController {
     const onVisibilityChange = () => { if (document.visibilityState === "hidden") flushOnHide(); };
 
     void SessionTraceRuntime.open({
-      requestedSessionId: requestedIdentity.sessionId,
+      requestedSessionId,
       path: window.location.pathname,
       environment: import.meta.env.MODE,
     }).then((runtime) => {
@@ -61,7 +63,7 @@ export function useSessionTrace(): SessionTraceController {
         return;
       }
       runtimeRef.current = runtime;
-      if (runtime.sessionId !== requestedIdentity.sessionId) {
+      if (runtime.sessionId !== requestedSessionId) {
         replaceTraceSessionId(window.location, window.history, runtime.sessionId);
         setSessionId(runtime.sessionId);
       }
@@ -72,7 +74,16 @@ export function useSessionTrace(): SessionTraceController {
       for (const draft of pending.drafts) runtime.emit(draft);
       pendingRef.current = { drafts: [], dropped: new Map() };
       setSnapshot(runtime.snapshot);
-      statusTimer = window.setInterval(() => setSnapshot(runtime.snapshot), 500);
+      if (observeStatus) {
+        let previous = JSON.stringify(runtime.snapshot);
+        statusTimer = window.setInterval(() => {
+          const next = runtime.snapshot;
+          const serialized = JSON.stringify(next);
+          if (serialized === previous) return;
+          previous = serialized;
+          setSnapshot(next);
+        }, 1_000);
+      }
       window.addEventListener("pagehide", flushOnHide);
       document.addEventListener("visibilitychange", onVisibilityChange);
     }).catch((reason) => {
@@ -90,7 +101,7 @@ export function useSessionTrace(): SessionTraceController {
       runtimeRef.current = undefined;
       if (runtime) void runtime.flush().catch(() => undefined).finally(() => runtime.close());
     };
-  }, [requestedIdentity]);
+  }, [observeStatus, requestedSessionId]);
 
   const flush = useCallback(async () => {
     await runtimeRef.current?.flush();
@@ -109,6 +120,19 @@ export function useSessionTrace(): SessionTraceController {
     }
   }, []);
 
+  const startNewSession = useCallback(() => {
+    const nextSessionId = createTraceSessionId();
+    replaceTraceSessionId(window.location, window.history, nextSessionId);
+    const runtime = runtimeRef.current;
+    runtimeRef.current = undefined;
+    runtime?.close();
+    pendingRef.current = { drafts: [], dropped: new Map() };
+    setSnapshot(initialSnapshot());
+    setSessionId(nextSessionId);
+    setRequestedSessionId(nextSessionId);
+    return nextSessionId;
+  }, []);
+
   const readRecent = useCallback(async (limit = 240) => runtimeRef.current?.readRecent(limit) ?? [], []);
   const exportJsonlBlob = useCallback(async () => {
     const runtime = runtimeRef.current;
@@ -116,5 +140,5 @@ export function useSessionTrace(): SessionTraceController {
     return runtime.exportJsonlBlob();
   }, []);
 
-  return { sessionId, snapshot, emit, flush, complete, readRecent, exportJsonlBlob };
+  return { sessionId, snapshot, emit, flush, complete, startNewSession, readRecent, exportJsonlBlob };
 }
