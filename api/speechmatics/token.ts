@@ -1,5 +1,7 @@
 import { createSpeechmaticsJWT } from "@speechmatics/auth";
 
+declare const process: { env: Record<string, string | undefined> };
+
 type Response = {
   setHeader(name: string, value: string): void;
   status(code: number): { json(body: unknown): void };

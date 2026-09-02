@@ -18,7 +18,7 @@ const policyFiles = [
   "data/nomenclature.yaml",
   "data/notation.yaml",
 ] as const;
-const serverOutput = resolve(root, "api/planner/generated/cuecaption-policy.ts");
+const serverOutput = resolve(root, "server/planner/generated/cuecaption-policy.ts");
 const clientOutput = resolve(root, "src/planner/generated/cuecaption-policy.ts");
 
 function yamlPairs(source: string, section: string, sourceKey: string, outputKey: string): Rewrite[] {
