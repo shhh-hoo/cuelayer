@@ -1,19 +1,38 @@
 .notation-renderer {
-  display: inline-block;
+  position: relative;
   max-width: 100%;
   min-width: 0;
-  overflow: hidden;
   color: inherit;
   vertical-align: middle;
 }
-.notation-renderer > span { display: inline-block; max-width: 100%; }
-.notation-renderer .katex-display { margin: 0; overflow: hidden; }
-.notation-renderer .katex { max-width: 100%; font-size: 1em; }
-.notation-renderer[data-notation-status="fallback"] > span,
-.notation-renderer[data-notation-status="loading"] > span {
+.notation-renderer[data-display="block"] {
+  display: block;
+  width: 100%;
+  min-height: 1em;
+  text-align: center;
+}
+.notation-renderer[data-display="inline"] { display: inline-block; }
+.notation-katex-target { display: inline-block; }
+.notation-renderer[data-display="block"] .notation-katex-target {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform-origin: top center;
+  white-space: nowrap;
+  visibility: hidden;
+}
+.notation-renderer[data-display="block"][data-notation-status="ready"] .notation-katex-target { visibility: visible; }
+.notation-renderer[data-display="inline"][data-notation-status="ready"] .notation-katex-target { visibility: visible; }
+.notation-renderer .katex-display { margin: 0; }
+.notation-renderer .katex { font-size: 1em; }
+.notation-fallback {
+  display: inline-block;
+  max-width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: .78em;
-  opacity: .78;
+  font-size: .72em;
+  line-height: 1.22;
+  opacity: .82;
   white-space: normal;
   overflow-wrap: anywhere;
 }
+.notation-renderer[data-display="block"] .notation-fallback { width: 100%; text-align: center; }
