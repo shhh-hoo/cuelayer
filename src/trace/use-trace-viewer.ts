@@ -10,26 +10,33 @@ export type TraceViewerState = {
   downloadJsonl(): Promise<void>;
 };
 
+export function sameTraceEventSnapshot(left: readonly SessionTraceEvent[], right: readonly SessionTraceEvent[]) {
+  return left.length === right.length && left.every((event, index) => event.eventId === right[index]?.eventId);
+}
+
 export function useTraceViewer(trace: SessionTraceController, enabled: boolean, limit = 240): TraceViewerState {
   const [events, setEvents] = useState<SessionTraceEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const loadingRef = useRef(false);
 
-  const reload = useCallback(async () => {
+  const refresh = useCallback(async (showLoading: boolean) => {
     if (!enabled || loadingRef.current) return;
     loadingRef.current = true;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
-      setEvents(await trace.readRecent(limit));
+      const next = await trace.readRecent(limit);
+      setEvents((current) => sameTraceEventSnapshot(current, next) ? current : next);
       setError(undefined);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "trace-read-failed");
     } finally {
       loadingRef.current = false;
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [enabled, limit, trace.readRecent]);
+
+  const reload = useCallback(async () => refresh(true), [refresh]);
 
   useEffect(() => {
     if (!enabled) {
@@ -37,10 +44,10 @@ export function useTraceViewer(trace: SessionTraceController, enabled: boolean, 
       setError(undefined);
       return;
     }
-    void reload();
-    const timer = window.setInterval(() => void reload(), 1_000);
+    void refresh(true);
+    const timer = window.setInterval(() => void refresh(false), 1_000);
     return () => window.clearInterval(timer);
-  }, [enabled, reload]);
+  }, [enabled, refresh]);
 
   const downloadJsonl = useCallback(async () => {
     try {
