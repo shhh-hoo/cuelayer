@@ -1,11 +1,7 @@
 {
   "functions": {
     "api/**/*.ts": {
-      "includeFiles": [
-        "server/**",
-        "src/planner/contracts.ts",
-        "src/trace/durable-trace.ts"
-      ]
+      "includeFiles": "{server/**,src/planner/contracts.ts,src/trace/durable-trace.ts}"
     }
   },
   "routes": [
