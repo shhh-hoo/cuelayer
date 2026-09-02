@@ -65,7 +65,8 @@ describe("NotationRenderer", () => {
   it("binds reaction support to the addressed bond", () => {
     const compiled = compileReaction(bromination, [bondAnnotation]);
     expect(compiled.expression).toContain("\\ce{CH2}\\underbrace{\\mathord{=}}");
-    expect(compiled.expression).toContain("the C=C bond is the changing part");
+    expect(compiled.expression).toContain("\\textsf{the C=C bond is the changing}");
+    expect(compiled.expression).toContain("\\textsf{part}");
     expect(compiled.expression).toContain("\\longrightarrow");
     expect(() => compileReaction(bromination, [{ ...bondAnnotation, bondIndex: 4 }])).toThrow("invalid-reaction-annotation-target");
   });
@@ -91,7 +92,9 @@ describe("NotationRenderer", () => {
     expect(html).toContain("data-notation-kind=\"reaction\"");
     expect(html).toContain("data-notation-status=\"katex\"");
     expect(html).toContain("class=\"katex-display\"");
-    expect(html).toContain("the C=C bond is the changing part");
+    expect(html).toContain("mathcolor=\"#9aaa9d\"");
+    expect(html).toContain("C=C");
+    expect(html).toContain(">part</");
     expect(html).not.toContain("notation-native-reaction-side");
   });
 
