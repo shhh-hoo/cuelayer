@@ -1,0 +1,76 @@
+.teaching-cue-demo-shell {
+  min-height: 100vh;
+  padding: 30px clamp(18px, 4vw, 58px) 50px;
+  color: #202622;
+  background: #eceee8;
+}
+.teaching-cue-demo-header {
+  width: min(1240px, 100%);
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+.teaching-cue-demo-eyebrow { color: #677268; font-size: 11px; font-weight: 780; letter-spacing: .12em; text-transform: uppercase; }
+.teaching-cue-demo-header h1 { max-width: 780px; margin: 7px 0 0; font-size: clamp(34px, 4.2vw, 58px); line-height: .98; letter-spacing: -.052em; }
+.teaching-cue-demo-header p { max-width: 760px; margin: 11px 0 0; color: #5d685f; font-size: 14px; line-height: 1.55; }
+.teaching-cue-demo-back { flex: 0 0 auto; padding: 9px 13px; border: 1px solid #bdc6bc; border-radius: 999px; color: #324237; background: #f8faf5; text-decoration: none; font-size: 13px; }
+.teaching-cue-demo-toolbar {
+  width: min(1240px, 100%);
+  margin: 0 auto 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.teaching-cue-demo-scenarios, .teaching-cue-demo-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.teaching-cue-demo-toolbar button { padding: 8px 12px; border: 1px solid #c5cdc3; border-radius: 999px; color: #435047; background: #f9faf7; cursor: pointer; }
+.teaching-cue-demo-toolbar button.selected { color: #f8faf6; border-color: #26372b; background: #26372b; }
+.teaching-cue-demo-stage {
+  position: relative;
+  width: min(1240px, 100%);
+  min-height: min(68vh, 720px);
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid #263029;
+  border-radius: 24px;
+  color: #f8faf6;
+  background: linear-gradient(145deg, #25352a, #0f1712 68%);
+  isolation: isolate;
+}
+.teaching-cue-demo-stage::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .7; background-image: linear-gradient(#ffffff08 1px, transparent 1px), linear-gradient(90deg, #ffffff08 1px, transparent 1px); background-size: 38px 38px; }
+.teaching-cue-demo-board {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 60px 70px 150px;
+  text-align: center;
+}
+.teaching-cue-demo-board-label { margin-bottom: 20px; color: #b7c5b9; font-size: 11px; font-weight: 780; letter-spacing: .12em; text-transform: uppercase; }
+.teaching-cue-demo-board strong { max-width: 900px; font-size: clamp(40px, 5.4vw, 76px); line-height: 1; letter-spacing: -.055em; font-weight: 610; }
+.teaching-cue-demo-relation { margin: 30px 0 0; color: #dbe4dc; font-size: clamp(20px, 2.7vw, 34px); line-height: 1.25; letter-spacing: -.025em; }
+.teaching-cue-demo-context { margin: 23px 0 0; color: #a8b6aa; font-size: clamp(15px, 1.7vw, 20px); }
+.teaching-cue-demo-stage.presentation-overlay { background: #dfe5dd; }
+.teaching-cue-demo-stage.presentation-overlay::before { display: none; }
+.teaching-cue-demo-slide { position: absolute; inset: 0; padding: clamp(38px, 6vw, 80px); color: #1f2922; background: linear-gradient(135deg, #f6f7f2, #dfe5dd); }
+.teaching-cue-demo-slide span { display: block; color: #667368; font-size: 12px; font-weight: 780; letter-spacing: .12em; text-transform: uppercase; }
+.teaching-cue-demo-slide strong { display: block; max-width: 800px; margin-top: 20px; font-size: clamp(42px, 5vw, 70px); line-height: .98; letter-spacing: -.05em; }
+.teaching-cue-demo-slide p { max-width: 720px; margin: 24px 0 0; color: #566258; font-size: clamp(18px, 2.2vw, 27px); line-height: 1.45; }
+.teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-board { inset: auto auto 28px 28px; width: min(460px, 52%); display: block; padding: 18px 20px; border: 1px solid #ffffff1f; border-radius: 14px; color: #f8faf6; background: #101712e8; text-align: left; backdrop-filter: blur(10px); }
+.teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-board-label { display: block; margin-bottom: 8px; }
+.teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-board strong { font-size: clamp(18px, 2vw, 26px); }
+.teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-relation { margin-top: 10px; font-size: 16px; }
+.teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-context { display: none; }
+.teaching-cue-demo-principles { width: min(1240px, 100%); margin: 12px auto 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.teaching-cue-demo-principles article { padding: 14px; border: 1px solid #d2d7d0; border-radius: 14px; background: #f7f9f4; }
+.teaching-cue-demo-principles strong { font-size: 13px; color: #304037; }
+.teaching-cue-demo-principles p { margin: 6px 0 0; color: #69746c; font-size: 12px; line-height: 1.45; }
+@media (max-width: 760px) {
+  .teaching-cue-demo-header, .teaching-cue-demo-toolbar { align-items: flex-start; flex-direction: column; }
+  .teaching-cue-demo-stage { min-height: 580px; }
+  .teaching-cue-demo-board { padding: 54px 24px 150px; }
+  .teaching-cue-demo-principles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .teaching-cue-demo-stage.presentation-overlay .teaching-cue-demo-board { left: 16px; bottom: 100px; width: calc(100% - 32px); }
+}
