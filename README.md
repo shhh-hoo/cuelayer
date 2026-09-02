@@ -50,3 +50,8 @@ The permanent Speechmatics key stays server-side. Set `SPEECHMATICS_API_KEY` fro
 The browser uses Speechmatics' current official React realtime and PCM AudioWorklet integrations. Provider messages terminate in [`speechmatics-adapter.ts`](src/session/speechmatics-adapter.ts), then CueLayer stores speech-faithful `CanonicalSpeechState` as planner provenance. Presentation capture stays independent if speech cannot start or disconnects.
 
 Live verification requires a configured Speechmatics key and a browser microphone permission. Keep an Alpha deployment behind private-preview or deployment-level access protection: its temporary-token endpoint is intentionally not an account or rate-limit system. Normal `/session` should not expose continuous ASR transcript as the learner-facing product surface; `/session?debug=speech` is the diagnostic surface for committed/provisional inspection and trace tooling.
+
+
+## Live teaching implementation roadmap
+
+Stable work-package identifiers and their current GitHub PR mappings are maintained in [`docs/LIVE_TEACHING_ROADMAP.md`](docs/LIVE_TEACHING_ROADMAP.md). PR numbers are operational metadata; the work-package contracts in [`docs/LIVE_TEACHING_SYSTEM_SPEC.md`](docs/LIVE_TEACHING_SYSTEM_SPEC.md) remain authoritative.
