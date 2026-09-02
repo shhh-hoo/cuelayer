@@ -2,7 +2,7 @@ import { useReducer, useState } from "react";
 import type { PresentationMode } from "../session/presentation-mode";
 import { BoardLayout } from "./BoardLayout";
 import type { ActiveTeachingCue, TeachingCueDraft } from "./contracts";
-import { NotationRenderer, type EquationNotationSpec, type ReactionNotationSpec } from "./NotationRenderer";
+import { NotationRenderer, type EquationNotationSpec, type ReactionAnnotation, type ReactionNotationSpec } from "./NotationRenderer";
 import { createInitialTeachingCueState, teachingCueReducer } from "./runtime";
 import "./teaching-cue-demo.css";
 
@@ -69,6 +69,13 @@ const BROMINATION: ReactionNotationSpec = {
   products: [{ formula: "CH2Br-CH2Br" }],
 };
 
+const BROMINATION_ANNOTATION: ReactionAnnotation = {
+  side: "reactant",
+  speciesIndex: 0,
+  bondIndex: 0,
+  label: "the C=C bond is the changing part",
+};
+
 const STRESS_REACTION: ReactionNotationSpec = {
   kind: "reaction",
   ariaLabel: "a deliberately crowded reversible reaction used to test fitting",
@@ -116,7 +123,12 @@ function EquationActive({ stress }: { stress: boolean }) {
 }
 
 function ReactionActive({ stress }: { stress: boolean }) {
-  return <div className="reaction-object"><NotationRenderer spec={stress ? STRESS_REACTION : BROMINATION} /></div>;
+  return <div className="reaction-object">
+    <NotationRenderer
+      spec={stress ? STRESS_REACTION : BROMINATION}
+      annotations={stress ? [] : [BROMINATION_ANNOTATION]}
+    />
+  </div>;
 }
 
 function stressCue(cue: ActiveTeachingCue | undefined, stress: boolean) {
@@ -171,7 +183,6 @@ function BoardScene({ kind, cue, presentationMode, stress, onCueExpire }: {
     onCueExpire={onCueExpire}
     retained={retained ?? [<span key="pi">π bond present</span>]}
     active={<ReactionActive stress={stress} />}
-    support={<span>{stress ? "the reaction renderer must fit or fall back legibly; it must never silently crop the product side" : "the C=C bond is the changing part"}</span>}
   />;
 }
 
@@ -195,7 +206,7 @@ export function TeachingCueDemoPage() {
       <div>
         <span className="teaching-cue-demo-eyebrow">CueLayer · learner surface study</span>
         <h1>Meaning sets the hierarchy.</h1>
-        <p>The Board uses stable content-priority rules rather than runtime geometry loops. Equation annotations stay attached to the exact term they explain, and equation/reaction notation renders synchronously from a bounded structured contract.</p>
+        <p>The Board owns spatial layout. A bounded compiler turns structured equation and reaction data into packaged KaTeX/mhchem markup synchronously, so notation keeps professional baselines without CDN loading, renderer handoff, or resize feedback.</p>
       </div>
       <a href="/session" className="teaching-cue-demo-back">Live session</a>
     </header>
@@ -221,8 +232,8 @@ export function TeachingCueDemoPage() {
 
     <section className="teaching-cue-demo-principles">
       <article><strong>Stable layout</strong><p>Content priority is deterministic; the page has no resize-driven render loop.</p></article>
-      <article><strong>Attached support</strong><p>Equation annotations stay on the term they explain instead of drifting into a generic footer.</p></article>
-      <article><strong>Structured notation</strong><p>Equation pieces and reaction species render synchronously; free TeX is not a planner contract.</p></article>
+      <article><strong>Attached support</strong><p>Annotations compile into the exact equation term or chemical bond they explain.</p></article>
+      <article><strong>Structured notation</strong><p>KaTeX/mhchem receives only compiler-owned expressions from bounded data, never planner-authored TeX.</p></article>
       <article><strong>One cue, one task</strong><p>An instruction containing a question remains one TASK cue instead of two competing prompts.</p></article>
     </section>
   </main>;

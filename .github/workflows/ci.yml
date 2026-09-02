@@ -13,6 +13,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Generate lockfile for notation dependency review
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Upload generated package lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: cuelayer-package-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1
       - run: npm ci
       - run: npm run typecheck
       - run: npm run test

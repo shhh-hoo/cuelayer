@@ -7,122 +7,36 @@
 }
 .notation-renderer[data-display="block"] { display: block; text-align: center; }
 .notation-renderer[data-display="inline"] { display: inline-block; width: auto; }
-.notation-native { width: 100%; max-width: 100%; }
-.notation-native-equation {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: center;
-  gap: .12em .28em;
-}
-.notation-native-equation-piece {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: center;
-}
-.notation-native-annotated-piece {
-  display: inline-grid;
-  grid-template-rows: auto auto;
-  justify-items: center;
-  align-items: start;
-  gap: .1em;
-  min-width: 0;
-}
-.notation-native-annotation {
-  min-width: 100%;
-  padding-top: .34em;
-  border-top: 2px solid #d9e469;
-  color: #9aaa9d;
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  font-size: clamp(12px, .18em, 15px);
-  font-weight: 650;
-  line-height: 1.15;
-  letter-spacing: .01em;
-  text-align: center;
-  white-space: nowrap;
-}
-.notation-native-symbol {
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
-  font-style: italic;
+.notation-katex {
+  display: inline-block;
+  max-width: none;
+  color: inherit;
   line-height: 1;
-}
-.notation-native-symbol[data-roman="true"] { font-style: normal; }
-.notation-native-base { display: inline-block; }
-.notation-native-scripts {
-  display: inline-grid;
-  grid-template-rows: .52em .52em;
-  width: max-content;
-  margin-left: .035em;
-  align-self: center;
-  font-style: normal;
-  line-height: 1;
-}
-.notation-native-scripts sup,
-.notation-native-scripts sub {
-  position: static;
-  margin: 0;
-  padding: 0;
-  font-size: .52em;
-  line-height: 1;
-}
-.notation-native-scripts sup {
-  grid-row: 1;
-  align-self: end;
-  transform: translateY(-.08em);
-}
-.notation-native-scripts sub {
-  grid-row: 2;
-  align-self: start;
-  transform: translateY(.08em);
-}
-.notation-native-operator { white-space: nowrap; opacity: .82; }
-.notation-native-fraction {
-  display: inline-grid;
-  grid-template-rows: auto auto;
-  align-items: center;
-  justify-items: stretch;
-  min-width: 1.8em;
   vertical-align: middle;
+  white-space: nowrap;
 }
-.notation-native-fraction > span { display: flex; justify-content: center; gap: .12em; padding-inline: .12em; }
-.notation-native-fraction > span:first-child { padding-bottom: .06em; border-bottom: .04em solid currentColor; }
-.notation-native-fraction > span:last-child { padding-top: .06em; }
-.notation-native-reaction {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: .34em .5em;
+.notation-renderer .katex-display {
+  display: inline-block;
+  width: auto;
+  margin: 0;
+  color: inherit;
+  text-align: inherit;
 }
-.notation-native-reaction-side {
-  min-width: 0;
-  display: flex;
-  flex: 1 1 12em;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: center;
-  gap: .18em .38em;
+.notation-renderer .katex-display > .katex {
+  display: inline-block;
+  color: inherit;
+  text-align: inherit;
+  white-space: nowrap;
 }
-.notation-native-reaction-item { display: inline-flex; align-items: baseline; gap: .34em; white-space: nowrap; }
-.notation-native-reaction-plus,
-.notation-native-reaction-arrow { opacity: .72; }
-.notation-native-reaction-arrow { flex: 0 0 auto; font-family: ui-sans-serif, system-ui, sans-serif; }
-.notation-native-species { display: inline-flex; align-items: baseline; white-space: nowrap; font-style: normal; }
-.notation-native-formula sub {
-  font-size: .56em;
-  line-height: 0;
-  vertical-align: -.34em;
+.notation-renderer .katex {
+  color: inherit;
+  font-size: 1em;
+  line-height: 1.12;
 }
-.notation-native-formula sup {
-  font-size: .56em;
-  line-height: 0;
-  vertical-align: .64em;
-}
-.notation-native-coefficient { margin-right: .04em; }
-.notation-native-state { margin-left: .04em; font-size: .62em; opacity: .78; }
+.notation-renderer[data-notation-kind="equation"][data-notation-density="compact"] .notation-katex { font-size: .84em; }
+.notation-renderer[data-notation-kind="equation"][data-notation-density="dense"] .notation-katex { font-size: .66em; }
+.notation-renderer[data-notation-kind="reaction"][data-notation-density="compact"] .notation-katex { font-size: .76em; }
+.notation-renderer[data-notation-kind="reaction"][data-notation-density="dense"] .notation-katex { font-size: .58em; }
 .notation-invalid {
   display: inline-block;
   width: 100%;
@@ -136,3 +50,10 @@
 .reaction-object { width: 100%; }
 .equation-object .notation-renderer,
 .reaction-object .notation-renderer { margin-inline: auto; }
+@media (max-width: 760px) {
+  .notation-renderer[data-notation-kind="equation"][data-notation-density="compact"] .notation-katex { font-size: .74em; }
+  .notation-renderer[data-notation-kind="equation"][data-notation-density="dense"] .notation-katex { font-size: .54em; }
+  .notation-renderer[data-notation-kind="reaction"][data-notation-density="regular"] .notation-katex { font-size: .78em; }
+  .notation-renderer[data-notation-kind="reaction"][data-notation-density="compact"] .notation-katex { font-size: .56em; }
+  .notation-renderer[data-notation-kind="reaction"][data-notation-density="dense"] .notation-katex { font-size: .36em; }
+}

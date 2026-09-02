@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+import katex from "katex";
+import "katex/contrib/mhchem";
+import "katex/dist/katex.min.css";
 import "./notation.css";
 
 export type EquationSymbol = {
@@ -49,7 +51,16 @@ export type ReactionNotationSpec = {
   ariaLabel: string;
 };
 
+export type ReactionAnnotation = {
+  side: "reactant" | "product";
+  speciesIndex: number;
+  bondIndex: number;
+  label: string;
+};
+
 export type NotationSpec = EquationNotationSpec | ReactionNotationSpec;
+export type NotationAnnotation = EquationAnnotation | ReactionAnnotation;
+export type NotationDensity = "regular" | "compact" | "dense";
 
 export type CompiledNotation = {
   kind: NotationSpec["kind"];
@@ -63,11 +74,50 @@ const SUBSCRIPT = /^[A-Za-z0-9]{1,8}$/;
 const FORMULA = /^[A-Za-z0-9()[\].=+\-^]+$/;
 const MAX_EQUATION_PIECES = 14;
 const MAX_REACTION_SPECIES = 6;
+const MAX_ANNOTATION_LENGTH = 120;
 
 function checkedLabel(label: string) {
   const normalized = label.replace(/\s+/g, " ").trim();
   if (!normalized || normalized.length > 240) throw new Error("invalid-notation-label");
   return normalized;
+}
+
+function checkedAnnotationLabel(label: string) {
+  const normalized = label.replace(/\s+/g, " ").trim();
+  if (!normalized || normalized.length > MAX_ANNOTATION_LENGTH || /[\\{}$%#&_~^]/.test(normalized)) {
+    throw new Error("invalid-notation-annotation");
+  }
+  return normalized;
+}
+
+function wrapAnnotationLabel(label: string) {
+  const words = label.split(" ");
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (current && next.length > 28) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(current);
+  if (lines.length <= 3) return lines;
+  return [lines[0]!, lines[1]!, lines.slice(2).join(" ")];
+}
+
+function annotationExpression(label: string) {
+  const rows = wrapAnnotationLabel(checkedAnnotationLabel(label))
+    .map((line) => `\\scriptstyle\\textsf{${line}}`)
+    .join("\\\\");
+  return `\\mathclap{\\color{#9aaa9d}{\\substack{${rows}}}}`;
+}
+
+function annotatedExpression(expression: string, label: string) {
+  return `\\underbrace{${expression}}_{${annotationExpression(label)}}`;
 }
 
 function symbolExpression(piece: EquationSymbol) {
@@ -103,18 +153,33 @@ function compileSimplePieces(pieces: EquationSimplePiece[]) {
   };
 }
 
-export function compileEquation(spec: EquationNotationSpec): CompiledNotation {
+function compileEquationPiece(piece: EquationPiece) {
+  if (piece.kind === "symbol") return { expression: symbolExpression(piece), plainText: symbolPlain(piece) };
+  if (piece.kind === "operator") return { expression: OPERATOR_EXPRESSION[piece.value], plainText: piece.value };
+  const numerator = compileSimplePieces(piece.numerator);
+  const denominator = compileSimplePieces(piece.denominator);
+  return {
+    expression: `\\frac{${numerator.expression}}{${denominator.expression}}`,
+    plainText: `(${numerator.plainText}) / (${denominator.plainText})`,
+  };
+}
+
+export function compileEquation(spec: EquationNotationSpec, annotations: EquationAnnotation[] = []): CompiledNotation {
   if (!spec.pieces.length || spec.pieces.length > MAX_EQUATION_PIECES) throw new Error("invalid-equation-pieces");
-  const compiled = spec.pieces.map((piece) => {
-    if (piece.kind === "symbol") return { expression: symbolExpression(piece), plainText: symbolPlain(piece) };
-    if (piece.kind === "operator") return { expression: OPERATOR_EXPRESSION[piece.value], plainText: piece.value };
-    const numerator = compileSimplePieces(piece.numerator);
-    const denominator = compileSimplePieces(piece.denominator);
-    return {
-      expression: `\\frac{${numerator.expression}}{${denominator.expression}}`,
-      plainText: `(${numerator.plainText}) / (${denominator.plainText})`,
-    };
+  const annotationByPiece = new Map<number, string>();
+  for (const annotation of annotations) {
+    if (!Number.isInteger(annotation.pieceIndex) || annotation.pieceIndex < 0 || annotation.pieceIndex >= spec.pieces.length || annotationByPiece.has(annotation.pieceIndex)) {
+      throw new Error("invalid-equation-annotation-target");
+    }
+    annotationByPiece.set(annotation.pieceIndex, checkedAnnotationLabel(annotation.label));
+  }
+
+  const compiled = spec.pieces.map((piece, index) => {
+    const result = compileEquationPiece(piece);
+    const annotation = annotationByPiece.get(index);
+    return annotation ? { ...result, expression: annotatedExpression(result.expression, annotation) } : result;
   });
+
   return {
     kind: "equation",
     expression: compiled.map((piece) => piece.expression).join(" "),
@@ -131,136 +196,130 @@ function compileSpecies(species: ReactionSpecies) {
   return `${coefficient}${species.formula}${state}`;
 }
 
-export function compileReaction(spec: ReactionNotationSpec): CompiledNotation {
+function reactionBondPositions(formula: string) {
+  const positions: number[] = [];
+  for (let index = 0; index < formula.length; index += 1) {
+    if (formula[index] === "-" || formula[index] === "=") positions.push(index);
+  }
+  return positions;
+}
+
+function compileAnnotatedSpecies(species: ReactionSpecies, annotation: ReactionAnnotation) {
+  compileSpecies(species);
+  const positions = reactionBondPositions(species.formula);
+  if (!Number.isInteger(annotation.bondIndex) || annotation.bondIndex < 0 || annotation.bondIndex >= positions.length) {
+    throw new Error("invalid-reaction-annotation-target");
+  }
+
+  const position = positions[annotation.bondIndex]!;
+  const bond = species.formula[position]!;
+  const coefficient = species.coefficient && species.coefficient !== 1 ? `${species.coefficient}` : "";
+  const state = species.state ? `(${species.state})` : "";
+  const before = `${coefficient}${species.formula.slice(0, position)}`;
+  const after = `${species.formula.slice(position + 1)}${state}`;
+  const pieces = [
+    before ? `\\ce{${before}}` : "",
+    annotatedExpression(`\\mathord{${bond}}`, annotation.label),
+    after ? `\\ce{${after}}` : "",
+  ];
+  return pieces.join("");
+}
+
+function compileAnnotatedReaction(spec: ReactionNotationSpec, annotation: ReactionAnnotation) {
+  const side = annotation.side === "reactant" ? spec.reactants : spec.products;
+  if (!Number.isInteger(annotation.speciesIndex) || annotation.speciesIndex < 0 || annotation.speciesIndex >= side.length) {
+    throw new Error("invalid-reaction-annotation-target");
+  }
+
+  const compileSide = (species: ReactionSpecies[], sideName: ReactionAnnotation["side"]) => species
+    .map((item, index) => sideName === annotation.side && index === annotation.speciesIndex
+      ? compileAnnotatedSpecies(item, annotation)
+      : `\\ce{${compileSpecies(item)}}`)
+    .join(" + ");
+
+  const arrow = spec.arrow === "equilibrium" ? "\\rightleftharpoons" : "\\longrightarrow";
+  return `${compileSide(spec.reactants, "reactant")} ${arrow} ${compileSide(spec.products, "product")}`;
+}
+
+export function compileReaction(spec: ReactionNotationSpec, annotations: ReactionAnnotation[] = []): CompiledNotation {
   const totalSpecies = spec.reactants.length + spec.products.length;
   if (!spec.reactants.length || !spec.products.length || totalSpecies > MAX_REACTION_SPECIES) throw new Error("invalid-reaction-species");
+  if (annotations.length > 1) throw new Error("invalid-reaction-annotations");
+  spec.reactants.forEach(compileSpecies);
+  spec.products.forEach(compileSpecies);
+
   const reactants = spec.reactants.map(compileSpecies);
   const products = spec.products.map(compileSpecies);
   const arrow = spec.arrow === "equilibrium" ? "<=>" : "->";
   const source = `${reactants.join(" + ")} ${arrow} ${products.join(" + ")}`;
   return {
     kind: "reaction",
-    expression: `\\ce{${source}}`,
+    expression: annotations[0] ? compileAnnotatedReaction(spec, annotations[0]) : `\\ce{${source}}`,
     plainText: source.replace("<=>", "⇌").replace("->", "→"),
     ariaLabel: checkedLabel(spec.ariaLabel),
   };
 }
 
-export function compileNotation(spec: NotationSpec) {
-  return spec.kind === "equation" ? compileEquation(spec) : compileReaction(spec);
+function isReactionAnnotation(annotation: NotationAnnotation): annotation is ReactionAnnotation {
+  return "side" in annotation;
 }
 
-function NativeEquationSymbol({ piece }: { piece: EquationSymbol }) {
-  const scripted = piece.subscript !== undefined || piece.power !== undefined;
-  return <span className="notation-native-symbol" data-roman={piece.roman ? "true" : "false"} data-scripted={scripted ? "true" : "false"}>
-    <span className="notation-native-base">{piece.value}</span>
-    {scripted ? <span className="notation-native-scripts" aria-hidden="true">
-      {piece.power !== undefined ? <sup>{piece.power}</sup> : null}
-      {piece.subscript !== undefined ? <sub>{piece.subscript}</sub> : null}
-    </span> : null}
-  </span>;
-}
-
-function NativeSimplePiece({ piece }: { piece: EquationSimplePiece }) {
-  return piece.kind === "symbol"
-    ? <NativeEquationSymbol piece={piece} />
-    : <span className="notation-native-operator">{piece.value}</span>;
-}
-
-function NativeEquationPiece({ piece }: { piece: EquationPiece }) {
-  if (piece.kind !== "fraction") return <NativeSimplePiece piece={piece} />;
-  return <span className="notation-native-fraction">
-    <span>{piece.numerator.map((item, index) => <NativeSimplePiece key={index} piece={item} />)}</span>
-    <span>{piece.denominator.map((item, index) => <NativeSimplePiece key={index} piece={item} />)}</span>
-  </span>;
-}
-
-function formulaNodes(formula: string) {
-  const nodes: ReactNode[] = [];
-  let index = 0;
-  let key = 0;
-  while (index < formula.length) {
-    const char = formula[index]!;
-    if (char === "^") {
-      let end = index + 1;
-      while (end < formula.length && /[0-9+\-]/.test(formula[end]!)) end += 1;
-      const charge = formula.slice(index + 1, end);
-      if (charge) nodes.push(<sup key={key++}>{charge}</sup>);
-      index = end;
-      continue;
-    }
-    if (/\d/.test(char)) {
-      let end = index + 1;
-      while (end < formula.length && /\d/.test(formula[end]!)) end += 1;
-      nodes.push(<sub key={key++}>{formula.slice(index, end)}</sub>);
-      index = end;
-      continue;
-    }
-    let end = index + 1;
-    while (end < formula.length && !/[\d^]/.test(formula[end]!)) end += 1;
-    nodes.push(<span key={key++}>{formula.slice(index, end)}</span>);
-    index = end;
-  }
-  return nodes;
-}
-
-function NativeReactionSpecies({ species }: { species: ReactionSpecies }) {
-  return <span className="notation-native-species">
-    {species.coefficient && species.coefficient !== 1 ? <span className="notation-native-coefficient">{species.coefficient}</span> : null}
-    <span className="notation-native-formula">{formulaNodes(species.formula)}</span>
-    {species.state ? <span className="notation-native-state">({species.state})</span> : null}
-  </span>;
-}
-
-function NativeReactionSide({ species }: { species: ReactionSpecies[] }) {
-  return <span className="notation-native-reaction-side">
-    {species.map((item, index) => <span className="notation-native-reaction-item" key={`${item.formula}-${index}`}>
-      {index ? <span className="notation-native-reaction-plus">+</span> : null}
-      <NativeReactionSpecies species={item} />
-    </span>)}
-  </span>;
-}
-
-function annotationFor(index: number, annotations: EquationAnnotation[]) {
-  const candidate = annotations.find((annotation) => annotation.pieceIndex === index)?.label.replace(/\s+/g, " ").trim();
-  return candidate && candidate.length <= 120 ? candidate : undefined;
-}
-
-function NativeNotation({ spec, annotations }: { spec: NotationSpec; annotations: EquationAnnotation[] }) {
+export function compileNotation(spec: NotationSpec, annotations: NotationAnnotation[] = []) {
   if (spec.kind === "equation") {
-    return <span className="notation-native notation-native-equation">
-      {spec.pieces.map((piece, index) => {
-        const annotation = annotationFor(index, annotations);
-        return <span className={annotation ? "notation-native-annotated-piece" : "notation-native-equation-piece"} key={index}>
-          <span className="notation-native-equation-piece"><NativeEquationPiece piece={piece} /></span>
-          {annotation ? <span className="notation-native-annotation">{annotation}</span> : null}
-        </span>;
-      })}
-    </span>;
+    if (annotations.some(isReactionAnnotation)) throw new Error("invalid-notation-annotation-kind");
+    return compileEquation(spec, annotations as EquationAnnotation[]);
   }
-  return <span className="notation-native notation-native-reaction">
-    <NativeReactionSide species={spec.reactants} />
-    <span className="notation-native-reaction-arrow">{spec.arrow === "equilibrium" ? "⇌" : "→"}</span>
-    <NativeReactionSide species={spec.products} />
-  </span>;
+  if (annotations.some((annotation) => !isReactionAnnotation(annotation))) throw new Error("invalid-notation-annotation-kind");
+  return compileReaction(spec, annotations as ReactionAnnotation[]);
+}
+
+export function notationDensity(compiled: CompiledNotation): NotationDensity {
+  const length = compiled.plainText.replace(/\s/g, "").length;
+  if (compiled.kind === "equation") {
+    if (length <= 20) return "regular";
+    return length <= 34 ? "compact" : "dense";
+  }
+  if (length <= 28) return "regular";
+  return length <= 46 ? "compact" : "dense";
+}
+
+function renderNotation(expression: string, displayMode: boolean) {
+  return katex.renderToString(expression, {
+    displayMode,
+    throwOnError: true,
+    strict: "error",
+    trust: false,
+    output: "htmlAndMathml",
+    maxSize: 10,
+    maxExpand: 100,
+  });
 }
 
 export function NotationRenderer({ spec, annotations = [], displayMode = true, className = "" }: {
   spec: NotationSpec;
-  annotations?: EquationAnnotation[];
+  annotations?: NotationAnnotation[];
   displayMode?: boolean;
   className?: string;
 }) {
   let compiled: CompiledNotation | undefined;
-  try { compiled = compileNotation(spec); } catch { compiled = undefined; }
+  let markup: string | undefined;
+  try {
+    compiled = compileNotation(spec, annotations);
+    markup = renderNotation(compiled.expression, displayMode);
+  } catch {
+    markup = undefined;
+  }
 
   return <span
     className={`notation-renderer ${className}`.trim()}
     data-display={displayMode ? "block" : "inline"}
     data-notation-kind={spec.kind}
-    data-notation-status={compiled ? "native" : "fallback"}
+    data-notation-density={compiled ? notationDensity(compiled) : "regular"}
+    data-notation-status={markup ? "katex" : "fallback"}
     aria-label={compiled?.ariaLabel ?? spec.ariaLabel}
   >
-    {compiled ? <NativeNotation spec={spec} annotations={annotations} /> : <span className="notation-invalid">{spec.ariaLabel}</span>}
+    {markup
+      ? <span className="notation-katex" aria-hidden="true" dangerouslySetInnerHTML={{ __html: markup }} />
+      : <span className="notation-invalid">{compiled?.plainText ?? spec.ariaLabel}</span>}
   </span>;
 }

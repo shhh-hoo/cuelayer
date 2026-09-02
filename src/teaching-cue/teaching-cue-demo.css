@@ -87,7 +87,7 @@
   min-width: 0;
   width: 100%;
   max-width: 100%;
-  font-size: clamp(31px, 4.7vw, 66px);
+  font-size: clamp(30px, 4.2vw, 58px);
   line-height: 1;
   text-align: center;
 }
@@ -112,9 +112,9 @@
 .presentation-overlay .definition-meaning { grid-column: 1 / -1; }
 .presentation-overlay .causal-chain { justify-items: start; gap: 2px; font-size: clamp(15px, 1.6vw, 22px); text-align: left; }
 .presentation-overlay .equation-object { font-size: clamp(24px, 2.7vw, 38px); text-align: left; }
-.presentation-overlay .equation-object .notation-native-equation { justify-content: flex-start; }
-.presentation-overlay .equation-object .notation-native-annotation { font-size: 10px; }
+.presentation-overlay .equation-object .notation-renderer { text-align: left; }
 .presentation-overlay .reaction-object { font-size: clamp(17px, 1.9vw, 26px); text-align: left; }
+.presentation-overlay .reaction-object .notation-renderer { text-align: left; }
 .teaching-cue-demo-principles { width: min(1240px, 100%); margin: 12px auto 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .teaching-cue-demo-principles article { padding: 14px; border: 1px solid #d2d7d0; border-radius: 14px; background: #f7f9f4; }
 .teaching-cue-demo-principles strong { font-size: 13px; color: #304037; }
@@ -131,4 +131,5 @@
   .teaching-cue-demo-principles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .teaching-cue-demo-slide p { width: 100%; }
   .equation-object { font-size: clamp(36px, 10vw, 58px); }
+  .reaction-object { font-size: clamp(24px, 7vw, 30px); }
 }
