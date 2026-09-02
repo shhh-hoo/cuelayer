@@ -10,7 +10,7 @@ vi.mock("openai", () => ({
   },
 }));
 
-import { createOpenAIPlannerRequest, requestOpenAIPlannerResult } from "./openai-planner";
+import { createOpenAIPlannerRequest, createOpenAIPlannerTraceRequest, requestOpenAIPlannerResult } from "./openai-planner";
 
 const input: PlannerInput = {
   recentSpeech: [{ id: "speech-span-0", text: "temperature increases", words: [{ text: "temperature", startMs: 0, endMs: 100 }, { text: "increases", startMs: 110, endMs: 200 }] }],
@@ -60,5 +60,12 @@ describe("OpenAI planner boundary", () => {
     expect(request.input[1].content).toBe(JSON.stringify(input));
     expect(request.text.format).toBeDefined();
     expect(mocks.parse.mock.calls[0]?.[1]).toEqual({ signal: controller.signal });
+  });
+
+  it("keeps the static policy out of each durable planner request fact", () => {
+    const request = createOpenAIPlannerRequest(input, "gpt-5.6-luna");
+    const trace = createOpenAIPlannerTraceRequest(input, request);
+    expect(JSON.stringify(trace)).not.toContain("RELATE requires two or more distinct targets");
+    expect(trace).toMatchObject({ model: "gpt-5.6-luna", plannerInput: input, policy: { sourceHash: expect.any(String), sourceFiles: expect.any(Array) } });
   });
 });

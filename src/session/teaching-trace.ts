@@ -32,9 +32,9 @@ export type PlannerInputSummary = {
 };
 
 export type TeachingTraceEvent =
-  | TraceBase & { stage: "asr"; decision: "partial" | "final" | "error"; transcript?: string; isFinal: boolean; errorCode?: string }
+  | TraceBase & { stage: "asr"; decision: "partial" | "final" | "punctuation" | "error"; transcript?: string; isFinal: boolean; errorCode?: string }
   | TraceBase & { stage: "commit"; decision: "committed" | "rejected"; transcript: string }
-  | TraceBase & { stage: "span"; decision: "opened" | "appended" | "closed"; transcript: string; sourceFinalIds: string[] }
+  | TraceBase & { stage: "span"; decision: "opened" | "appended" | "closed" | "punctuation_attached"; transcript: string; sourceFinalIds: string[] }
   | TraceBase & { stage: "planner_gate"; decision: "run" | "skip"; input?: PlannerInputSummary }
   | TraceBase & { stage: "planner"; decision: "started" | "completed" | "failed" | "aborted" | "stale" | "structured_output_invalid" | "validation_degraded"; input?: PlannerInputSummary; output?: RuntimeDecision }
   | TraceBase & { stage: "compile"; decision: "emit" | "no_emit" | "failed"; displayIntent?: DisplayIntent; learnerIntent?: LearnerIntent; effectCue?: EffectCue }

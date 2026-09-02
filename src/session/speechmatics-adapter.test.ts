@@ -27,8 +27,15 @@ describe("Speechmatics adapter", () => {
     expect(event).toMatchObject({ kind: "provisional", text: "所以这里是 rate determining" });
   });
 
-  it("preserves transcript whitespace exactly as received for durable diagnosis", () => {
+  it("keeps lexical text product-safe while whitespace-only evidence has no product event", () => {
     const event = speechEventFromSpeechmatics({ message: "AddPartialTranscript", metadata: { transcript: "  noise fragment  " }, results: [] } as never);
-    expect(event).toMatchObject({ kind: "provisional", text: "  noise fragment  ", provider: { message: "AddPartialTranscript", resultCount: 0 } });
+    expect(event).toMatchObject({ kind: "provisional", text: "noise fragment", provider: { message: "AddPartialTranscript", resultCount: 0 } });
+    expect(speechEventFromSpeechmatics({ message: "AddTranscript", metadata: { transcript: "   " }, results: [] } as never)).toBeUndefined();
+  });
+
+  it("types punctuation-only results separately from lexical finals", () => {
+    const event = speechEventFromSpeechmatics({ message: "AddTranscript", metadata: { transcript: "." }, results: [{ type: "punctuation", start_time: 1, end_time: 1, alternatives: [{ content: ".", confidence: 0.99 }] }] } as never);
+    expect(event).toMatchObject({ kind: "punctuation", text: ".", attachesTo: "previous", isEos: true });
+    expect(speechEventFromSpeechmatics({ message: "AddTranscript", metadata: { transcript: "." }, results: [] } as never)).toMatchObject({ kind: "punctuation" });
   });
 });

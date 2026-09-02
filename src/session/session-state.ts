@@ -1,4 +1,4 @@
-import { applySpeechEvent, closeCanonicalSpeechSpan, createInitialCanonicalSpeechState, isPlannerCheckpoint } from "./canonical-speech";
+import { applySpeechEvent, attachPunctuationToCanonical, closeCanonicalSpeechSpan, createInitialCanonicalSpeechState, isPlannerCheckpoint } from "./canonical-speech";
 import { compileCaptionEpisode } from "../planner/caption-compiler";
 import { activateCaption, createInitialCaptionRuntime, expireCaption, expireLearnerCue, showLearnerCue, toggleCaptionLock } from "../planner/caption-runtime";
 import { fallbackFromGroundedSpeech, validateRuntimeDecision } from "../planner/validation";
@@ -65,18 +65,36 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       return { ...state, speech: { ...state.speech, status: "ready" } };
     case "speech-event": {
       const now = action.now ?? 0;
+      if (action.event.kind !== "error" && action.event.kind !== "punctuation" && !action.event.text.trim()) {
+        const eventCount = action.event.kind === "provisional"
+          ? { providerEvents: state.speech.debug.providerEvents + 1, provisionalEvents: state.speech.debug.provisionalEvents + 1 }
+          : { providerEvents: state.speech.debug.providerEvents + 1, committedEvents: state.speech.debug.committedEvents + 1 };
+        return { ...state, speech: { ...state.speech, debug: { ...state.speech.debug, ...eventCount } } };
+      }
       const finalId = `provider-final-${state.speech.canonical.finals.length}`;
       const providerSequence = action.event.kind === "error" ? state.speech.debug.providerEvents : action.event.provider?.sequence ?? state.speech.debug.providerEvents;
       const speechEventId = action.event.kind === "error" ? `provider-event-${action.runId}-${providerSequence}` : action.event.provider?.messageId ?? `provider-event-${action.runId}-${providerSequence}`;
       const traceId = traceIdFor(action.runId, speechEventId);
       const asrEvent: TeachingTraceEventDraft = action.event.kind === "error"
         ? { traceId, stage: "asr", timestamp: now, speechEventId, decision: "error", isFinal: false, reason: action.event.message, errorCode: action.event.code }
+        : action.event.kind === "punctuation"
+          ? { traceId, stage: "asr", timestamp: now, speechEventId, decision: "punctuation", transcript: action.event.text, isFinal: false, provider: { ...action.event.provider, sequence: providerSequence } }
         : { traceId, stage: "asr", timestamp: now, speechEventId, finalId: action.event.kind === "committed" ? finalId : undefined, decision: action.event.kind === "committed" ? "final" : "partial", transcript: action.event.text, isFinal: action.event.kind === "committed", provider: { ...action.event.provider, sequence: providerSequence } };
       let nextState = withTrace(state, [asrEvent]);
       if (action.event.kind === "error") {
         if (state.speech.debug.runId !== action.runId || state.status === "idle" || state.status === "ended") return nextState;
         if (state.speech.status === "starting" || state.speech.status === "ready" || state.speech.status === "paused") return { ...nextState, speech: { ...state.speech, status: "error", error: { code: action.event.code, message: action.event.message }, debug: { ...state.speech.debug, lastError: { code: action.event.code, message: action.event.message } } } };
         return nextState;
+      }
+      if (action.event.kind === "punctuation") {
+        const eventCount = { providerEvents: state.speech.debug.providerEvents + 1 };
+        const unavailable = state.speech.debug.runId !== action.runId || state.status !== "active" || state.speech.status !== "ready";
+        const attachment = unavailable
+          ? { state: state.speech.canonical, reason: "no_compatible_lexical_span" as const }
+          : attachPunctuationToCanonical(state.speech.canonical, action.event, now);
+        nextState = { ...nextState, speech: { ...state.speech, canonical: attachment.state, debug: { ...state.speech.debug, ...eventCount } } };
+        if (!attachment.span) return withTrace(nextState, [{ traceId, stage: "span", timestamp: now, speechEventId, decision: "punctuation_attached", reason: attachment.reason, transcript: action.event.text, sourceFinalIds: [] }]);
+        return withTrace(nextState, [{ traceId: spanTraceIdFor(action.runId, attachment.span.id, attachment.span.revision), stage: "span", timestamp: now, speechEventId, spanId: attachment.span.id, spanRevision: attachment.span.revision, decision: "punctuation_attached", reason: attachment.reason, transcript: attachment.span.text, sourceFinalIds: attachment.span.sourceFinalIds }]);
       }
       const rejectionReason = state.speech.debug.runId !== action.runId
         ? "stale_speech_run"
@@ -96,10 +114,6 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         ? { providerEvents: state.speech.debug.providerEvents + 1, provisionalEvents: state.speech.debug.provisionalEvents + 1 }
         : { providerEvents: state.speech.debug.providerEvents + 1, committedEvents: state.speech.debug.committedEvents + 1 };
       const normalizedText = action.event.text.trim();
-      if (!normalizedText) {
-        const emptyState = { ...nextState, speech: { ...state.speech, debug: { ...state.speech.debug, ...eventCount } } };
-        return action.event.kind === "committed" ? withTrace(emptyState, [{ traceId, stage: "commit", timestamp: now, speechEventId, commitId: finalId, finalId, decision: "rejected", reason: "empty_transcript", transcript: action.event.text }]) : emptyState;
-      }
       const update = applySpeechEvent(state.speech.canonical, { ...action.event, text: normalizedText }, now);
       if (action.event.kind === "committed") {
         nextState = withTrace(nextState, [

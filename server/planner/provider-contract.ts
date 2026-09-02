@@ -70,6 +70,18 @@ export function plannerResponseRequest(input: PlannerInput, model: string, optio
   };
 }
 
+/** Trace only dynamic planner evidence; the static policy is reconstructible from its committed source hash. */
+export function plannerTraceRequest(input: PlannerInput, request: ReturnType<typeof plannerResponseRequest>) {
+  return {
+    model: request.model,
+    reasoning: request.reasoning,
+    temperature: request.temperature,
+    maxOutputTokens: request.max_output_tokens,
+    policy: { sourceHash: CUECAPTION_POLICY_SOURCE_HASH, sourceFiles: CUECAPTION_POLICY_SOURCE_FILES },
+    plannerInput: input,
+  };
+}
+
 export function normalizeRuntimeDecision(parsed: z.infer<typeof runtimeDecisionSchema>): RuntimeDecision {
   const learner = parsed.learner.kind === "NONE" || parsed.learner.target
     ? parsed.learner

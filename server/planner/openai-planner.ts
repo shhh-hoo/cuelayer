@@ -1,11 +1,15 @@
 import OpenAI from "openai";
 import type { PlannerInput, RuntimeDecision } from "../../src/planner/contracts.ts";
-import { normalizeProviderUsage, normalizeRuntimeDecision, plannerResponseRequest, type PlannerProviderResult } from "./provider-contract.ts";
+import { normalizeProviderUsage, normalizeRuntimeDecision, plannerResponseRequest, plannerTraceRequest, type PlannerProviderResult } from "./provider-contract.ts";
 
 export type OpenAIPlannerRequestOptions = { signal?: AbortSignal; serviceTier?: "default" | "priority" };
 
 export function createOpenAIPlannerRequest(input: PlannerInput, model: string, options?: OpenAIPlannerRequestOptions) {
   return plannerResponseRequest(input, model, options);
+}
+
+export function createOpenAIPlannerTraceRequest(input: PlannerInput, request: ReturnType<typeof createOpenAIPlannerRequest>) {
+  return plannerTraceRequest(input, request);
 }
 
 /** OpenAI Responses structured output transport; CueLayer semantics remain in the shared contract. */

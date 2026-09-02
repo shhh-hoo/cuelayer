@@ -19,6 +19,7 @@ export type SpeechProviderMetadata = {
 export type SpeechEvent =
   | { kind: "provisional"; text: string; words: SpeechWord[]; provider?: SpeechProviderMetadata }
   | { kind: "committed"; text: string; words: SpeechWord[]; provider?: SpeechProviderMetadata }
+  | { kind: "punctuation"; text: string; attachesTo: "previous"; isEos: boolean; provider?: SpeechProviderMetadata }
   | { kind: "error"; code: string; message: string };
 
 export type ProviderFinal = {

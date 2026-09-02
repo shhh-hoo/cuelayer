@@ -2,22 +2,29 @@ import type { AddPartialTranscript, AddTranscript, ErrorType, RealtimeServerMess
 import type { SpeechEvent, SpeechWord } from "./speech-types";
 
 type TranscriptMessage = AddPartialTranscript | AddTranscript;
+const PUNCTUATION_ONLY = /^[\p{P}\p{S}]+$/u;
 
 function transcriptEvent(message: TranscriptMessage, kind: "provisional" | "committed"): SpeechEvent | undefined {
-  if (typeof message.metadata?.transcript !== "string") return undefined;
+  const rawText = message.metadata?.transcript;
+  const text = typeof rawText === "string" ? rawText.trim() : undefined;
+  if (!text) return undefined;
   const timestamps = message.results.flatMap((result) => [result.start_time, result.end_time]).filter(Number.isFinite);
+  const provider = {
+    message: message.message,
+    format: message.format,
+    channel: message.channel,
+    resultCount: message.results.length,
+    startMs: timestamps.length ? Math.round(Math.min(...timestamps) * 1000) : undefined,
+    endMs: timestamps.length ? Math.round(Math.max(...timestamps) * 1000) : undefined,
+  } as const;
+  if ((message.results.length > 0 && message.results.every((result) => result.type === "punctuation")) || PUNCTUATION_ONLY.test(text)) {
+    return { kind: "punctuation", text, attachesTo: "previous", isEos: /[.!?。！？…][\s'’"”)}\]）】》」』]*$/u.test(text), provider };
+  }
   return {
     kind,
-    text: message.metadata.transcript,
+    text,
     words: wordsFromSpeechmatics(message),
-    provider: {
-      message: message.message,
-      format: message.format,
-      channel: message.channel,
-      resultCount: message.results.length,
-      startMs: timestamps.length ? Math.round(Math.min(...timestamps) * 1000) : undefined,
-      endMs: timestamps.length ? Math.round(Math.max(...timestamps) * 1000) : undefined,
-    },
+    provider,
   };
 }
 

@@ -53,7 +53,7 @@ export function SessionPage() {
   const onSpeechReady = useCallback((runId: number) => dispatch({ type: "speech-ready", runId }), []);
   const onSpeechTrace = useCallback((event: Omit<DurableTraceEventDraft, "id" | "timestamp" | "source">) => { void appendTrace(event); }, [appendTrace]);
 
-  const { start: startSpeechmatics, stop: stopSpeechmatics, pause: pauseSpeechmatics, resume: resumeSpeechmatics } = useSpeechmaticsSession({
+  const { start: startSpeechmatics, stop: stopSpeechmatics, pause: pauseSpeechmatics, resume: resumeSpeechmatics, diagnostics: speechDiagnostics } = useSpeechmaticsSession({
     traceSessionId: traceIdentity.sessionId,
     tracePageInstanceId: durableTrace.pageInstanceId,
     onServerTraceEvents: durableTrace.append,
@@ -227,6 +227,22 @@ export function SessionPage() {
         <div className="session-panel-actions"><button className="choose-presentation-button" type="button" disabled={state.presentation.status === "starting"} onClick={() => void (state.status === "ended" ? startAnotherSession() : startPresentation())}>{state.presentation.status === "starting" ? "Choosing presentation…" : state.status === "ended" ? "Start another session" : "Choose presentation"}</button>{sessionIsRunning && state.presentation.status !== "starting" ? <button className="end-session-link" type="button" onClick={() => void endSession()}>End session</button> : null}</div>
       </>}
       {state.speech.error ? <p className="session-error" role="alert">{state.speech.error.message}</p> : null}
+      {showSpeechDebug ? <section className="speech-diagnostic-panel" aria-label="Speech diagnostics">
+        <strong>Speech diagnostics</strong>
+        <p>Input permission: {speechDiagnostics.permissionState} · selected: {speechDiagnostics.selectedDeviceLabel}</p>
+        {speechDiagnostics.permissionState === "prompt" && speechDiagnostics.requestPermission ? <button type="button" onClick={() => void speechDiagnostics.requestPermission?.()}>Allow microphone to inspect inputs</button> : null}
+        {speechDiagnostics.permissionState === "granted" ? <label>Input device <select value={speechDiagnostics.selectedDeviceId ?? ""} onChange={(event) => speechDiagnostics.setSelectedDeviceId(event.target.value || undefined)}>
+          <option value="">Browser default input</option>
+          {speechDiagnostics.deviceList.map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label}</option>)}
+        </select></label> : null}
+        {speechDiagnostics.latestPcmWindow ? <p>PCM · {speechDiagnostics.latestPcmWindow.classification} · peak {speechDiagnostics.latestPcmWindow.peakAbsolute.toFixed(3)} · RMS {speechDiagnostics.latestPcmWindow.rmsDbfs.toFixed(1)} dBFS · {speechDiagnostics.latestPcmWindow.sampleCount} samples</p> : <p>PCM level appears after live audio starts.</p>}
+        <div className="speech-diagnostic-actions">
+          <button type="button" disabled={state.speech.status !== "ready" || speechDiagnostics.soundCheckState.status === "capturing"} onClick={speechDiagnostics.startSoundCheck}>5-second local sound check</button>
+          <button type="button" disabled={speechDiagnostics.soundCheckState.status !== "ready"} onClick={speechDiagnostics.playSoundCheck}>Play local check</button>
+          <button type="button" disabled={speechDiagnostics.soundCheckState.status === "idle"} onClick={speechDiagnostics.closeSoundCheck}>Discard local check</button>
+        </div>
+        <p>Local check: {speechDiagnostics.soundCheckState.status} · {speechDiagnostics.soundCheckState.sampleCount} samples. It stays only in this tab’s memory and is discarded on reload or close.</p>
+      </section> : null}
       {showSpeechDebug && state.speech.status !== "off" ? <p className="session-debug">Speech debug · run {state.speech.debug.runId} · partials {state.speech.debug.provisionalEvents} · raw finals {state.speech.canonical.finals.length} · spans {state.speech.canonical.spans.length}{state.speech.debug.lastError ? ` · last error: ${state.speech.debug.lastError.code}` : ""}</p> : null}
       {showSpeechDebug && state.speech.status !== "off" ? <p className="session-debug">Planner debug · {state.planner.status} · request {state.planner.requestId}{state.planner.inFlightRequestId ? ` · in flight ${state.planner.inFlightRequestId}` : ""}{state.planner.latestDecision ? ` · ${state.planner.latestDecision.display.kind}/${state.planner.latestDecision.learner.kind}` : ""}{state.planner.lastValidationError ? ` · validation: ${state.planner.lastValidationError}` : state.planner.lastError ? ` · error: ${state.planner.lastError}` : ""}</p> : null}
       {showSpeechDebug ? <TeachingTraceDrawer sessionId={durableTrace.sessionId} events={durableTrace.events} status={durableTrace.status} error={durableTrace.error} pendingCount={durableTrace.pendingCount} onReload={() => void durableTrace.reload()} onExport={() => void durableTrace.exportJsonl()} onInject={developmentDebug ? injectSemanticCue : undefined} /> : null}

@@ -100,9 +100,34 @@ function closesForTerminalPunctuation(text: string) {
   return TERMINAL_PUNCTUATION.test(text.trim());
 }
 
+export type PunctuationAttachment = {
+  state: CanonicalSpeechState;
+  span?: CanonicalSpeechSpan;
+  reason: "attached_to_previous_lexical_span" | "no_compatible_lexical_span";
+};
+
+/** Keeps provider finals immutable while their later punctuation can close an existing lexical span. */
+export function attachPunctuationToCanonical(state: CanonicalSpeechState, event: Extract<SpeechEvent, { kind: "punctuation" }>, now = 0): PunctuationAttachment {
+  const priorFinal = state.finals.at(-1);
+  const index = state.spans.length - 1;
+  const priorSpan = state.spans[index];
+  if (!priorFinal || !priorSpan || !priorSpan.sourceFinalIds.includes(priorFinal.id)) return { state, reason: "no_compatible_lexical_span" };
+  const shouldClose = event.isEos || closesForTerminalPunctuation(event.text);
+  const span: CanonicalSpeechSpan = {
+    ...priorSpan,
+    text: joinTranscript(priorSpan.text, event.text),
+    revision: priorSpan.revision + 1,
+    updatedAtMs: now,
+    ...(shouldClose && priorSpan.status === "open" ? { status: "closed", closeReason: "terminal_punctuation" as const } : {}),
+  };
+  const spans = [...state.spans];
+  spans[index] = span;
+  return { state: { ...state, spans }, span, reason: "attached_to_previous_lexical_span" };
+}
+
 /** Provider finals remain immutable provenance; deterministic spans own product segmentation. */
 export function applySpeechEvent(state: CanonicalSpeechState, event: SpeechEvent, now = 0): CanonicalSpeechUpdate {
-  if (event.kind === "error") return { state, changes: [] };
+  if (event.kind === "error" || event.kind === "punctuation") return { state, changes: [] };
   if (event.kind === "provisional") return { state: { ...state, provisional: provisionalFrom(event, state.finals.length) }, changes: [] };
 
   const final: ProviderFinal = { id: `provider-final-${state.finals.length}`, text: event.text, words: event.words, committedAtMs: now };

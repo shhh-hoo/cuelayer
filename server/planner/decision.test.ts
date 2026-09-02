@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlannerInput, RuntimeDecision } from "../../src/planner/contracts";
 
 const mocks = vi.hoisted(() => ({ openAI: vi.fn(), buildRequest: vi.fn(), trace: vi.fn(), traceResponse: vi.fn(), headers: vi.fn(() => ({ sessionId: "session-api-test", apiRequestId: "api-test", plannerRequestId: "planner-test" } as { sessionId?: string; apiRequestId?: string; plannerRequestId?: string })), traceDelivery: { events: [] as unknown[] } }));
-vi.mock("./openai-planner.ts", () => ({ requestOpenAIPlannerResult: mocks.openAI, createOpenAIPlannerRequest: mocks.buildRequest }));
+vi.mock("./openai-planner.ts", () => ({ requestOpenAIPlannerResult: mocks.openAI, createOpenAIPlannerRequest: mocks.buildRequest, createOpenAIPlannerTraceRequest: (_input: unknown, request: unknown) => ({ traced: request }) }));
 vi.mock("../trace/api-trace.ts", () => ({
   traceHeaders: mocks.headers,
   traceExternalCall: async (options: { responsePayload(value: unknown): unknown }, call: () => Promise<unknown>) => {
@@ -31,7 +31,7 @@ describe("live planner OpenAI contract", () => {
     await handler({ method: "POST", body: input }, captured.response);
     const providerRequest = mocks.buildRequest.mock.results[0]?.value;
     expect(mocks.openAI).toHaveBeenCalledWith(providerRequest, "openai-key", { signal: undefined });
-    expect(mocks.trace).toHaveBeenCalledWith(expect.objectContaining({ provider: "openai", model: "gpt-5.6-luna", operation: "teaching_planner.decision", requestPayload: providerRequest }));
+    expect(mocks.trace).toHaveBeenCalledWith(expect.objectContaining({ provider: "openai", model: "gpt-5.6-luna", operation: "teaching_planner.decision", requestPayload: { traced: providerRequest } }));
     expect(captured.result()).toEqual({ code: 200, body: { decision, traceEvents: [] } });
   });
 

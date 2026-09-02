@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { activateBrowserAudio, createSpeechmaticsConfig, requestRealtimeToken, speechStartFailureFrom } from "./use-speechmatics-session";
+import { activateBrowserAudio, createRecordingStartOptions, createSpeechmaticsConfig, requestRealtimeToken, speechStartFailureFrom } from "./use-speechmatics-session";
 
 describe("Speechmatics configuration", () => {
   afterEach(() => vi.unstubAllGlobals());
   it("uses the actual browser audio sample rate for raw PCM", () => {
     expect(createSpeechmaticsConfig(48_000).audio_format.sample_rate).toBe(48_000);
+  });
+
+  it("passes an explicit selected device to every official recorder start", () => {
+    const selection = "chosen-device";
+    expect(createRecordingStartOptions(selection)).toMatchObject({ deviceId: selection, recordingOptions: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    expect(createRecordingStartOptions(selection)).toEqual(createRecordingStartOptions(selection));
   });
 
   it("keeps microphone and browser-audio startup failures distinct", () => {

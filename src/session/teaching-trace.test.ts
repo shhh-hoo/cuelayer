@@ -69,7 +69,7 @@ describe("development teaching trace", () => {
     expect(state.trace.events.at(-1)).toMatchObject({ stage: "span", decision: "closed", spanId: "speech-span-0", spanRevision: 3, reason: "meaningful_pause", sourceFinalIds: ["provider-final-0", "provider-final-1"] });
   });
 
-  it("preserves partial → revision → final ordering and rejects an empty noise-only final", () => {
+  it("preserves partial → revision → final ordering and excludes empty noise-only provider windows", () => {
     let state = sessionReducer(createInitialSessionState(true), { type: "begin-speech", runId: 4 });
     state = sessionReducer(state, { type: "speech-ready", runId: 4 });
     state = sessionReducer(state, { type: "speech-event", runId: 4, event: { kind: "provisional", text: "  activa", words: [], provider: { message: "AddPartialTranscript", resultCount: 1, sequence: 12 } }, now: 10 });
@@ -81,10 +81,38 @@ describe("development teaching trace", () => {
       ["partial", "  activa", "provider-event-4-12"],
       ["partial", "activation ener", "provider-event-4-13"],
       ["final", "activation energy", "provider-event-4-14"],
-      ["final", "   ", "provider-event-4-15"],
     ]);
-    expect(state.trace.events.at(-1)).toMatchObject({ stage: "commit", decision: "rejected", reason: "empty_transcript", transcript: "   " });
+    expect(state.trace.events.some((event) => event.stage === "commit" && event.decision === "rejected" && event.reason === "empty_transcript")).toBe(false);
     expect(state.speech.canonical.finals).toHaveLength(1);
+  });
+
+  it("does not create product ASR events or canonical content for empty transcript input", () => {
+    let state = sessionReducer(createInitialSessionState(true), { type: "begin-speech", runId: 9 });
+    state = sessionReducer(state, { type: "speech-ready", runId: 9 });
+    state = sessionReducer(state, { type: "speech-event", runId: 9, event: { kind: "provisional", text: "  ", words: [] }, now: 10 });
+    state = sessionReducer(state, { type: "speech-event", runId: 9, event: { kind: "committed", text: "\t", words: [] }, now: 20 });
+    expect(state.trace.events).toEqual([]);
+    expect(state.speech.canonical.finals).toEqual([]);
+    expect(state.speech.canonical.spans).toEqual([]);
+  });
+
+  it("attaches punctuation to preceding lexical content without a standalone final, commit, or planner event", () => {
+    let state = committedState();
+    state = sessionReducer(state, { type: "speech-event", runId: 1, event: { kind: "punctuation", text: ".", attachesTo: "previous", isEos: true, provider: { message: "AddTranscript", resultCount: 1, sequence: 2 } }, now: 120 });
+    expect(state.speech.canonical.finals).toHaveLength(1);
+    expect(state.speech.canonical.spans[0]).toMatchObject({ text: "temperature increases.", status: "closed" });
+    expect(state.trace.events.filter((event) => event.stage === "asr").map((event) => event.decision)).toEqual(["final", "punctuation"]);
+    expect(state.trace.events.filter((event) => event.stage === "commit")).toHaveLength(1);
+    expect(state.trace.events.some((event) => event.stage === "planner" || event.stage === "planner_gate")).toBe(false);
+  });
+
+  it("deterministically ignores punctuation when there is no preceding lexical span", () => {
+    let state = sessionReducer(createInitialSessionState(true), { type: "begin-speech", runId: 10 });
+    state = sessionReducer(state, { type: "speech-ready", runId: 10 });
+    state = sessionReducer(state, { type: "speech-event", runId: 10, event: { kind: "punctuation", text: ".", attachesTo: "previous", isEos: true, provider: { message: "AddTranscript", resultCount: 1 } }, now: 10 });
+    expect(state.speech.canonical.spans).toEqual([]);
+    expect(state.trace.events.at(-1)).toMatchObject({ stage: "span", decision: "punctuation_attached", reason: "no_compatible_lexical_span" });
+    expect(state.trace.events.some((event) => event.stage === "planner" || event.stage === "planner_gate")).toBe(false);
   });
 
   it("keeps durable correlation from provider final through commit, span, planner, cue, and render", () => {
