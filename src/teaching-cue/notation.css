@@ -1,5 +1,6 @@
 .notation-renderer {
   position: relative;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
   color: inherit;
@@ -7,11 +8,10 @@
 }
 .notation-renderer[data-display="block"] {
   display: block;
-  width: 100%;
   min-height: 1em;
   text-align: center;
 }
-.notation-renderer[data-display="inline"] { display: inline-block; }
+.notation-renderer[data-display="inline"] { display: inline-block; width: auto; }
 .notation-katex-target { display: inline-block; }
 .notation-renderer[data-display="block"] .notation-katex-target {
   position: absolute;
@@ -22,17 +22,73 @@
   visibility: hidden;
 }
 .notation-renderer[data-display="block"][data-notation-status="ready"] .notation-katex-target { visibility: visible; }
+.notation-renderer[data-display="inline"] .notation-katex-target { visibility: hidden; }
 .notation-renderer[data-display="inline"][data-notation-status="ready"] .notation-katex-target { visibility: visible; }
-.notation-renderer .katex-display { margin: 0; }
 .notation-renderer .katex { font-size: 1em; }
 .notation-fallback {
   display: inline-block;
+  width: 100%;
   max-width: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: .72em;
-  line-height: 1.22;
-  opacity: .82;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  font-family: Cambria, "Times New Roman", Georgia, serif;
+  font-size: .82em;
+  line-height: 1.16;
+  opacity: .94;
 }
-.notation-renderer[data-display="block"] .notation-fallback { width: 100%; text-align: center; }
+.notation-native {
+  width: 100%;
+  max-width: 100%;
+}
+.notation-native-equation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: .12em .28em;
+}
+.notation-native-symbol { display: inline-flex; align-items: baseline; white-space: nowrap; font-style: italic; }
+.notation-native-symbol[data-roman="true"] { font-style: normal; }
+.notation-native-symbol sub,
+.notation-native-formula sub { font-size: .56em; line-height: 0; vertical-align: -.34em; }
+.notation-native-symbol sup,
+.notation-native-formula sup { font-size: .56em; line-height: 0; vertical-align: .64em; }
+.notation-native-operator { white-space: nowrap; opacity: .82; }
+.notation-native-fraction {
+  display: inline-grid;
+  grid-template-rows: auto auto;
+  align-items: center;
+  justify-items: stretch;
+  min-width: 1.8em;
+  vertical-align: middle;
+}
+.notation-native-fraction > span { display: flex; justify-content: center; gap: .12em; padding-inline: .12em; }
+.notation-native-fraction > span:first-child { padding-bottom: .06em; border-bottom: .04em solid currentColor; }
+.notation-native-fraction > span:last-child { padding-top: .06em; }
+.notation-native-reaction {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: .34em .5em;
+}
+.notation-native-reaction-side {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 12em;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: .18em .38em;
+}
+.notation-native-reaction-item { display: inline-flex; align-items: baseline; gap: .34em; white-space: nowrap; }
+.notation-native-reaction-plus,
+.notation-native-reaction-arrow { opacity: .72; }
+.notation-native-reaction-arrow { flex: 0 0 auto; font-family: ui-sans-serif, system-ui, sans-serif; }
+.notation-native-species { display: inline-flex; align-items: baseline; white-space: nowrap; font-style: normal; }
+.notation-native-coefficient { margin-right: .04em; }
+.notation-native-state { margin-left: .04em; font-size: .62em; opacity: .78; }
+/* A centered grid child can otherwise shrink to max-content and make the
+   structured fallback wider than the Board region. */
+.equation-object,
+.reaction-object { width: 100%; }
+.equation-object .notation-renderer,
+.reaction-object .notation-renderer { margin-inline: auto; }

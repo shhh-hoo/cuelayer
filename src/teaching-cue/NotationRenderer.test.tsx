@@ -43,10 +43,19 @@ describe("NotationRenderer", () => {
     expect(notationFitForWidths(400, 1000)).toEqual({ mode: "fallback", scale: 1 });
   });
 
-  it("server-renders an accessible deterministic fallback before the browser renderer loads", () => {
+  it("server-renders a structured equation fallback before KaTeX loads", () => {
+    const html = renderToStaticMarkup(<NotationRenderer spec={equation} />);
+    expect(html).toContain("notation-native-equation");
+    expect(html).toContain("<sup>2</sup>");
+    expect(html).not.toContain("rate = k [A]^2");
+  });
+
+  it("server-renders a wrapping chemical fallback with real subscripts", () => {
     const html = renderToStaticMarkup(<NotationRenderer spec={reaction} />);
     expect(html).toContain("data-notation-kind=\"reaction\"");
     expect(html).toContain("hydrogen reacts with oxygen to form water");
-    expect(html).toContain("2H2 + O2 → 2H2O");
+    expect(html).toContain("notation-native-reaction");
+    expect(html).toContain("H<sub>2</sub>");
+    expect(html).toContain("→");
   });
 });
