@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { createInitialCaptionRuntime } from "../planner/caption-runtime";
+import { createInitialTeachingState } from "../lesson-stream/teaching-state";
 import { PresentationStage } from "./PresentationStage";
 import { developmentSpeechDebugEnabled, speechDebugEnabled } from "./SessionPage";
 import { TeachingTraceDrawer } from "./TeachingTraceDrawer";
@@ -20,9 +20,8 @@ function stage(showSpeechDebug: boolean, presentationStatus: "empty" | "ready" =
     speech={speech}
     speechStatus="ready"
     showSpeechDebug={showSpeechDebug}
-    captionRuntime={createInitialCaptionRuntime()}
-    onCaptionExpire={() => undefined}
-    onLearnerCueExpire={() => undefined}
+    teachingState={createInitialTeachingState()}
+    onTeachingCueExpire={() => undefined}
   />);
 }
 
@@ -44,8 +43,14 @@ describe("session debug visibility", () => {
   it("keeps realtime transcript inspection out of a normal /session", () => {
     expect(speechDebugEnabled("")).toBe(false);
     expect(stage(false)).not.toContain("speech-inspection-surface");
-    expect(stage(false)).toContain("temperature increases");
+    expect(stage(false)).not.toContain("temperature increases");
     expect(stage(false)).not.toContain("particles move");
+  });
+
+  it("does not mount the legacy semantic caption runtime on the normal learner stage", () => {
+    const html = stage(false);
+    expect(html).not.toContain("adaptive-semantic-layer");
+    expect(html).not.toContain("semantic-caption");
   });
 
   it("shows provisional and canonical-span inspection only for ?debug=speech", () => {
