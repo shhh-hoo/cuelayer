@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { PresentationStage } from "./PresentationStage";
 import { requestPresentationStream, stopPresentationStream } from "./presentation-capture";
 import { SessionControls } from "./SessionControls";
-import { createInitialSessionState, sessionReducer } from "./session-state";
+import { createInitialSessionState } from "./session-state";
+import { createSessionPageReducer } from "./page-session-reducer";
 import { usePrepareSpeechmaticsAudioContext } from "./SpeechmaticsSessionProvider";
 import { speechStartFailureFrom, useSpeechmaticsSession } from "./use-speechmatics-session";
 import { useTeachingPlanner } from "./use-teaching-planner";
@@ -28,7 +29,8 @@ export function SessionPage() {
   const developmentDebug = developmentSpeechDebugEnabled(import.meta.env.DEV, window.location.search);
   const trace = useSessionTrace({ observeStatus: showSpeechDebug });
   const traceViewer = useTraceViewer(trace, showSpeechDebug);
-  const [state, dispatch] = useReducer(sessionReducer, developmentDebug, createInitialSessionState);
+  const pageReducer = useMemo(() => createSessionPageReducer(developmentDebug), [developmentDebug]);
+  const [state, dispatch] = useReducer(pageReducer, developmentDebug, createInitialSessionState);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
   const stageRef = useRef<HTMLElement>(null);
@@ -141,7 +143,13 @@ export function SessionPage() {
   }, []);
 
   const startPresentation = async () => {
-    if (state.status === "ended") trace.startNewSession();
+    if (state.status === "ended") {
+      trace.startNewSession();
+      speechRunIdRef.current = 0;
+      syntheticSequenceRef.current = 0;
+      previousPresentationStatusRef.current = undefined;
+      dispatch({ type: "restart-session" });
+    }
     dispatch({ type: "begin-capture" });
     try {
       const stream = await requestPresentationStream();
