@@ -1,7 +1,7 @@
 # CueLayer Live Teaching System Specification
 
 **Version:** v0.1  
-**Status:** PR11–PR12 execution baseline  
+**Status:** PR12–PR13 execution baseline  
 **Date:** 2026-09-02  
 **Scope:** single-session live teaching: speech evidence, stream processing, LLM interpretation, Teaching State, Teaching Board, Teaching Cue, and learner rendering.
 
@@ -10,7 +10,7 @@ This document is the execution authority for CueLayer's live teaching system. It
 ## 0. Authority and migration
 
 1. `docs/PRODUCT_CHARTER.md` remains the highest product authority.
-2. This document is the single execution authority for live teaching dataflow, state, windows, LLM context, PR11, and PR12.
+2. This document is the single execution authority for live teaching dataflow, state, windows, LLM context, PR12, and PR13.
 3. It supersedes the live product model in `docs/TEACHING_STATE_PLANNER.md`, specifically the semantic-subtitle model built around recent bounded speech, transient `CaptionEpisode`, and the 2.5-second live budget.
 4. `docs/TEACHING_CUE_LAYER.md` remains authoritative for the Board/Teaching Cue visual and lifecycle contracts, except that its deferred-live-integration boundary is now owned by this document.
 5. `CaptionRenderer`, FX Lab, Showcase, and existing FOCUS/RELATE/TRANSFORM renderer assets may remain as laboratories. They no longer define the normal `/session` learner-facing runtime.
@@ -28,13 +28,13 @@ CueLayer uses:
 
 The system preserves four categories of information without collapsing them into one ambiguous "context":
 
-| Concept | Formal object | Retention | PR11 baseline LLM input |
+| Concept | Formal object | Retention | PR12 baseline LLM input |
 |---|---|---:|---:|
 | Everything that has happened so far | `ProcessedLessonTimeline` | persistent | yes, compact projection |
 | Previously accepted LLM work | `AcceptedInterpretationLog` | persistent | yes |
 | Current authoritative product state | `TeachingStateSnapshot` | materialized from events | yes |
 | Current unprocessed speech window | `PendingInterpretationBatch` | until accepted | yes |
-| Which of the above the model should receive | `ContextProjectionPolicy` | evaluated | P4 baseline in PR11; ablation in PR12 |
+| Which of the above the model should receive | `ContextProjectionPolicy` | evaluated | P4 baseline in PR12; ablation in PR13 |
 
 Core rules:
 
@@ -98,7 +98,7 @@ The system must:
 - preserve the last valid learner surface through timeout, invalid output, ASR ambiguity, provider failure, or trace failure;
 - trace the full evidence → interpretation → accepted delta → state → render chain.
 
-### Non-goals for PR11–PR12
+### Non-goals for PR12–PR13
 
 Do not add:
 
@@ -335,7 +335,7 @@ type LessonEvent =
     };
 ```
 
-`teacher_override.applied` may be contract-only during PR11/PR12; no teacher editing UI is required.
+`teacher_override.applied` may be contract-only during PR12/PR13; no teacher editing UI is required.
 
 ### Diagnostic-only events
 
@@ -362,7 +362,7 @@ Do not place these in the replayable domain log:
 
 ### Storage boundary
 
-PR11 is local-first:
+PR12 is local-first:
 
 - reuse PR8 IndexedDB connection/writer primitives where useful;
 - use a distinct product-domain store/schema;
@@ -453,7 +453,7 @@ Rules:
 
 Defines what already-retained information is included in a model request. It changes prompt projection, not retention.
 
-PR11 uses the lossless baseline:
+PR12 uses the lossless baseline:
 
 ```text
 P4 = E + J + S + W
@@ -464,13 +464,13 @@ S = current Teaching State snapshot
 W = current unprocessed evidence batch
 ```
 
-Only PR12 may choose a smaller normal policy after controlled ablation.
+Only PR13 may choose a smaller normal policy after controlled ablation.
 
 ---
 
 ## 7. Context Assembler
 
-### PR11 request envelope
+### PR12 request envelope
 
 ```ts
 type TeachingInterpretationRequest = {
@@ -560,7 +560,7 @@ Record:
 - latency;
 - estimated cost.
 
-If a request approaches provider context limits, fail explicitly and trace it. PR11/PR12 must never silently truncate lesson history.
+If a request approaches provider context limits, fail explicitly and trace it. PR12/PR13 must never silently truncate lesson history.
 
 ---
 
@@ -644,7 +644,7 @@ type BoardContent =
     };
 ```
 
-No model-authored free prose, React, HTML, CSS, layout, timing, animation, or TeX in PR11/PR12.
+No model-authored free prose, React, HTML, CSS, layout, timing, animation, or TeX in PR12/PR13.
 
 ### TeachingCueDelta
 
@@ -672,7 +672,7 @@ Alpha defaults:
 - cue resolution never clears Board;
 - an instruction containing a question is one TASK, not competing TASK + QUESTION;
 - HINT must come from teacher speech;
-- one visible active cue remains the Alpha default; TASK + transient HINT is a PR12 evaluation question.
+- one visible active cue remains the Alpha default; TASK + transient HINT is a PR13 evaluation question.
 
 ---
 
@@ -972,13 +972,13 @@ Context/cost:
 - output tokens;
 - provider/server/browser latency.
 
-`canonical_speech_mounted` must not be a normal successful learner-render reason after PR11.
+`canonical_speech_mounted` must not be a normal successful learner-render reason after PR12.
 
 ---
 
-## 14. Context policy evaluation — PR12
+## 14. Context policy evaluation — PR13
 
-PR11 uses P4 as the lossless baseline. PR12 runs the same stateful sequence corpus under:
+PR12 uses P4 as the lossless baseline. PR13 runs the same stateful sequence corpus under:
 
 | Policy | Input | Purpose |
 |---|---|---|
@@ -999,7 +999,7 @@ A smaller policy may become normal only if it passes every critical safety gate 
 
 If P4 clearly beats P3, first inspect whether Teaching State is missing necessary semantic fields such as correction lineage, source IDs, teaching thread, or cue origin. Improve the state schema before permanently depending on raw model-response history.
 
-Before PR12 evaluation, do not add adaptive retrieval, rolling summary, heuristic full-context escalation, state-only fast paths, or provider conversation memory as the source of truth.
+Before PR13 evaluation, do not add adaptive retrieval, rolling summary, heuristic full-context escalation, state-only fast paths, or provider conversation memory as the source of truth.
 
 ---
 
@@ -1041,8 +1041,8 @@ Critical gates:
 | Later speech alone causes stale | 0 |
 | Replay mismatch | 0 |
 | Structured parse | 100% |
-| State transition accuracy | PR12 target ≥95% |
-| Cue lifecycle accuracy | PR12 target ≥95% |
+| State transition accuracy | PR13 target ≥95% |
+| Cue lifecycle accuracy | PR13 target ≥95% |
 | Successful provider response accepted or explicitly channel-conflicted | near 100% |
 | Trace volume | <1 MB/min |
 | Normal raw transcript mounts | 0 |
@@ -1063,13 +1063,13 @@ PR8 is infrastructure only:
 - punctuation/empty lexical boundary;
 - JSONL export.
 
-PR8 does not solve Teaching State or the live learner surface. Start PR11 after PR8 is integrated with latest `main`.
+PR8 does not solve Teaching State or the live learner surface. Start PR12 after PR8 is integrated with latest `main`.
 
-### PR11 — Lossless Lesson Stream → Live Teaching Surface
+### PR12 — Lossless Lesson Stream → Live Teaching Surface
 
 **Title:** `feat: make lossless lesson interpretation drive the live teaching surface`
 
-PR11 must be dogfoodable end to end.
+PR12 must be dogfoodable end to end.
 
 #### Slice A — Domain log and replay
 
@@ -1133,7 +1133,7 @@ Implement:
 - retain old Caption runtime only as laboratory;
 - full domain/state/render correlation.
 
-#### PR11 hard gate
+#### PR12 hard gate
 
 A real microphone `/session` run must demonstrate:
 
@@ -1160,11 +1160,11 @@ And must include:
 - normal transcript mount = 0;
 - trace <1 MB/min.
 
-Fixtures, synthetic injection, unit tests, or CI green alone cannot give PR11 PASS.
+Fixtures, synthetic injection, unit tests, or CI green alone cannot give PR12 PASS.
 
-### PR12 — Stateful Semantics + Context Ablation
+### PR13 — Stateful Semantics + Context Ablation
 
-PR12 does not rebuild stream infrastructure. It focuses on:
+PR13 does not rebuild stream infrastructure. It focuses on:
 
 1. multi-turn teaching sequence corpus;
 2. board-worthiness;
@@ -1177,9 +1177,9 @@ PR12 does not rebuild stream infrastructure. It focuses on:
 9. selecting the smallest safe normal context policy;
 10. updating this document with the resulting policy decision.
 
-PR12 explicitly does not include ASR provider/config optimisation, live equation/reaction generation, slide understanding, RAG, arbitrary paraphrase, or broad visual redesign.
+PR13 explicitly does not include ASR provider/config optimisation, live equation/reaction generation, slide understanding, RAG, arbitrary paraphrase, or broad visual redesign.
 
-### PR12 — Speech Evidence Quality
+### PR13 — Speech Evidence Quality
 
 After the processing model is stable:
 
