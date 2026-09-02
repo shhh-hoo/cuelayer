@@ -4,6 +4,7 @@ dist/
 !.env.example
 artifacts/
 .cuelayer/
+.agents/
 skills/9701-cuecaption/eval/generated/
 *.tsbuildinfo
 .DS_Store
