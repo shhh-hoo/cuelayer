@@ -5,12 +5,48 @@ import { createHttpTeachingInterpreter, type TeachingInterpreter } from "../less
 import { LessonStreamRuntime } from "../lesson-stream/runtime";
 import { createInitialTeachingState } from "../lesson-stream/teaching-state";
 import type { TeachingStateSnapshot } from "../lesson-stream/contracts";
+import type { AcceptedInterpretationStep } from "../lesson-stream/contracts";
 import { traceDraft, type TraceEmitter } from "../trace/contracts";
 import type { CanonicalSpeechState, SpeechStatus } from "./speech-types";
 import type { SessionStatus } from "./session-types";
 
 const HARD_DEADLINE_MS = 6_000;
 const MODEL_NAME = "gpt-5.6-luna";
+
+export function checkpointTraceIdentity(speechRunId: number, spanId: string) {
+  return `${speechRunId}:${spanId}`;
+}
+
+export function emitAcceptedStepTrace({
+  transition,
+  speechRunId,
+  plannerRequestId,
+  emit,
+}: {
+  transition: { step: AcceptedInterpretationStep; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot };
+  speechRunId: number;
+  plannerRequestId: string;
+  emit: TraceEmitter;
+}) {
+  const { step, stateBefore, stateAfter } = transition;
+  const correlation = { rootId: `interpretation:${plannerRequestId}`, runId: speechRunId, plannerRequestId, interpretationId: step.interpretationId, stepIndex: step.stepIndex, boardRevision: stateAfter.board.revision, cueRevision: stateAfter.cue.revision };
+  emit(traceDraft("interpretation.step_accepted", { requestId: plannerRequestId, interpretationId: step.interpretationId, stepIndex: step.stepIndex, checkpointIds: step.consumesCheckpointIds, boardAction: step.boardDelta.action, cueAction: step.cueDelta.action }, { correlation }));
+  if (step.boardDelta.action === "KEEP") emit(traceDraft("board.keep", { reason: step.boardDelta.reason }, { correlation }));
+  if (step.boardDelta.action === "SET_ACTIVE") {
+    const boardItemId = `board-${step.interpretationId}-${step.stepIndex}`;
+    emit(traceDraft("board.active_set", { boardItemId, continuity: step.boardDelta.continuity }, { correlation: { ...correlation, boardItemId } }));
+    if (step.boardDelta.retainPrevious && stateBefore.board.active) emit(traceDraft("board.context_retained", { boardItemIds: [stateBefore.board.active.id] }, { correlation }));
+    if (step.boardDelta.continuity !== "same_thread") emit(traceDraft("board.context_retired", { boardItemIds: [stateBefore.board.active, ...stateBefore.board.retained].flatMap((item) => item ? [item.id] : []) }, { correlation }));
+    if (step.boardDelta.invalidatesBoardItemIds?.length) emit(traceDraft("board.content_invalidated", { boardItemIds: step.boardDelta.invalidatesBoardItemIds }, { correlation }));
+  }
+  if (step.boardDelta.action === "ADD_SUPPORT") emit(traceDraft("board.support_added", { boardItemId: step.boardDelta.targetBoardItemId, supportId: `support-${step.interpretationId}-${step.stepIndex}` }, { correlation: { ...correlation, boardItemId: step.boardDelta.targetBoardItemId } }));
+  if (step.cueDelta.action === "KEEP") emit(traceDraft("teaching_cue.keep", {}, { correlation }));
+  if (step.cueDelta.action === "SET") {
+    const cueId = `cue-${step.interpretationId}-${step.stepIndex}`;
+    emit(traceDraft("teaching_cue.set", { cueId, kind: step.cueDelta.cueKind }, { correlation: { ...correlation, cueId } }));
+  }
+  if (step.cueDelta.action === "RESOLVE_CURRENT" && stateBefore.cue.active) emit(traceDraft("teaching_cue.resolved", { cueId: stateBefore.cue.active.id, reason: step.cueDelta.reason }, { correlation: { ...correlation, cueId: stateBefore.cue.active.id } }));
+}
 
 export type LiveTeachingStatus = "restoring" | "ready" | "interpreting" | "degraded";
 
@@ -144,33 +180,13 @@ export function useLiveTeaching({
       }
       if (acceptance.boardConflict) onTrace?.(traceDraft("interpretation.channel_conflict", { requestId: work.requestId, channel: "board" }, { correlation: { rootId: `interpretation:${work.requestId}`, plannerRequestId: work.requestId } }));
       if (acceptance.cueConflict) onTrace?.(traceDraft("interpretation.channel_conflict", { requestId: work.requestId, channel: "cue" }, { correlation: { rootId: `interpretation:${work.requestId}`, plannerRequestId: work.requestId } }));
-      const stateBefore = acceptance.stateBefore;
-      const stateAfter = acceptance.stateAfter;
       schedulerRef.current.settleAccepted(work.requestId, acceptance.steps.flatMap((step) => step.consumesCheckpointIds));
       consecutiveFailuresRef.current = 0;
       setError(undefined);
       setStatus("ready");
       const latencyMs = Math.max(0, Date.now() - work.startedAtMs);
       onTrace?.(traceDraft("interpretation.request_completed", { requestId: work.requestId, latencyMs, ...(response.usage ? { inputTokens: response.usage.inputTokens, cachedInputTokens: response.usage.cachedInputTokens, outputTokens: response.usage.outputTokens } : {}), ...(response.estimatedCostUsd === undefined ? { costStatus: "rates_unconfigured" as const } : { costStatus: "estimated" as const, estimatedCostUsd: response.estimatedCostUsd }) }, { correlation: { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId } }));
-      acceptance.steps.forEach((step) => {
-        const correlation = { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId, interpretationId: step.interpretationId, stepIndex: step.stepIndex, boardRevision: stateAfter.board.revision, cueRevision: stateAfter.cue.revision };
-        onTrace?.(traceDraft("interpretation.step_accepted", { requestId: work.requestId, interpretationId: step.interpretationId, stepIndex: step.stepIndex, checkpointIds: step.consumesCheckpointIds, boardAction: step.boardDelta.action, cueAction: step.cueDelta.action }, { correlation }));
-        if (step.boardDelta.action === "KEEP") onTrace?.(traceDraft("board.keep", { reason: step.boardDelta.reason }, { correlation }));
-        if (step.boardDelta.action === "SET_ACTIVE") {
-          const boardItemId = `board-${step.interpretationId}-${step.stepIndex}`;
-          onTrace?.(traceDraft("board.active_set", { boardItemId, continuity: step.boardDelta.continuity }, { correlation: { ...correlation, boardItemId } }));
-          if (step.boardDelta.retainPrevious && stateBefore.board.active) onTrace?.(traceDraft("board.context_retained", { boardItemIds: [stateBefore.board.active.id] }, { correlation }));
-          if (step.boardDelta.continuity !== "same_thread") onTrace?.(traceDraft("board.context_retired", { boardItemIds: [stateBefore.board.active, ...stateBefore.board.retained].flatMap((item) => item ? [item.id] : []) }, { correlation }));
-          if (step.boardDelta.invalidatesBoardItemIds?.length) onTrace?.(traceDraft("board.content_invalidated", { boardItemIds: step.boardDelta.invalidatesBoardItemIds }, { correlation }));
-        }
-        if (step.boardDelta.action === "ADD_SUPPORT") onTrace?.(traceDraft("board.support_added", { boardItemId: step.boardDelta.targetBoardItemId, supportId: `support-${step.interpretationId}-${step.stepIndex}` }, { correlation: { ...correlation, boardItemId: step.boardDelta.targetBoardItemId } }));
-        if (step.cueDelta.action === "KEEP") onTrace?.(traceDraft("teaching_cue.keep", {}, { correlation }));
-        if (step.cueDelta.action === "SET") {
-          const cueId = `cue-${step.interpretationId}-${step.stepIndex}`;
-          onTrace?.(traceDraft("teaching_cue.set", { cueId, kind: step.cueDelta.cueKind }, { correlation: { ...correlation, cueId } }));
-        }
-        if (step.cueDelta.action === "RESOLVE_CURRENT" && stateBefore.cue.active) onTrace?.(traceDraft("teaching_cue.resolved", { cueId: stateBefore.cue.active.id, reason: step.cueDelta.reason }, { correlation: { ...correlation, cueId: stateBefore.cue.active.id } }));
-      });
+      acceptance.transitions.forEach((transition) => emitAcceptedStepTrace({ transition, speechRunId, plannerRequestId: work.requestId, emit: onTrace }));
       queueMicrotask(() => pumpRef.current());
     }).catch((reason: unknown) => {
       schedulerRef.current.settleFailed(work.requestId);
@@ -193,8 +209,9 @@ export function useLiveTeaching({
     const runtime = runtimeRef.current;
     if (!runtime || sessionStatus === "ended") return;
     for (const span of canonicalSpeech.spans) {
-      if (openedCheckpointTraceRef.current.has(span.id)) continue;
-      openedCheckpointTraceRef.current.add(span.id);
+      const traceIdentity = checkpointTraceIdentity(speechRunId, span.id);
+      if (openedCheckpointTraceRef.current.has(traceIdentity)) continue;
+      openedCheckpointTraceRef.current.add(traceIdentity);
       onTrace?.(traceDraft("evidence.checkpoint_opened", { runId: speechRunId, spanId: span.id, spanRevision: span.revision }, { correlation: { rootId: `speech:${speechRunId}:span:${span.id}`, runId: speechRunId, spanId: span.id, spanRevision: span.revision } }));
     }
     const closed = canonicalSpeech.spans.filter((span) => span.status === "closed");

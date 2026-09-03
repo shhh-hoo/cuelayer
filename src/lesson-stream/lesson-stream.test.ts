@@ -229,6 +229,28 @@ describe("lesson evidence and replay", () => {
     expect(runtime.pending.map((checkpoint) => checkpoint.checkpointId)).toEqual([item!.checkpointId]);
     expect(runtime.state).toEqual(createInitialTeachingState());
   });
+
+  it("returns exact per-step state transitions for an ordered accepted batch", async () => {
+    const persisted: import("./contracts").LessonEvent[] = [];
+    const store: LessonEventStore = { async append(events) { persisted.push(...events); }, async readSession() { return persisted; } };
+    const runtime = await LessonStreamRuntime.open("lesson-step-transitions", store);
+    await runtime.start();
+    const a = await runtime.commitClosedSpan(span({ id: "span-a", text: "Set the task." }), 1);
+    const b = await runtime.commitClosedSpan(span({ id: "span-b", text: "The task is complete." }), 1);
+    const { request } = buildTeachingInterpretationRequest({ requestId: "step-transitions", sessionId: "lesson-step-transitions", events: runtime.events, currentState: runtime.state, newEvidence: [a!, b!] });
+    const result = await runtime.acceptProposal({
+      request, model: "test-model",
+      proposal: { requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 0, steps: [
+        { consumesCheckpointIds: [a!.checkpointId], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: a!.checkpointId, text: "Set the task" } }, evidenceRefs: [{ checkpointId: a!.checkpointId, text: "Set the task" }] },
+        { consumesCheckpointIds: [b!.checkpointId], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "RESOLVE_CURRENT", reason: "completed", evidence: { checkpointId: b!.checkpointId, text: "The task is complete" } }, evidenceRefs: [{ checkpointId: b!.checkpointId, text: "The task is complete" }] },
+      ] },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.transitions.map((transition) => [transition.stateBefore.cue.revision, transition.stateAfter.cue.revision])).toEqual([[0, 1], [1, 2]]);
+    expect(result.transitions[0]!.stateBefore.cue.active).toBeUndefined();
+    expect(result.transitions[1]!.stateBefore.cue.active?.id).toBe("cue-step-transitions-accepted-0");
+  });
 });
 
 describe("lossless scheduling and P4 projection", () => {

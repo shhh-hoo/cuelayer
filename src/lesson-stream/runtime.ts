@@ -4,6 +4,7 @@ import { validateAndNormalizeProposal } from "./accepted-interpretations";
 import { checkpointCommittedEvent, cueExpiredEvent, interpretationAcceptedEvent, lessonEndedEvent, lessonStartedEvent } from "./events";
 import { pendingEvidence, replayLessonEvents, type LessonReplay } from "./replay";
 import { LocalLessonEventStore } from "./store";
+import { reduceAcceptedStep } from "./teaching-state";
 import type { AcceptedInterpretationStep, LessonEvent, TeachingInterpretationRequest, TeachingStateSnapshot } from "./contracts";
 
 export type LessonEventStore = {
@@ -13,7 +14,7 @@ export type LessonEventStore = {
 };
 
 export type ProposalAcceptance =
-  | { ok: true; steps: AcceptedInterpretationStep[]; boardConflict: boolean; cueConflict: boolean; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot }
+  | { ok: true; steps: AcceptedInterpretationStep[]; transitions: Array<{ step: AcceptedInterpretationStep; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot }>; boardConflict: boolean; cueConflict: boolean; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot }
   | { ok: false; error: string };
 
 export class LessonStreamRuntime {
@@ -109,12 +110,20 @@ export class LessonStreamRuntime {
       const stateBefore = this.replayValue.state;
       const validation = validateAndNormalizeProposal({ proposal, request, allCheckpoints: this.replayValue.checkpoints, state: stateBefore, model });
       if (!validation.ok) return validation;
+      const checkpointSequences = new Map(this.replayValue.checkpoints.map((checkpoint) => [checkpoint.checkpointId, checkpoint.lessonSequence]));
+      let rollingState = stateBefore;
+      const transitions = validation.steps.map((step) => {
+        const before = rollingState;
+        rollingState = reduceAcceptedStep(rollingState, step, checkpointSequences);
+        return { step, stateBefore: before, stateAfter: rollingState };
+      });
       const firstSequence = this.nextEventSequence();
       const events = validation.steps.map((step, index) => interpretationAcceptedEvent(this.sessionId, firstSequence + index, step));
       await this.appendNow(events);
       return {
         ok: true,
         steps: validation.steps,
+        transitions,
         boardConflict: validation.boardConflict,
         cueConflict: validation.cueConflict,
         stateBefore,
