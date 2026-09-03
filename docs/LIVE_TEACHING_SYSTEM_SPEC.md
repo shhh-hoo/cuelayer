@@ -5,18 +5,15 @@
 **Date:** 2026-09-02  
 **Scope:** single-session live teaching: speech evidence, stream processing, LLM interpretation, Teaching State, Teaching Board, Teaching Cue, and learner rendering.
 
-This document is the execution authority for CueLayer's live teaching system. It is subordinate to `docs/PRODUCT_CHARTER.md`, but supersedes older live-planner implementation descriptions, PR descriptions, fixtures, and code comments where they conflict with this design.
+This document is the execution authority for CueLayer's live teaching system. It is subordinate to `docs/PRODUCT_CHARTER.md` and governs implementation descriptions, PR descriptions, fixtures, and code comments where they conflict with this design.
 
 Stable work-package identifiers in this specification are authoritative. Current GitHub pull-request mappings are operational metadata maintained only in [`docs/LIVE_TEACHING_ROADMAP.md`](LIVE_TEACHING_ROADMAP.md). A changed or inserted PR number must never require semantic renumbering of this specification.
 
-## 0. Authority and migration
+## 0. Authority
 
 1. `docs/PRODUCT_CHARTER.md` remains the highest product authority.
 2. This document is the single execution authority for live teaching dataflow, state, windows, LLM context, `LIVE-STATE`, and `SEMANTICS`.
-3. It supersedes the live product model in `docs/TEACHING_STATE_PLANNER.md`, specifically the semantic-subtitle model built around recent bounded speech, transient `CaptionEpisode`, and the 2.5-second live budget.
-4. `docs/TEACHING_CUE_LAYER.md` remains authoritative for the Board/Teaching Cue visual and lifecycle contracts, except that its deferred-live-integration boundary is now owned by this document.
-5. `CaptionRenderer`, FX Lab, Showcase, and existing FOCUS/RELATE/TRANSFORM renderer assets may remain as laboratories. They no longer define the normal `/session` learner-facing runtime.
-6. PR descriptions explain implementation against this document; they do not redefine the system.
+3. PR descriptions explain implementation against this document; they do not redefine the system.
 
 If code and this document disagree, update this document intentionally before changing product semantics.
 
@@ -100,7 +97,7 @@ The system must:
 - retain and replay a full lesson's speech evidence;
 - retain earlier accepted LLM interpretations even after current state changes;
 - deterministically reconstruct current Teaching State from the lesson event log;
-- never lose unprocessed evidence because of planner coalescing;
+- never lose unprocessed evidence because of scheduler coalescing;
 - allow each LLM call to use full lesson context while returning only bounded deltas;
 - never treat later speech alone as a reason an otherwise valid request is stale;
 - render Teaching State, not rolling transcript, on the normal learner surface;
@@ -174,7 +171,7 @@ type LessonSession = {
 };
 ```
 
-A lesson starts and ends through explicit user action. Silence, waiting for students, presentation interruption, planner failure, or speech reconnect do not end the lesson. Reload may resume the same local session. "Start another session" creates a new session identity.
+A lesson starts and ends through explicit user action. Silence, waiting for students, presentation interruption, interpretation failure, or speech reconnect do not end the lesson. Reload may resume the same local session. "Start another session" creates a new session identity.
 
 ### 4.2 Compact Evidence Checkpoint
 
@@ -395,7 +392,7 @@ Defines the complete history boundary.
 Start session ───────────────────────── End session
 ```
 
-Only explicit user actions start/end it. A 900ms pause, 30-second student wait, presentation end, planner failure, or speech reconnect does not end the lesson.
+Only explicit user actions start/end it. A 900ms pause, 30-second student wait, presentation end, interpretation failure, or speech reconnect does not end the lesson.
 
 ### Window B — Evidence Checkpoint
 
@@ -931,19 +928,19 @@ BoardLayout   TeachingCueLayer
 Hard rules:
 
 - canonical/provisional transcript appears only on explicit debug surfaces;
-- normal session never auto-creates canonical `CaptionEpisode` fallback;
 - without presentation, Board is the primary canvas;
 - with presentation, presentation remains primary and Board uses the essential safe region;
+- Board layout makes the active contribution primary, support secondary, and retained context visibly subordinate;
+- Board density and safe-region allocation are deterministic from presentation mode and bounded content, never runtime measurement;
 - Board and Cue are sibling channels with independent state/lifecycle;
 - Board update does not clear Cue;
 - Cue resolution does not clear Board;
-- planner failure preserves last valid state;
-- no prior state + planner failure means visual quiet;
-- normal live session removes Space-to-lock-caption behaviour;
+- interpretation failure preserves last valid state;
+- no prior state + interpretation failure means visual quiet;
 - accepted backlog batch renders final state once rather than flickering through intermediate steps;
 - render events include resulting Board/Cue revisions.
 
-Old Caption runtime remains available to FX Lab, Showcase, and renderer tests. FOCUS/RELATE/TRANSFORM representation assets may be reused by Board compilation, but their lifetime is controlled by Teaching State rather than a fixed five-second episode.
+Structured notation is a reusable bounded primitive: EquationSpec and ReactionSpec compile deterministically through KaTeX/mhchem, validate their inputs before compilation, and never accept arbitrary model-authored TeX. Notation failure is isolated from Teaching State.
 
 ---
 
@@ -1061,7 +1058,7 @@ At minimum include:
 13. NOTE expiry while Board request is in flight;
 14. several pending checkpoints produce ordered steps;
 15. task issued and resolved inside one backlog batch;
-16. planner failure leaves checkpoint pending;
+16. interpretation failure leaves checkpoint pending;
 17. reload → event replay → identical state;
 18. new speech during request → current result remains valid;
 19. presentation mode change without teaching-state revision;
@@ -1170,8 +1167,6 @@ Implement:
 - `/session` uses `TeachingSurfaceLayer`;
 - reuse `BoardLayout` and `TeachingCueLayer`;
 - remove canonical fallback from normal learner surface;
-- remove normal Space caption lock;
-- retain old Caption runtime only as laboratory;
 - full domain/state/render correlation.
 
 #### `LIVE-STATE` hard gate
@@ -1238,7 +1233,7 @@ After state and grounding are stable:
 - bounded EquationSpec / ReactionSpec;
 - speech evidence → structured object;
 - deterministic compiler → existing KaTeX/mhchem renderer;
-- no planner-authored TeX;
+- no interpreter-authored TeX;
 - notation failure isolated from Board/Cue state.
 
 ---
@@ -1310,7 +1305,7 @@ Future PR descriptions must cite affected acceptance IDs.
 
 Current phase rejects:
 
-1. recent six spans + active caption as the primary lesson context;
+1. a small rolling transcript as the primary lesson context;
 2. calling the LLM every 2.5 seconds regardless of evidence boundaries;
 3. aborting current work whenever newer speech arrives;
 4. latest-only pending coalescing that drops earlier unconsumed evidence;
@@ -1319,7 +1314,7 @@ Current phase rejects:
 7. raw model result as domain truth;
 8. `previous_response_id` as the only lesson memory;
 9. single-lesson rolling summary/RAG before evidence demands it;
-10. rolling transcript learner fallback on planner failure;
+10. rolling transcript learner fallback on interpretation failure;
 11. diagnostic trace as the product event store;
 12. declaring live-product PASS from CI green, fixture screenshots, or component tests alone.
 

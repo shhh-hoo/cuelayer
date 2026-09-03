@@ -37,20 +37,18 @@ Natural teaching is the primary interface.
 
 AI handles interpretation where meaning or pedagogical intent is uncertain: what the teacher is expressing, whether a visible intervention is useful, how current speech relates to Teaching State, and whether the current teaching moment warrants a learner-facing cue.
 
-Deterministic software handles predictable execution: validation, target grounding, bounded visual grammar, layout, animation treatment, timing policy, state transitions, fallback, stale-result handling, and rendering.
+Deterministic software handles predictable execution: validation, provenance, bounded Board/Cue state, layout, lifecycle policy, stale-result handling, and rendering.
 
 ```text
-teacher speech + Teaching State
-              ↓
-     canonical speech state
-              ↓
-      AI interpretation
-        ↙           ↘
- display intent   learner intent
-        ↘           ↙
- deterministic compiler/runtime
-              ↓
-    learner-visible surface
+teacher speech → canonical speech → lesson checkpoints
+                               ↓
+                       AI interpretation
+                               ↓
+                 accepted contribution events
+                               ↓
+                   deterministic Teaching State
+                               ↓
+                    learner-visible surface
 ```
 
 AI-native behaviour is expressed through autonomous interpretation of natural teaching, not through generation frequency or an AI-labelled interface.
@@ -61,23 +59,11 @@ Interpretation is stateful across teaching turns. CueLayer maintains Teaching St
 
 Teaching State can accumulate semantic relationships, current topic, recently established concepts, unresolved references, teacher corrections, incomplete causal or procedural structures, and pedagogical phase across speech turns. This allows an explanation to grow as the teacher develops it.
 
-Early implementations may use a compact recent-context representation, but the runtime and planner should preserve continuity across turns and remain compatible with richer state as the product develops.
+The runtime preserves continuity through immutable checkpoints, accepted contributions, and deterministic replay rather than a temporary caption context.
 
 ## Adaptive representation
 
-CueLayer treats representation as a policy decision rather than assuming every spoken word should remain visible.
-
-Planner-level display intents are:
-
-- `QUIET`: the best learner-visible state is visual quiet.
-- `TEXT`: readable speech-derived text is the useful representation.
-- `FOCUS`: direct attention to one minimal semantic anchor.
-- `RELATE`: expose an explicitly grounded cause, sequence, or contrast.
-- `TRANSFORM`: show the same object, expression, or state changing representation or state.
-
-Display intents are planner-level semantic decisions. They compile into renderer state and bounded effect cues; they are not necessarily renderer cue kinds. In particular, `QUIET` and `TEXT` may resolve to ordinary renderer state rather than new `EffectCue.kind` values.
-
-`QUIET` is a successful decision. A useful CueLayer session should contain substantial visually quiet time.
+CueLayer treats representation as a policy decision rather than assuming every spoken word should remain visible. The interpreter proposes bounded Board and Teaching Cue deltas; the deterministic reducer controls their lifecycle, retention, and visual hierarchy. Visual quiet is a successful outcome.
 
 Every learner-visible representation remains attributable to speech evidence, Teaching State, domain knowledge, or their combination. Grounding proves provenance, not literal display equality or subject-matter truth: exact claimed speech quotes support a contribution, while bounded reconstructions, representations, augmentations, and corrections may use the appropriate non-speech provenance. Symbolic or spatial compression may make meaning easier to follow while preserving evidence history, corrections, uncertainty, and reversible classroom control.
 
@@ -104,10 +90,10 @@ AI determines pedagogical eligibility and may originate a learner action; determ
 3. **Adaptive representation is the default product model.** The system selects among quiet, text, semantic structure, and learning cues according to the teaching moment.
 4. **Selective intervention is a feature.** `QUIET` and `NONE` are first-class outcomes.
 5. **Interpretation is stateful.** Teaching turns contribute to an evolving Teaching State rather than being treated as unrelated requests.
-6. **AI interprets; deterministic code executes.** Semantic and pedagogical intent compile into a bounded, testable visual runtime.
+6. **AI interprets; deterministic code executes.** Contributions become bounded, testable Teaching State before rendering.
 7. **Learner-visible meaning is grounded.** Visual compression preserves the teacher's actual assertions and supported context.
 8. **Presentation transport remains independent from semantic interpretation.** A presentation can provide the visual background while semantic slide understanding remains a separate capability.
-9. **Failure domains degrade independently.** Presentation transport continues independently of speech recognition and semantic planning. Speech-pipeline failure affects speech-derived representations without taking down presentation transport. Planner failure falls back to a suitable `TEXT` or `QUIET` state from whatever grounded speech state is available; planner latency does not block capture or rewind the learner-visible surface.
+9. **Failure domains degrade independently.** Presentation transport continues independently of speech recognition and interpretation. Speech-pipeline failure affects speech-derived representations without taking down presentation transport. Interpretation failure preserves the last valid Teaching State and never blocks capture or rewinds the learner-visible surface.
 10. **Usable vertical slices drive development.** Each implementation step should improve an end-to-end teaching experience that can be dogfooded.
 
 ## Product review gate

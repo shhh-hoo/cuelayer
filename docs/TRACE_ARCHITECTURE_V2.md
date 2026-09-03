@@ -17,7 +17,7 @@ No trace write, PCM scan, allocation, serialization, React update, IndexedDB tra
 ## Runtime path
 
 ```text
-speech / planner / renderer fact
+speech / interpretation / learner-surface fact
             ↓
       TraceWriter.emit
   assign source-local sequence
@@ -34,7 +34,7 @@ React is not the trace message bus. Normal `/session` retains no durable event a
 
 ## Event policy
 
-- Critical: session lifecycle, speech final, canonical final/span, planner gate/outcome, renderer activation.
+- Critical: session lifecycle, speech final, canonical final/span, interpretation outcome, learner-surface render.
 - Raw: Speechmatics partial transcript snapshots. Rapid revisions for the same speech run are coalesced before persistence.
 - Aggregate: one-second and final-run `AudioAdded` delivery summaries.
 - Queue pressure is never silent. Dropped evidence produces a durable `trace.gap` event when storage recovers.

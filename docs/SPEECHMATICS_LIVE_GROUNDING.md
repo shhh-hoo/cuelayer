@@ -1,6 +1,6 @@
 # Speechmatics live grounding
 
-This slice adds a live speech subsystem to `/session` without coupling it to Presentation Proxy or the semantic renderer.
+This slice adds a live speech subsystem to `/session` without coupling it to presentation transport or the learner surface.
 
 ## Runtime configuration
 
