@@ -12,8 +12,9 @@ This document maps stable work-package identifiers to GitHub pull requests. The 
 | Work package | Scope | Dependency | Current GitHub mapping |
 |---|---|---|---|
 | `TRACE-V2` | Durable local diagnostic trace outside the live audio hot path | none | Completed by PR #12; deployment packaging corrected by PR #13. PR #10 is the closed draft predecessor. |
-| `LIVE-STATE` | Lossless Lesson Event Log, immutable evidence checkpoints, P4 context projection, ordered interpretation deltas, one-in-flight scheduler, replayable Teaching State, and live Board/Teaching Cue `/session` surface | `TRACE-V2` | Next planned implementation: PR #14. |
-| `SEMANTICS` | Stateful teaching policy, multi-turn sequence corpus, correction/topic-shift/Cue lifecycle semantics, and P0–P4 context ablation | `LIVE-STATE` | Planned after `LIVE-STATE`: PR #15, provided PR #14 is merged without an intervening PR. |
+| `LIVE-STATE` | Lossless Lesson Event Log, immutable evidence checkpoints, ordered interpretation deltas, one-in-flight scheduler, replayable Teaching State, and live Board/Teaching Cue `/session` surface | `TRACE-V2` | In progress in Draft PR #14. |
+| `SEMANTICS` | Bounded learner-surface agency, state, Cue lifecycle, reconstruction, augmentation, correction, and intervention quality | `LIVE-STATE` | Unassigned. Do not reserve a PR number in durable documents. |
+| `CONTEXT-POLICY` | Controlled P0–P4 context projection ablation after `SEMANTICS` freezes the policy, corpus, and gates | `SEMANTICS` | Unassigned. Do not reserve a PR number in durable documents. |
 | `SPEECH-QUALITY` | ASR language/configuration evaluation, domain vocabulary, critical-term errors, ambiguity signals, and checkpoint evidence quality | `SEMANTICS` | Unassigned. Do not reserve a PR number in durable documents. |
 | `STRUCTURED-OBJECTS` | Grounded EquationSpec/ReactionSpec generation and deterministic Board rendering through packaged KaTeX/mhchem | `SEMANTICS`, normally after `SPEECH-QUALITY` evidence | Unassigned. Do not reserve a PR number in durable documents. |
 
@@ -22,21 +23,16 @@ This document maps stable work-package identifiers to GitHub pull requests. The 
 ```text
 TRACE-V2                         complete
    ↓
-LIVE-STATE                       next; currently expected PR #14
+LIVE-STATE                       in progress; Draft PR #14
    ↓
-SEMANTICS                        after LIVE-STATE; currently expected PR #15
+SEMANTICS                        after LIVE-STATE
+   ↓
+CONTEXT-POLICY                   after SEMANTICS policy/corpus/gates freeze
    ↓
 SPEECH-QUALITY                   future; PR number assigned only when opened
    ↓
 STRUCTURED-OBJECTS               future; PR number assigned only when opened
 ```
-
-The two currently assigned implementation numbers are therefore:
-
-- PR #14: `LIVE-STATE` — `feat: make lossless lesson interpretation drive the live teaching surface`
-- PR #15: `SEMANTICS` — `feat: validate stateful teaching semantics and context policy`
-
-If another PR is inserted before either one, update only this mapping. Do not renumber or rewrite `LIVE_TEACHING_SYSTEM_SPEC.md`.
 
 ## Development rule
 
@@ -51,13 +47,3 @@ Work package: LIVE-STATE
 GitHub PR: #14
 Acceptance IDs: LOG-*, WIN-*, CTX-*, SCH-*, STA-*, SUR-*, E2E-*
 ```
-
-```text
-Work package: SEMANTICS
-GitHub PR: #15
-Acceptance IDs: CTX-*, STA-*, WIN-04/05, SCH-02/03/05/06, SUR-01/05, E2E-02..05
-```
-
-## Historical numbering note
-
-Earlier revisions of the live-system specification referred to the same work as PR10/PR11, then PR12/PR13, and then PR14/PR15. Those numbers reflected repository sequencing, not product-design changes. This roadmap permanently separates the two.
