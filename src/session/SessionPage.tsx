@@ -31,6 +31,11 @@ export function SessionPage() {
   const traceViewer = useTraceViewer(trace, showSpeechDebug);
   const pageReducer = useMemo(() => createSessionPageReducer(developmentDebug), [developmentDebug]);
   const [state, dispatch] = useReducer(pageReducer, developmentDebug, createInitialSessionState);
+  const stateRef = useRef(state);
+  const dispatchSession = useCallback((action: import("./page-session-reducer").SessionPageAction) => {
+    stateRef.current = pageReducer(stateRef.current, action);
+    dispatch(action);
+  }, [pageReducer]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
   const stageRef = useRef<HTMLElement>(null);
@@ -42,8 +47,8 @@ export function SessionPage() {
   const prepareSpeechmaticsAudioContext = usePrepareSpeechmaticsAudioContext();
 
   const { start: startSpeechmatics, stop: stopSpeechmatics, pause: pauseSpeechmatics, resume: resumeSpeechmatics } = useSpeechmaticsSession({
-    onEvent: (runId, event) => dispatch({ type: "speech-event", runId, event, now: Date.now() }),
-    onReady: (runId) => dispatch({ type: "speech-ready", runId }),
+    onEvent: (runId, event) => dispatchSession({ type: "speech-event", runId, event, now: Date.now() }),
+    onReady: (runId) => dispatchSession({ type: "speech-ready", runId }),
     onTrace: trace.emit,
   });
 
@@ -59,7 +64,7 @@ export function SessionPage() {
   useCanonicalSpeechSpanLifecycle({
     canonicalSpeech: state.speech.canonical,
     speechRunId: state.speech.debug.runId,
-    dispatch,
+    dispatch: dispatchSession,
   });
 
   useCanonicalTrace(trace.sessionId, state.speech.debug.runId, state.speech.canonical, trace.emit);
@@ -100,8 +105,8 @@ export function SessionPage() {
   const stopSpeech = useCallback(async () => {
     const runId = state.speech.debug.runId;
     await stopSpeechmatics();
-    dispatch({ type: "speech-stopped", runId, now: Date.now() });
-  }, [state.speech.debug.runId, stopSpeechmatics]);
+    dispatchSession({ type: "speech-stopped", runId, now: Date.now() });
+  }, [dispatchSession, state.speech.debug.runId, stopSpeechmatics]);
 
   useEffect(() => () => { releasePresentation(true); void stopSpeech(); }, [releasePresentation, stopSpeech]);
 
@@ -122,61 +127,61 @@ export function SessionPage() {
       speechRunIdRef.current = 0;
       previousPresentationStatusRef.current = undefined;
       teachingLayoutRef.current = undefined;
-      dispatch({ type: "restart-session" });
+      dispatchSession({ type: "restart-session" });
     }
-    dispatch({ type: "begin-capture" });
+    dispatchSession({ type: "begin-capture" });
     try {
       const stream = await requestPresentationStream();
       streamRef.current = stream;
       const videoTrack = stream.getVideoTracks()[0];
       const onCaptureEnded = () => {
         releasePresentation(false);
-        dispatch({ type: "capture-ended" });
+        dispatchSession({ type: "capture-ended" });
         void exitStageFullscreen();
       };
       endedListenerRef.current = onCaptureEnded;
       videoTrack?.addEventListener("ended", onCaptureEnded, { once: true });
-      dispatch({ type: "capture-ready", stream });
+      dispatchSession({ type: "capture-ready", stream });
     } catch (error) {
-      dispatch({ type: "capture-failed", error: error && typeof error === "object" && "kind" in error && "message" in error ? error as { kind: "unsupported" | "cancelled" | "permission-denied" | "unknown"; message: string } : { kind: "unknown", message: "CueLayer could not start presentation capture. Please try selecting your presentation again." } });
+      dispatchSession({ type: "capture-failed", error: error && typeof error === "object" && "kind" in error && "message" in error ? error as { kind: "unsupported" | "cancelled" | "permission-denied" | "unknown"; message: string } : { kind: "unknown", message: "CueLayer could not start presentation capture. Please try selecting your presentation again." } });
     }
   };
 
   const endSession = async () => {
-    const speechRunId = state.speech.debug.runId;
-    const finalCanonicalSpeech = closeOpenCanonicalSpeechSpans(state.speech.canonical, "explicit_stop", Date.now());
     await stopSpeech();
+    const speechRunId = stateRef.current.speech.debug.runId;
+    const finalCanonicalSpeech = closeOpenCanonicalSpeechSpans(stateRef.current.speech.canonical, "explicit_stop", Date.now());
     releasePresentation(true);
     await exitStageFullscreen();
     await liveTeaching.endLesson({ canonicalSpeech: finalCanonicalSpeech, speechRunId });
     await trace.complete("user_ended_session");
-    dispatch({ type: "end", now: Date.now() });
+    dispatchSession({ type: "end", now: Date.now() });
   };
 
   const startSpeech = async () => {
     const runId = ++speechRunIdRef.current;
-    dispatch({ type: "begin-speech", runId });
+    dispatchSession({ type: "begin-speech", runId });
     try { await startSpeechmatics(runId); }
     catch (error) {
       const startFailure = speechStartFailureFrom(error);
-      dispatch({ type: "speech-event", runId, event: { kind: "error", code: startFailure.code, message: startFailure.message } });
+      dispatchSession({ type: "speech-event", runId, event: { kind: "error", code: startFailure.code, message: startFailure.message } });
     }
   };
 
   const toggleSpeech = async () => {
     if (state.speech.status === "ready") {
       pauseSpeechmatics();
-      dispatch({ type: "speech-paused", runId: state.speech.debug.runId });
+      dispatchSession({ type: "speech-paused", runId: state.speech.debug.runId });
     } else if (state.speech.status === "paused") {
       resumeSpeechmatics();
-      dispatch({ type: "speech-resumed", runId: state.speech.debug.runId });
+      dispatchSession({ type: "speech-resumed", runId: state.speech.debug.runId });
     } else await startSpeech();
   };
 
   const toggleSessionPause = () => {
     if (state.status === "active") pauseSpeechmatics();
     else if (state.speech.status === "paused") resumeSpeechmatics();
-    dispatch({ type: state.status === "paused" ? "resume" : "pause" });
+    dispatchSession({ type: state.status === "paused" ? "resume" : "pause" });
   };
 
   const toggleFullscreen = async () => {
