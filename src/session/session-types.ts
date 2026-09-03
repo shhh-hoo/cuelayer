@@ -42,7 +42,7 @@ export type SessionAction =
   | { type: "close-speech-span"; runId: number; spanId: string; spanRevision: number; reason: CanonicalSpeechSpanCloseReason; now: number }
   | { type: "speech-paused"; runId: number }
   | { type: "speech-resumed"; runId: number }
-  | { type: "speech-stopped"; runId: number }
+  | { type: "speech-stopped"; runId: number; now?: number }
   | { type: "planner-gate"; runId: number; spanId: string; spanRevision: number; segmentIds: string[]; decision: "run" | "skip"; reason: string; now: number; requestId?: number; input?: PlannerInput }
   | { type: "planner-requested"; requestId: number; runId: number; spanId: string; spanRevision: number; input?: PlannerInput; segmentIds?: string[]; now?: number }
   | { type: "planner-aborted"; requestId: number; runId: number; spanId: string; spanRevision: number; input: PlannerInput; reason: "live_budget_timeout" | "superseded_by_newer_checkpoint" | "session_stopped"; now: number; startedAt?: number; segmentIds?: string[] }
@@ -55,4 +55,4 @@ export type SessionAction =
   | { type: "toggle-caption-lock" }
   | { type: "pause" }
   | { type: "resume" }
-  | { type: "end" };
+  | { type: "end"; now?: number };

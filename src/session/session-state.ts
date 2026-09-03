@@ -132,7 +132,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       return { ...state, speech: { ...state.speech, status: "ready" } };
     case "speech-stopped":
       if (state.speech.debug.runId !== action.runId) return state;
-      return { ...state, speech: { ...state.speech, status: "ended", canonical: { ...state.speech.canonical, provisional: undefined } } };
+      return closeOpenSpeechSpans({ ...state, speech: { ...state.speech, status: "ended", canonical: { ...state.speech.canonical, provisional: undefined } } }, action.runId, action.now ?? Date.now());
     case "planner-gate": {
       const input = action.input ? plannerInputSummary(action.input) : undefined;
       const traceId = spanTraceIdFor(action.runId, action.spanId, action.spanRevision);
@@ -297,6 +297,17 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     case "resume":
       return state.status === "paused" ? { ...state, status: "active", speech: state.speech.status === "paused" ? { ...state.speech, status: "ready" } : state.speech } : state;
     case "end":
-      return { ...state, status: "ended", presentation: { status: "ended", stream: null }, speech: { ...state.speech, status: "ended", canonical: { ...state.speech.canonical, provisional: undefined } }, planner: { ...state.planner, inFlightRequestId: undefined } };
+      {
+        const closed = closeOpenSpeechSpans(state, state.speech.debug.runId, action.now ?? Date.now());
+        return { ...closed, status: "ended", presentation: { status: "ended", stream: null }, speech: { ...closed.speech, status: "ended", canonical: { ...closed.speech.canonical, provisional: undefined } }, planner: { ...closed.planner, inFlightRequestId: undefined } };
+      }
   }
+}
+
+function closeOpenSpeechSpans(state: SessionState, runId: number, now: number) {
+  let next = state;
+  for (const span of state.speech.canonical.spans.filter((item) => item.status === "open")) {
+    next = sessionReducer(next, { type: "close-speech-span", runId, spanId: span.id, spanRevision: span.revision, reason: "explicit_stop", now });
+  }
+  return next;
 }

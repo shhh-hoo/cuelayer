@@ -7,6 +7,8 @@ import { createSessionPageReducer } from "./page-session-reducer";
 import { usePrepareSpeechmaticsAudioContext } from "./SpeechmaticsSessionProvider";
 import { speechStartFailureFrom, useSpeechmaticsSession } from "./use-speechmatics-session";
 import { useLiveTeaching } from "./use-live-teaching";
+import { useCanonicalSpeechSpanLifecycle } from "./use-canonical-speech-span-lifecycle";
+import { closeOpenCanonicalSpeechSpans } from "./canonical-speech";
 import { TeachingTraceDrawer } from "./TeachingTraceDrawer";
 import { traceDraft } from "../trace/contracts";
 import { useCanonicalTrace } from "../trace/use-canonical-trace";
@@ -54,6 +56,12 @@ export function SessionPage() {
     onTrace: trace.emit,
   });
 
+  useCanonicalSpeechSpanLifecycle({
+    canonicalSpeech: state.speech.canonical,
+    speechRunId: state.speech.debug.runId,
+    dispatch,
+  });
+
   useCanonicalTrace(trace.sessionId, state.speech.debug.runId, state.speech.canonical, trace.emit);
 
   useEffect(() => {
@@ -90,8 +98,10 @@ export function SessionPage() {
   }, []);
 
   const stopSpeech = useCallback(async () => {
+    const runId = state.speech.debug.runId;
     await stopSpeechmatics();
-  }, [stopSpeechmatics]);
+    dispatch({ type: "speech-stopped", runId, now: Date.now() });
+  }, [state.speech.debug.runId, stopSpeechmatics]);
 
   useEffect(() => () => { releasePresentation(true); void stopSpeech(); }, [releasePresentation, stopSpeech]);
 
@@ -133,12 +143,14 @@ export function SessionPage() {
   };
 
   const endSession = async () => {
+    const speechRunId = state.speech.debug.runId;
+    const finalCanonicalSpeech = closeOpenCanonicalSpeechSpans(state.speech.canonical, "explicit_stop", Date.now());
     await stopSpeech();
     releasePresentation(true);
     await exitStageFullscreen();
-    await liveTeaching.endLesson();
+    await liveTeaching.endLesson({ canonicalSpeech: finalCanonicalSpeech, speechRunId });
     await trace.complete("user_ended_session");
-    dispatch({ type: "end" });
+    dispatch({ type: "end", now: Date.now() });
   };
 
   const startSpeech = async () => {

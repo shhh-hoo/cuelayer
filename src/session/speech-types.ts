@@ -17,7 +17,7 @@ export type ProviderFinal = {
   committedAtMs: number;
 };
 
-export type CanonicalSpeechSpanCloseReason = "meaningful_pause" | "timing_gap" | "terminal_punctuation" | "max_duration" | "max_words";
+export type CanonicalSpeechSpanCloseReason = "meaningful_pause" | "timing_gap" | "terminal_punctuation" | "max_duration" | "max_words" | "explicit_stop";
 
 export type CanonicalSpeechSpan = {
   id: string;

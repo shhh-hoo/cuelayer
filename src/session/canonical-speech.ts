@@ -162,6 +162,12 @@ export function closeCanonicalSpeechSpan(state: CanonicalSpeechState, spanId: st
   return { state: { ...state, spans }, changes: [{ decision: "closed", spanId, spanRevision: closed.revision, closeReason: reason }] };
 }
 
+export function closeOpenCanonicalSpeechSpans(state: CanonicalSpeechState, reason: CanonicalSpeechSpanCloseReason, now: number) {
+  return state.spans.reduce((next, span) => span.status === "open"
+    ? closeCanonicalSpeechSpan(next, span.id, span.revision, reason, now).state
+    : next, state);
+}
+
 export function isPlannerCheckpoint(span: CanonicalSpeechSpan) {
   return span.status === "closed" || span.endMs - span.startMs >= SPEECH_SPAN_ASSEMBLY.plannerCheckpointMs;
 }

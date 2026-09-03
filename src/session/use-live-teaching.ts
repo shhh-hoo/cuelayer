@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { validateAndNormalizeProposal } from "../lesson-stream/accepted-interpretations";
 import { buildTeachingInterpretationRequest } from "../lesson-stream/context-projection";
 import { LosslessInterpretationScheduler } from "../lesson-stream/pending-evidence";
 import { createHttpTeachingInterpreter, type TeachingInterpreter } from "../lesson-stream/planner";
@@ -133,24 +132,28 @@ export function useLiveTeaching({
     const timeout = window.setTimeout(() => { timedOut = true; controller.abort("hard_deadline"); }, HARD_DEADLINE_MS);
 
     void interpreter.interpret(request, { signal: controller.signal }).then(async (response) => {
-      if (activeRunRef.current !== work.speechRunId || runtimeRef.current !== runtime) throw new Error("interpretation-stale-speech-run");
-      const validation = validateAndNormalizeProposal({ proposal: response.proposal, request, allCheckpoints: runtime.checkpoints, state: runtime.state, model: MODEL_NAME });
-      if (!validation.ok) {
-        onTrace?.(traceDraft("interpretation.output_rejected", { requestId: work.requestId, reason: validation.error, pendingCount: schedulerRef.current.pendingCount }, { correlation: { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId } }));
-        throw new Error(validation.error);
+      const acceptance = await runtime.acceptProposal({
+        proposal: response.proposal,
+        request,
+        model: MODEL_NAME,
+        isCurrent: () => activeRunRef.current === work.speechRunId && runtimeRef.current === runtime,
+      });
+      if (!acceptance.ok) {
+        onTrace?.(traceDraft("interpretation.output_rejected", { requestId: work.requestId, reason: acceptance.error, pendingCount: schedulerRef.current.pendingCount }, { correlation: { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId } }));
+        throw new Error(acceptance.error);
       }
-      if (validation.boardConflict) onTrace?.(traceDraft("interpretation.channel_conflict", { requestId: work.requestId, channel: "board" }, { correlation: { rootId: `interpretation:${work.requestId}`, plannerRequestId: work.requestId } }));
-      if (validation.cueConflict) onTrace?.(traceDraft("interpretation.channel_conflict", { requestId: work.requestId, channel: "cue" }, { correlation: { rootId: `interpretation:${work.requestId}`, plannerRequestId: work.requestId } }));
-      const stateBefore = runtime.state;
-      await runtime.acceptSteps(validation.steps);
-      schedulerRef.current.settleAccepted(work.requestId, validation.steps.flatMap((step) => step.consumesCheckpointIds));
+      if (acceptance.boardConflict) onTrace?.(traceDraft("interpretation.channel_conflict", { requestId: work.requestId, channel: "board" }, { correlation: { rootId: `interpretation:${work.requestId}`, plannerRequestId: work.requestId } }));
+      if (acceptance.cueConflict) onTrace?.(traceDraft("interpretation.channel_conflict", { requestId: work.requestId, channel: "cue" }, { correlation: { rootId: `interpretation:${work.requestId}`, plannerRequestId: work.requestId } }));
+      const stateBefore = acceptance.stateBefore;
+      const stateAfter = acceptance.stateAfter;
+      schedulerRef.current.settleAccepted(work.requestId, acceptance.steps.flatMap((step) => step.consumesCheckpointIds));
       consecutiveFailuresRef.current = 0;
       setError(undefined);
       setStatus("ready");
       const latencyMs = Math.max(0, Date.now() - work.startedAtMs);
       onTrace?.(traceDraft("interpretation.request_completed", { requestId: work.requestId, latencyMs, ...(response.usage ? { inputTokens: response.usage.inputTokens, cachedInputTokens: response.usage.cachedInputTokens, outputTokens: response.usage.outputTokens } : {}), ...(response.estimatedCostUsd === undefined ? { costStatus: "rates_unconfigured" as const } : { costStatus: "estimated" as const, estimatedCostUsd: response.estimatedCostUsd }) }, { correlation: { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId } }));
-      validation.steps.forEach((step) => {
-        const correlation = { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId, interpretationId: step.interpretationId, stepIndex: step.stepIndex, boardRevision: runtime.state.board.revision, cueRevision: runtime.state.cue.revision };
+      acceptance.steps.forEach((step) => {
+        const correlation = { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId, interpretationId: step.interpretationId, stepIndex: step.stepIndex, boardRevision: stateAfter.board.revision, cueRevision: stateAfter.cue.revision };
         onTrace?.(traceDraft("interpretation.step_accepted", { requestId: work.requestId, interpretationId: step.interpretationId, stepIndex: step.stepIndex, checkpointIds: step.consumesCheckpointIds, boardAction: step.boardDelta.action, cueAction: step.cueDelta.action }, { correlation }));
         if (step.boardDelta.action === "KEEP") onTrace?.(traceDraft("board.keep", { reason: step.boardDelta.reason }, { correlation }));
         if (step.boardDelta.action === "SET_ACTIVE") {
@@ -222,9 +225,15 @@ export function useLiveTeaching({
     }
   }, [onTrace]);
 
-  const endLesson = useCallback(async () => {
+  const endLesson = useCallback(async ({ canonicalSpeech, speechRunId }: { canonicalSpeech?: CanonicalSpeechState; speechRunId?: number } = {}) => {
     activeControllerRef.current?.abort("lesson_ended");
-    await runtimeRef.current?.end();
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    await runtime.start();
+    if (canonicalSpeech && speechRunId !== undefined) {
+      for (const span of canonicalSpeech.spans.filter((item) => item.status === "closed")) await runtime.commitClosedSpan(span, speechRunId);
+    }
+    await runtime.end();
   }, []);
 
   return { state, status, pendingCount, error, expireCue, endLesson };
