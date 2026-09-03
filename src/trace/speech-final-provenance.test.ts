@@ -38,8 +38,8 @@ describe("speech final provenance", () => {
     const accepted = validateAndNormalizeProposal({
       proposal: { requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 0, steps: [{
         consumesCheckpointIds: [evidence.checkpointId],
-        boardDelta: { action: "SET_ACTIVE", content: { kind: "TEXT", source: { checkpointId: evidence.checkpointId, text: "Activation energy" } }, continuity: "same_thread", retainPrevious: false },
-        cueDelta: { action: "KEEP" }, evidenceRefs: [{ checkpointId: evidence.checkpointId, text: "Activation energy" }],
+        boardDelta: { action: "SET_ACTIVE", contribution: { mode: "REPRESENT", content: { kind: "TEXT", text: "Energy threshold" }, provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: evidence.checkpointId, quote: "Activation energy" }] } }, continuity: "same_thread", retainPrevious: false },
+        cueDelta: { action: "KEEP" }, evidenceRefs: [{ checkpointId: evidence.checkpointId, quote: "Activation energy" }],
       }] }, request, allCheckpoints: [evidence], state: before, model: "test",
     });
     expect(accepted.ok).toBe(true);
@@ -58,7 +58,7 @@ describe("speech final provenance", () => {
     expect(canonicalSpan.payload.sourceFinalIds).toEqual([final.id]);
     expect(checkpoint.payload.sourceFinalIds).toEqual([final.id]);
     expect(request.newEvidence.map((item) => item.checkpointId)).toEqual([evidence.checkpointId]);
-    expect(interpretation[0]).toMatchObject({ type: "interpretation.step_accepted", payload: { checkpointIds: [evidence.checkpointId] }, correlation: { plannerRequestId: request.requestId, boardRevision: after.board.revision } });
+    expect(interpretation[0]).toMatchObject({ type: "interpretation.step_accepted", payload: { checkpointIds: [evidence.checkpointId], boardMode: "REPRESENT", boardSpeechRefCount: 1 }, correlation: { plannerRequestId: request.requestId, boardRevision: after.board.revision } });
     expect(board).toMatchObject({ payload: { boardItemId: "board-provenance-request-accepted-0" }, correlation: { boardRevision: after.board.revision } });
     expect(surface.correlation).toMatchObject({ boardRevision: after.board.revision, cueRevision: after.cue.revision });
   });

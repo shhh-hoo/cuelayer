@@ -14,17 +14,17 @@ describe("live teaching trace correlation", () => {
   });
 
   it("emits exact ordered Cue transitions for same-batch SET then RESOLVE", () => {
-    const first = step(0, { action: "SET", cueKind: "TASK", source: { checkpointId: "A", text: "Complete the task" } });
+    const first = step(0, { action: "SET", cueKind: "NOTE", contribution: { mode: "RECONSTRUCT", content: "Complete the task", provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "A", quote: "Complete the task" }] } } });
     const beforeFirst = createInitialTeachingState();
     const afterFirst = reduceAcceptedStep(beforeFirst, first, new Map([["A", 1], ["B", 2]]));
-    const second = step(1, { action: "RESOLVE_CURRENT", reason: "completed", evidence: { checkpointId: "B", text: "Completed" } });
+    const second = step(1, { action: "RESOLVE_CURRENT", reason: "completed", evidence: { checkpointId: "B", quote: "Completed" } });
     const afterSecond = reduceAcceptedStep(afterFirst, second, new Map([["A", 1], ["B", 2]]));
     const drafts: SessionTraceDraft[] = [];
     emitAcceptedStepTrace({ transition: { step: first, stateBefore: beforeFirst, stateAfter: afterFirst }, speechRunId: 3, plannerRequestId: "batch", emit: (draft) => drafts.push(draft) });
     emitAcceptedStepTrace({ transition: { step: second, stateBefore: afterFirst, stateAfter: afterSecond }, speechRunId: 3, plannerRequestId: "batch", emit: (draft) => drafts.push(draft) });
     const set = drafts.find((draft) => draft.type === "teaching_cue.set");
     const resolved = drafts.find((draft) => draft.type === "teaching_cue.resolved");
-    expect(set).toMatchObject({ payload: { cueId: "cue-batch-accepted-0", kind: "TASK" }, correlation: { cueId: "cue-batch-accepted-0", cueRevision: 1 } });
+    expect(set).toMatchObject({ payload: { cueId: "cue-batch-accepted-0", kind: "NOTE" }, correlation: { cueId: "cue-batch-accepted-0", cueRevision: 1 } });
     expect(resolved).toMatchObject({ payload: { cueId: "cue-batch-accepted-0", reason: "completed" }, correlation: { cueId: "cue-batch-accepted-0", cueRevision: 2 } });
   });
 });

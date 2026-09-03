@@ -21,6 +21,10 @@ export function projectProcessedTimeline(events: readonly LessonEvent[]): Proces
       timeline.push({
         type: "accepted_interpretation",
         interpretationId: event.step.interpretationId,
+        contributionIds: {
+          ...(event.step.boardDelta.action === "SET_ACTIVE" ? { board: `board-${event.step.interpretationId}-${event.step.stepIndex}` } : {}),
+          ...(event.step.cueDelta.action === "SET" ? { cue: `cue-${event.step.interpretationId}-${event.step.stepIndex}` } : {}),
+        },
         consumesCheckpointIds: event.step.consumesCheckpointIds,
         boardDelta: event.step.boardDelta,
         cueDelta: event.step.cueDelta,

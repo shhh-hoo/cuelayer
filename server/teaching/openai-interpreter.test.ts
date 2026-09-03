@@ -17,7 +17,7 @@ import { validateAndNormalizeProposal } from "../../src/lesson-stream/accepted-i
 const input: TeachingInterpretationRequest = {
   requestId: "request-1",
   sessionId: "session-1",
-  policyVersion: "live-state-p4-v1",
+  policyVersion: "bounded-agent-p4-bootstrap-v1",
   processedTimeline: [{ type: "evidence", checkpointId: "checkpoint-0", sequence: 1, text: "Activation energy is required.", warnings: [] }],
   currentState: createInitialTeachingState(),
   newEvidence: [{ checkpointId: "checkpoint-1", lessonSequence: 2, speechRunId: 1, startMs: 100, endMs: 200, text: "Temperature increases.", sourceFinalIds: ["provider-final-1"], warnings: [] }],
@@ -80,14 +80,14 @@ describe("OpenAI Teaching State interpreter", () => {
         consumesCheckpointIds: ["checkpoint-1"],
         boardDelta: {
           action: "SET_ACTIVE" as const,
-          content: { kind: "TEXT" as const, source: { checkpointId: "checkpoint-1", text: "Temperature increases" } },
+          contribution: { mode: "REPRESENT" as const, content: { kind: "TEXT" as const, text: "Temperature rises" }, provenance: { basis: "SPEECH" as const, speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], stateRefs: null } },
           continuity: "same_thread" as const,
           retainPrevious: false,
           support: null,
           invalidatesBoardItemIds: null,
         },
-        cueDelta: { action: "SET" as const, cueKind: "NOTE" as const, source: { checkpointId: "checkpoint-1", text: "Temperature increases" }, targetBoardItemId: null },
-        evidenceRefs: [{ checkpointId: "checkpoint-1", text: "Temperature increases" }],
+        cueDelta: { action: "SET" as const, cueKind: "NOTE" as const, contribution: { mode: "REPRESENT" as const, content: "Notice the temperature change", provenance: { basis: "SPEECH" as const, speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], stateRefs: null } }, targetBoardItemId: null },
+        evidenceRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }],
         warnings: null,
       }],
       warnings: null,
@@ -110,13 +110,13 @@ describe("OpenAI Teaching State interpreter", () => {
       requestId: "request-1", baseBoardRevision: 0, baseCueRevision: 0,
       steps: [{
         consumesCheckpointIds: ["checkpoint-1"],
-        boardDelta: { action: "SET_ACTIVE", content: { kind: "TEXT", source: { checkpointId: "checkpoint-1", text: "Temperature increases" } }, continuity: "same_thread", retainPrevious: false, support: [{ checkpointId: "checkpoint-1", text: "Temperature increases" }], invalidatesBoardItemIds: ["old-board"] },
-        cueDelta: { action: "SET", cueKind: "NOTE", source: { checkpointId: "checkpoint-1", text: "Temperature increases" }, targetBoardItemId: "board-request-1-accepted-0" },
+        boardDelta: { action: "SET_ACTIVE", contribution: { mode: "RECONSTRUCT", content: { kind: "TEXT", text: "Temperature increases" }, provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], stateRefs: null } }, continuity: "same_thread", retainPrevious: false, support: [{ mode: "RECONSTRUCT", content: "Temperature increases", provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], stateRefs: null } }], invalidatesBoardItemIds: ["old-board"] },
+        cueDelta: { action: "SET", cueKind: "NOTE", contribution: { mode: "RECONSTRUCT", content: "Temperature increases", provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], stateRefs: null } }, targetBoardItemId: "board-request-1-accepted-0" },
         evidenceRefs: [], warnings: [{ code: "provider-note", detail: "kept" }],
       }],
       warnings: [{ code: "proposal-note", detail: "kept" }],
     });
-    expect(proposal.steps[0]!.boardDelta).toMatchObject({ support: [{ checkpointId: "checkpoint-1" }], invalidatesBoardItemIds: ["old-board"] });
+    expect(proposal.steps[0]!.boardDelta).toMatchObject({ support: [{ mode: "RECONSTRUCT", provenance: { speechRefs: [{ checkpointId: "checkpoint-1" }] } }], invalidatesBoardItemIds: ["old-board"] });
     expect(proposal.steps[0]!.cueDelta).toMatchObject({ targetBoardItemId: "board-request-1-accepted-0" });
     expect(proposal.warnings).toEqual([{ code: "proposal-note", detail: "kept" }]);
   });

@@ -40,7 +40,7 @@ export function checkpointFromClosedSpan(
   };
 }
 
-export function exactReferenceIsGrounded(reference: { checkpointId: string; text: string }, checkpoints: readonly CompactEvidenceCheckpoint[]) {
+export function exactSpeechReferenceIsGrounded(reference: { checkpointId: string; quote: string }, checkpoints: readonly CompactEvidenceCheckpoint[]) {
   const checkpoint = checkpoints.find((item) => item.checkpointId === reference.checkpointId);
-  return Boolean(checkpoint && reference.text.trim() && checkpoint.text.includes(reference.text));
+  return Boolean(checkpoint && reference.quote.trim() && checkpoint.text.includes(reference.quote));
 }

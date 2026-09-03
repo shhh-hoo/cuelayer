@@ -12,6 +12,12 @@ It listens to teaching as it unfolds, maintains a speech-faithful semantic sourc
 
 The canonical speech representation is a grounding layer. Learner-visible output is adaptive rather than synonymous with a continuous transcript.
 
+### Alpha learner-surface boundary
+
+CueLayer Alpha is a bounded learner-surface agent. New lesson evidence is the only deliberation trigger. Teacher speech is primary evidence, but it is not the literal learner-output boundary: the Board may reconstruct, represent, or (when enabled by policy) narrowly augment a teacher assertion; Teaching Cue may reconstruct or represent it. Every visible contribution carries exact speech provenance and, where used, references to existing Teaching State.
+
+Alpha does not autonomously create a task, question, or hint; it does not correct the teacher or initiate a new activity. A teacher-provided hint and an explicit teacher self-correction remain supported state semantics. Teacher override is a contract-only event, with no Alpha UI. Personality, avatar, intervention-level controls, and proactive timers are future work.
+
 ## Primary experience
 
 The teacher teaches naturally. CueLayer interprets the live explanation and turns useful structure into a restrained learner-visible surface.
@@ -71,7 +77,7 @@ Display intents are planner-level semantic decisions. They compile into renderer
 
 `QUIET` is a successful decision. A useful CueLayer session should contain substantial visually quiet time.
 
-Every learner-visible representation remains grounded in the teacher's speech, Teaching State, and approved context. Symbolic or spatial compression may make stated meaning easier to follow while preserving the teacher's asserted meaning, corrections, uncertainty, and deliberate wording.
+Every learner-visible representation remains grounded in the teacher's speech, Teaching State, and approved context. Grounding proves provenance, not literal display equality: exact speech quotes support the contribution while the bounded contribution may reconstruct or represent stated meaning. Symbolic or spatial compression may make stated meaning easier to follow while preserving the teacher's asserted meaning, corrections, uncertainty, and deliberate wording.
 
 ## Learning cues
 

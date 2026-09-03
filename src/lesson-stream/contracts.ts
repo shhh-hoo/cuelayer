@@ -1,6 +1,7 @@
 import type { SpeechWord } from "../session/speech-types";
 
-export const LESSON_POLICY_VERSION = "live-state-p4-v1";
+export const LESSON_POLICY_VERSION = "bounded-agent-p4-bootstrap-v1";
+export const LESSON_EVENT_SCHEMA_VERSION = "lesson-event-v2-contribution-provenance";
 export const NOTE_EXPIRY_MS = 4_000;
 
 export type SpeechEvidenceWarning = {
@@ -26,16 +27,30 @@ export type GroundingRecord = {
   providerEvidence: Array<{ providerFinalId: string }>;
 };
 
-export type GroundedReference = {
+/** Exact teacher-speech evidence. Quotes, unlike visible contributions, must be substrings. */
+export type SpeechReference = {
   checkpointId: string;
-  text: string;
+  quote: string;
+};
+
+export type ContributionMode = "RECONSTRUCT" | "REPRESENT" | "AUGMENT";
+export type StateReference = { kind: "BOARD_ITEM" | "ACTIVE_CUE"; id: string };
+export type ContributionProvenance = {
+  speechRefs: SpeechReference[];
+  stateRefs?: StateReference[];
+  basis: "SPEECH" | "SPEECH_AND_STATE" | "DOMAIN_KNOWLEDGE";
+};
+export type TeachingContribution<TContent> = {
+  mode: ContributionMode;
+  content: TContent;
+  provenance: ContributionProvenance;
 };
 
 export type BoardContent =
-  | { kind: "TEXT"; source: GroundedReference }
-  | { kind: "FOCUS"; target: GroundedReference }
-  | { kind: "RELATION"; relation: "cause" | "sequence" | "contrast"; targets: GroundedReference[] }
-  | { kind: "TRANSFORM"; from: GroundedReference; to: GroundedReference };
+  | { kind: "TEXT"; text: string }
+  | { kind: "FOCUS"; target: string }
+  | { kind: "RELATION"; relation: "cause" | "sequence" | "contrast"; targets: string[] }
+  | { kind: "TRANSFORM"; from: string; to: string };
 
 export type BoardDelta =
   | {
@@ -44,18 +59,18 @@ export type BoardDelta =
     }
   | {
       action: "SET_ACTIVE";
-      content: BoardContent;
+      contribution: TeachingContribution<BoardContent>;
       continuity: "same_thread" | "topic_shift" | "correction";
       retainPrevious: boolean;
-      support?: GroundedReference[];
+      support?: TeachingContribution<string>[];
       invalidatesBoardItemIds?: string[];
     }
-  | { action: "ADD_SUPPORT"; support: GroundedReference; targetBoardItemId: string };
+  | { action: "ADD_SUPPORT"; support: TeachingContribution<string>; targetBoardItemId: string };
 
 export type TeachingCueDelta =
   | { action: "KEEP" }
-  | { action: "SET"; cueKind: "QUESTION" | "TASK" | "NOTE" | "HINT"; source: GroundedReference; targetBoardItemId?: string }
-  | { action: "RESOLVE_CURRENT"; reason: "answered" | "completed" | "teacher_moved_on" | "replaced"; evidence: GroundedReference };
+  | { action: "SET"; cueKind: "NOTE" | "HINT"; contribution: TeachingContribution<string>; targetBoardItemId?: string }
+  | { action: "RESOLVE_CURRENT"; reason: "answered" | "completed" | "teacher_moved_on" | "replaced"; evidence: SpeechReference };
 
 export type InterpretationWarning = {
   code: string;
@@ -71,7 +86,7 @@ export type AcceptedInterpretationStep = {
   baseCueRevision: number;
   boardDelta: BoardDelta;
   cueDelta: TeachingCueDelta;
-  evidenceRefs: GroundedReference[];
+  evidenceRefs: SpeechReference[];
   warnings: InterpretationWarning[];
   model: string;
   policyVersion: string;
@@ -80,7 +95,7 @@ export type AcceptedInterpretationStep = {
 
 export type BoardItem = {
   id: string;
-  content: BoardContent;
+  contribution: TeachingContribution<BoardContent>;
   sourceCheckpointIds: string[];
   establishedAtRevision: number;
 };
@@ -88,13 +103,13 @@ export type BoardItem = {
 export type BoardSupport = {
   id: string;
   targetBoardItemId: string;
-  source: GroundedReference;
+  contribution: TeachingContribution<string>;
 };
 
 export type ActiveLessonCue = {
   id: string;
-  kind: "QUESTION" | "TASK" | "NOTE" | "HINT";
-  text: string;
+  kind: "NOTE" | "HINT";
+  contribution: TeachingContribution<string>;
   sourceSegmentIds: string[];
   activatedAt: number;
   targetBoardItemId?: string;
@@ -116,19 +131,21 @@ export type TeachingStateSnapshot = {
   };
 };
 
+type EventIdentity = { schemaVersion: typeof LESSON_EVENT_SCHEMA_VERSION; eventId: string; sessionId: string; sequence: number };
 export type LessonEvent =
-  | { type: "lesson.started"; eventId: string; sessionId: string; sequence: number; timestamp: string }
-  | { type: "evidence.checkpoint_committed"; eventId: string; sessionId: string; sequence: number; timestamp: string; checkpoint: CompactEvidenceCheckpoint; grounding: GroundingRecord }
-  | { type: "interpretation.step_accepted"; eventId: string; sessionId: string; sequence: number; step: AcceptedInterpretationStep }
-  | { type: "teaching_cue.expired"; eventId: string; sessionId: string; sequence: number; cueId: string; baseCueRevision: number; timestamp: string }
-  | { type: "teacher_override.applied"; eventId: string; sessionId: string; sequence: number; operation: { kind: string; payload?: unknown } }
-  | { type: "lesson.ended"; eventId: string; sessionId: string; sequence: number; timestamp: string };
+  | (EventIdentity & { type: "lesson.started"; timestamp: string })
+  | (EventIdentity & { type: "evidence.checkpoint_committed"; timestamp: string; checkpoint: CompactEvidenceCheckpoint; grounding: GroundingRecord })
+  | (EventIdentity & { type: "interpretation.step_accepted"; step: AcceptedInterpretationStep })
+  | (EventIdentity & { type: "teaching_cue.expired"; cueId: string; baseCueRevision: number; timestamp: string })
+  | (EventIdentity & { type: "teacher_override.applied"; operation: { kind: string; payload?: unknown } })
+  | (EventIdentity & { type: "lesson.ended"; timestamp: string });
 
 export type ProcessedTimelineEntry =
   | { type: "evidence"; checkpointId: string; sequence: number; text: string; warnings: SpeechEvidenceWarning[] }
   | {
       type: "accepted_interpretation";
       interpretationId: string;
+      contributionIds: { board?: string; cue?: string };
       consumesCheckpointIds: string[];
       boardDelta: BoardDelta;
       cueDelta: TeachingCueDelta;
@@ -150,7 +167,7 @@ export type TeachingInterpretationStepProposal = {
   consumesCheckpointIds: string[];
   boardDelta: BoardDelta;
   cueDelta: TeachingCueDelta;
-  evidenceRefs: GroundedReference[];
+  evidenceRefs: SpeechReference[];
   warnings?: InterpretationWarning[];
 };
 

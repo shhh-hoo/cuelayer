@@ -154,7 +154,7 @@ export type SessionTracePayloads = {
   "interpretation.request_timeout": { requestId: string; latencyMs: number; pendingCount: number };
   "interpretation.output_rejected": { requestId: string; reason: string; pendingCount: number };
   "interpretation.channel_conflict": { requestId: string; channel: "board" | "cue" };
-  "interpretation.step_accepted": { requestId: string; interpretationId: string; stepIndex: number; checkpointIds: string[]; boardAction: string; cueAction: string };
+  "interpretation.step_accepted": { requestId: string; interpretationId: string; stepIndex: number; checkpointIds: string[]; boardAction: string; cueAction: string; boardMode?: string; boardSpeechRefCount?: number; cueMode?: string; cueSpeechRefCount?: number };
   "board.keep": { reason: string };
   "board.active_set": { boardItemId: string; continuity: string };
   "board.support_added": { boardItemId: string; supportId: string };

@@ -11,23 +11,23 @@ const teachingState: TeachingStateSnapshot = {
     revision: 2,
     active: {
       id: "board-active",
-      content: {
+      contribution: { mode: "REPRESENT", content: {
         kind: "RELATION",
         relation: "cause",
         targets: [
-          { checkpointId: "checkpoint-1", text: "Temperature increases" },
-          { checkpointId: "checkpoint-2", text: "successful collisions increase" },
+          "Temperature increases",
+          "successful collisions increase",
         ],
-      },
+      }, provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }] } },
       sourceCheckpointIds: ["checkpoint-1", "checkpoint-2"],
       establishedAtRevision: 2,
     },
-    support: [{ id: "support-1", targetBoardItemId: "board-active", source: { checkpointId: "checkpoint-2", text: "more particles exceed activation energy" } }],
-    retained: [{ id: "board-retained", content: { kind: "TEXT", source: { checkpointId: "checkpoint-0", text: "Activation energy is required" } }, sourceCheckpointIds: ["checkpoint-0"], establishedAtRevision: 1 }],
+    support: [{ id: "support-1", targetBoardItemId: "board-active", contribution: { mode: "RECONSTRUCT", content: "more particles exceed activation energy", provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-2", quote: "more particles exceed activation energy" }] } } }],
+    retained: [{ id: "board-retained", contribution: { mode: "RECONSTRUCT", content: { kind: "TEXT", text: "Activation energy is required" }, provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-0", quote: "Activation energy is required" }] } }, sourceCheckpointIds: ["checkpoint-0"], establishedAtRevision: 1 }],
   },
   cue: {
     revision: 1,
-    active: { id: "cue-task", kind: "TASK", text: "Compare the two pathways. Which is faster?", sourceSegmentIds: ["checkpoint-3"], activatedAt: 0 },
+    active: { id: "cue-note", kind: "NOTE", contribution: { mode: "REPRESENT", content: "Compare the two pathways. Which is faster?", provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-3", quote: "Compare the two pathways" }] } }, sourceSegmentIds: ["checkpoint-3"], activatedAt: 0 },
   },
 };
 

@@ -1,11 +1,15 @@
-import { exactReferenceIsGrounded } from "./evidence-checkpoints";
+import { exactSpeechReferenceIsGrounded } from "./evidence-checkpoints";
 import { reduceAcceptedStep } from "./teaching-state";
 import type {
   AcceptedInterpretationStep,
   BoardContent,
   BoardDelta,
   CompactEvidenceCheckpoint,
-  GroundedReference,
+  ContributionMode,
+  ContributionProvenance,
+  SpeechReference,
+  StateReference,
+  TeachingContribution,
   TeachingCueDelta,
   TeachingInterpretationProposal,
   TeachingInterpretationRequest,
@@ -17,7 +21,8 @@ type ValidationResult =
   | { ok: false; error: string };
 
 const object = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
-const reference = (value: unknown): value is GroundedReference => object(value) && typeof value.checkpointId === "string" && typeof value.text === "string" && value.text.trim().length > 0;
+const reference = (value: unknown): value is SpeechReference => object(value) && typeof value.checkpointId === "string" && typeof value.quote === "string" && value.quote.trim().length > 0;
+const stateReference = (value: unknown): value is StateReference => object(value) && ["BOARD_ITEM", "ACTIVE_CUE"].includes(String(value.kind)) && typeof value.id === "string" && value.id.length > 0;
 const warning = (value: unknown) => object(value) && typeof value.code === "string" && (value.detail === undefined || typeof value.detail === "string");
 const valueType = (value: unknown) => value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
 
@@ -41,52 +46,65 @@ function stepSchemaError(stepIndex: number, step: unknown) {
   return undefined;
 }
 
-function contentReferences(content: BoardContent): GroundedReference[] {
-  switch (content.kind) {
-    case "TEXT": return [content.source];
-    case "FOCUS": return [content.target];
-    case "RELATION": return content.targets;
-    case "TRANSFORM": return [content.from, content.to];
-  }
+function validBoardContent(value: unknown): value is BoardContent {
+  if (!object(value)) return false;
+  if (value.kind === "TEXT") return typeof value.text === "string" && value.text.trim().length > 0;
+  if (value.kind === "FOCUS") return typeof value.target === "string" && value.target.trim().length > 0;
+  if (value.kind === "RELATION") return ["cause", "sequence", "contrast"].includes(String(value.relation)) && Array.isArray(value.targets) && value.targets.length >= 2 && value.targets.every((target) => typeof target === "string" && target.trim().length > 0);
+  return value.kind === "TRANSFORM" && typeof value.from === "string" && value.from.trim().length > 0 && typeof value.to === "string" && value.to.trim().length > 0;
 }
 
-function validBoardContent(value: unknown): value is BoardContent {
-  if (!object(value) || typeof value.kind !== "string") return false;
-  if (value.kind === "TEXT") return reference(value.source);
-  if (value.kind === "FOCUS") return reference(value.target);
-  if (value.kind === "RELATION") return ["cause", "sequence", "contrast"].includes(String(value.relation)) && Array.isArray(value.targets) && value.targets.length >= 2 && value.targets.every(reference);
-  if (value.kind === "TRANSFORM") return reference(value.from) && reference(value.to);
-  return false;
+function validProvenance(value: unknown): value is ContributionProvenance {
+  return object(value) && Array.isArray(value.speechRefs) && value.speechRefs.length > 0 && value.speechRefs.every(reference)
+    && ["SPEECH", "SPEECH_AND_STATE", "DOMAIN_KNOWLEDGE"].includes(String(value.basis))
+    && (value.stateRefs === undefined || Array.isArray(value.stateRefs) && value.stateRefs.every(stateReference))
+    && (value.basis !== "SPEECH_AND_STATE" || Boolean(value.stateRefs?.length));
 }
+
+function contribution<T>(value: unknown, content: (candidate: unknown) => candidate is T): value is TeachingContribution<T> {
+  return object(value) && ["RECONSTRUCT", "REPRESENT", "AUGMENT"].includes(String(value.mode)) && content(value.content) && validProvenance(value.provenance);
+}
+function textContribution(value: unknown): value is TeachingContribution<string> { return contribution(value, (item): item is string => typeof item === "string" && item.trim().length > 0); }
 
 function validBoardDelta(value: unknown): value is BoardDelta {
   if (!object(value) || typeof value.action !== "string") return false;
   if (value.action === "KEEP") return ["filler", "transition", "repetition", "unfinished", "insufficient_evidence", "ambiguous_reference", "classroom_management", "no_board_value"].includes(String(value.reason));
-  if (value.action === "ADD_SUPPORT") return reference(value.support) && typeof value.targetBoardItemId === "string";
-  if (value.action !== "SET_ACTIVE" || !validBoardContent(value.content)) return false;
+  if (value.action === "ADD_SUPPORT") return textContribution(value.support) && typeof value.targetBoardItemId === "string";
+  if (value.action !== "SET_ACTIVE" || !contribution(value.contribution, validBoardContent)) return false;
   return ["same_thread", "topic_shift", "correction"].includes(String(value.continuity))
     && typeof value.retainPrevious === "boolean"
-    && (value.support === undefined || Array.isArray(value.support) && value.support.every(reference))
+    && (value.support === undefined || Array.isArray(value.support) && value.support.every(textContribution))
     && (value.invalidatesBoardItemIds === undefined || Array.isArray(value.invalidatesBoardItemIds) && value.invalidatesBoardItemIds.every((id) => typeof id === "string"));
 }
 
 function validCueDelta(value: unknown): value is TeachingCueDelta {
   if (!object(value) || typeof value.action !== "string") return false;
   if (value.action === "KEEP") return true;
-  if (value.action === "SET") return ["QUESTION", "TASK", "NOTE", "HINT"].includes(String(value.cueKind)) && reference(value.source) && (value.targetBoardItemId === undefined || typeof value.targetBoardItemId === "string");
+  if (value.action === "SET") return ["NOTE", "HINT"].includes(String(value.cueKind)) && textContribution(value.contribution) && value.contribution.mode !== "AUGMENT" && (value.targetBoardItemId === undefined || typeof value.targetBoardItemId === "string");
   return value.action === "RESOLVE_CURRENT" && ["answered", "completed", "teacher_moved_on", "replaced"].includes(String(value.reason)) && reference(value.evidence);
 }
 
-function boardReferences(delta: BoardDelta) {
+function boardReferences(delta: BoardDelta): SpeechReference[] {
   if (delta.action === "KEEP") return [];
-  if (delta.action === "ADD_SUPPORT") return [delta.support];
-  return [...contentReferences(delta.content), ...(delta.support ?? [])];
+  if (delta.action === "ADD_SUPPORT") return delta.support.provenance.speechRefs;
+  return [...delta.contribution.provenance.speechRefs, ...(delta.support ?? []).flatMap((support) => support.provenance.speechRefs)];
 }
 
-function cueReferences(delta: TeachingCueDelta) {
-  if (delta.action === "SET") return [delta.source];
+function cueReferences(delta: TeachingCueDelta): SpeechReference[] {
+  if (delta.action === "SET") return delta.contribution.provenance.speechRefs;
   if (delta.action === "RESOLVE_CURRENT") return [delta.evidence];
   return [];
+}
+
+function stateReferences(delta: BoardDelta | TeachingCueDelta): StateReference[] {
+  if (delta.action === "SET") return delta.contribution.provenance.stateRefs ?? [];
+  if (delta.action === "SET_ACTIVE") return [...(delta.contribution.provenance.stateRefs ?? []), ...(delta.support ?? []).flatMap((support) => support.provenance.stateRefs ?? [])];
+  if (delta.action === "ADD_SUPPORT") return delta.support.provenance.stateRefs ?? [];
+  return [];
+}
+function stateReferencesExist(refs: readonly StateReference[], state: TeachingStateSnapshot) {
+  const boardIds = new Set([...(state.board.active ? [state.board.active.id] : []), ...state.board.retained.map((item) => item.id)]);
+  return refs.every((ref) => ref.kind === "BOARD_ITEM" ? boardIds.has(ref.id) : state.cue.active?.id === ref.id);
 }
 
 export function validateAndNormalizeProposal({
@@ -96,6 +114,7 @@ export function validateAndNormalizeProposal({
   state,
   model,
   acceptedAt = new Date().toISOString(),
+  allowAugment = false,
 }: {
   proposal: unknown;
   request: TeachingInterpretationRequest;
@@ -103,6 +122,8 @@ export function validateAndNormalizeProposal({
   state: TeachingStateSnapshot;
   model: string;
   acceptedAt?: string;
+  /** Bootstrap policy keeps augmentation disabled; SEMANTICS may explicitly opt in. */
+  allowAugment?: boolean;
 }): ValidationResult {
   if (!object(raw) || typeof raw.requestId !== "string" || typeof raw.baseBoardRevision !== "number" || !Number.isInteger(raw.baseBoardRevision) || raw.baseBoardRevision < 0 || typeof raw.baseCueRevision !== "number" || !Number.isInteger(raw.baseCueRevision) || raw.baseCueRevision < 0 || !Array.isArray(raw.steps) || !raw.steps.length || (raw.warnings !== undefined && (!Array.isArray(raw.warnings) || raw.warnings.length > 4 || !raw.warnings.every(warning)))) return { ok: false, error: "proposal-schema-invalid" };
   if (raw.requestId !== request.requestId) return { ok: false, error: "proposal-request-id-mismatch" };
@@ -122,11 +143,16 @@ export function validateAndNormalizeProposal({
     coverageOffset += step.consumesCheckpointIds.length;
 
     const refs = [...step.evidenceRefs, ...boardReferences(step.boardDelta), ...cueReferences(step.cueDelta)];
-    if (refs.some((item) => !exactReferenceIsGrounded(item, allCheckpoints))) return { ok: false, error: "proposal-grounding-invalid" };
+    if (refs.some((item) => !exactSpeechReferenceIsGrounded(item, allCheckpoints))) return { ok: false, error: "proposal-speech-grounding-invalid" };
     if (step.boardDelta.action !== "KEEP" || step.cueDelta.action !== "KEEP") {
       const currentIds = new Set(step.consumesCheckpointIds);
       if (!refs.some((item) => currentIds.has(item.checkpointId))) return { ok: false, error: "proposal-missing-current-trigger" };
     }
+    const boardModes: ContributionMode[] = step.boardDelta.action === "SET_ACTIVE"
+      ? [step.boardDelta.contribution.mode, ...(step.boardDelta.support ?? []).map((support) => support.mode)]
+      : step.boardDelta.action === "ADD_SUPPORT" ? [step.boardDelta.support.mode] : [];
+    if ((!allowAugment && boardModes.includes("AUGMENT")) || (step.cueDelta.action === "SET" && step.cueDelta.contribution.mode === "AUGMENT")) return { ok: false, error: "proposal-contribution-mode-not-permitted" };
+    if (!stateReferencesExist([...stateReferences(step.boardDelta), ...stateReferences(step.cueDelta)], rollingState)) return { ok: false, error: "proposal-state-reference-missing" };
     if (step.boardDelta.action === "SET_ACTIVE" && step.boardDelta.continuity === "correction" && (step.boardDelta.retainPrevious || !step.boardDelta.invalidatesBoardItemIds?.length)) return { ok: false, error: "proposal-correction-invalid" };
 
     const effectiveBoardDelta = boardConflict ? { action: "KEEP" as const, reason: "insufficient_evidence" as const } : step.boardDelta;
@@ -153,7 +179,7 @@ export function validateAndNormalizeProposal({
         })()
       : effectiveCueDelta;
 
-    const groundedReferences = refs.filter((item, index, items) => items.findIndex((candidate) => candidate.checkpointId === item.checkpointId && candidate.text === item.text) === index);
+    const groundedReferences = refs.filter((item, index, items) => items.findIndex((candidate) => candidate.checkpointId === item.checkpointId && candidate.quote === item.quote) === index);
     const accepted: AcceptedInterpretationStep = {
       interpretationId: `${request.requestId}-accepted`,
       requestId: request.requestId,

@@ -36,6 +36,10 @@ const checkpoint = (id: string, sequence: number, text = `evidence ${id}`): Comp
   warnings: [],
 });
 
+const speech = (checkpointId: string, quote: string) => ({ checkpointId, quote });
+const visibleText = (checkpointId: string, quote: string, text = quote) => ({ mode: "RECONSTRUCT" as const, content: text, provenance: { basis: "SPEECH" as const, speechRefs: [speech(checkpointId, quote)] } });
+const boardText = (checkpointId: string, quote: string, text = quote) => ({ mode: "RECONSTRUCT" as const, content: { kind: "TEXT" as const, text }, provenance: { basis: "SPEECH" as const, speechRefs: [speech(checkpointId, quote)] } });
+
 const groundedEvent = (sessionId: string, eventSequence: number, item: CompactEvidenceCheckpoint) => checkpointCommittedEvent(sessionId, eventSequence, item, {
   checkpointId: item.checkpointId,
   canonicalSpanIds: [{ spanId: `span-${item.checkpointId}`, spanRevision: 1 }],
@@ -189,7 +193,7 @@ describe("lesson evidence and replay", () => {
     const runtime = await LessonStreamRuntime.open("lesson-commit-time", store);
     await runtime.start();
     const a = await runtime.commitClosedSpan(span({ id: "span-a", text: "Set a task." }), 1);
-    await runtime.acceptSteps([acceptedStep("existing-cue", [a!.checkpointId], { action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "TASK", source: { checkpointId: a!.checkpointId, text: "Set a task" } })]);
+    await runtime.acceptSteps([acceptedStep("existing-cue", [a!.checkpointId], { action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "NOTE", contribution: visibleText(a!.checkpointId, "Set a task") })]);
     const b = await runtime.commitClosedSpan(span({ id: "span-b", text: "Add a Board item and another cue." }), 1);
     const { request } = buildTeachingInterpretationRequest({ requestId: "commit-time", sessionId: "lesson-commit-time", events: runtime.events, currentState: runtime.state, newEvidence: [b!] });
     const expiry = runtime.expireCue(runtime.state.cue.active!.id, runtime.state.cue.revision);
@@ -198,9 +202,9 @@ describe("lesson evidence and replay", () => {
       model: "test-model",
       proposal: { requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 1, steps: [{
         consumesCheckpointIds: [b!.checkpointId],
-        boardDelta: { action: "SET_ACTIVE", content: { kind: "TEXT", source: { checkpointId: b!.checkpointId, text: "Add a Board item" } }, continuity: "same_thread", retainPrevious: false },
-        cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: b!.checkpointId, text: "another cue" } },
-        evidenceRefs: [{ checkpointId: b!.checkpointId, text: "Add a Board item" }, { checkpointId: b!.checkpointId, text: "another cue" }],
+        boardDelta: { action: "SET_ACTIVE", contribution: boardText(b!.checkpointId, "Add a Board item"), continuity: "same_thread", retainPrevious: false },
+        cueDelta: { action: "SET", cueKind: "NOTE", contribution: visibleText(b!.checkpointId, "another cue") },
+        evidenceRefs: [speech(b!.checkpointId, "Add a Board item"), speech(b!.checkpointId, "another cue")],
       }] },
     });
     await expiry;
@@ -241,8 +245,8 @@ describe("lesson evidence and replay", () => {
     const result = await runtime.acceptProposal({
       request, model: "test-model",
       proposal: { requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 0, steps: [
-        { consumesCheckpointIds: [a!.checkpointId], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: a!.checkpointId, text: "Set the task" } }, evidenceRefs: [{ checkpointId: a!.checkpointId, text: "Set the task" }] },
-        { consumesCheckpointIds: [b!.checkpointId], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "RESOLVE_CURRENT", reason: "completed", evidence: { checkpointId: b!.checkpointId, text: "The task is complete" } }, evidenceRefs: [{ checkpointId: b!.checkpointId, text: "The task is complete" }] },
+        { consumesCheckpointIds: [a!.checkpointId], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "SET", cueKind: "NOTE", contribution: visibleText(a!.checkpointId, "Set the task") }, evidenceRefs: [speech(a!.checkpointId, "Set the task")] },
+        { consumesCheckpointIds: [b!.checkpointId], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "RESOLVE_CURRENT", reason: "completed", evidence: speech(b!.checkpointId, "The task is complete") }, evidenceRefs: [speech(b!.checkpointId, "The task is complete")] },
       ] },
     });
     expect(result.ok).toBe(true);
@@ -305,8 +309,8 @@ describe("proposal validation and deterministic state", () => {
       proposal: {
         requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 0,
         steps: [
-          { consumesCheckpointIds: ["A"], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: "A", text: "Set the task now" } }, evidenceRefs: [{ checkpointId: "A", text: "Set the task now" }] },
-          { consumesCheckpointIds: ["B"], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "RESOLVE_CURRENT", reason: "completed", evidence: { checkpointId: "B", text: "The task is complete" } }, evidenceRefs: [{ checkpointId: "B", text: "The task is complete" }] },
+          { consumesCheckpointIds: ["A"], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "SET", cueKind: "NOTE", contribution: visibleText("A", "Set the task now") }, evidenceRefs: [speech("A", "Set the task now")] },
+          { consumesCheckpointIds: ["B"], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "RESOLVE_CURRENT", reason: "completed", evidence: speech("B", "The task is complete") }, evidenceRefs: [speech("B", "The task is complete")] },
         ],
       }, request, allCheckpoints: [a, b], state: createInitialTeachingState(), model: "test-model",
     });
@@ -326,9 +330,9 @@ describe("proposal validation and deterministic state", () => {
     const result = validateAndNormalizeProposal({
       proposal: { requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 0, steps: [{
         consumesCheckpointIds: ["A"],
-        boardDelta: { action: "SET_ACTIVE", content: { kind: "TEXT", source: { checkpointId: "A", text: "activation energy" } }, continuity: "same_thread", retainPrevious: false },
-        cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: "A", text: "Set the task" }, targetBoardItemId: "board-cue-prospective-accepted-0" },
-        evidenceRefs: [{ checkpointId: "A", text: "Set the task" }],
+        boardDelta: { action: "SET_ACTIVE", contribution: boardText("A", "activation energy"), continuity: "same_thread", retainPrevious: false },
+        cueDelta: { action: "SET", cueKind: "NOTE", contribution: visibleText("A", "Set the task"), targetBoardItemId: "board-cue-prospective-accepted-0" },
+        evidenceRefs: [speech("A", "Set the task")],
       }] }, request, allCheckpoints: [a], state, model: "test-model",
     });
     expect(result.ok).toBe(true);
@@ -339,13 +343,13 @@ describe("proposal validation and deterministic state", () => {
     const a = checkpoint("A", 1, "Complete the current task.");
     const sessionId = "lesson-cue-current-target";
     const events = [lessonStartedEvent(sessionId, 1), groundedEvent(sessionId, 2, a)];
-    const existing = { id: "board-current", content: { kind: "TEXT" as const, source: { checkpointId: "A", text: "Complete the current task" } }, sourceCheckpointIds: ["A"], establishedAtRevision: 1 };
+    const existing = { id: "board-current", contribution: boardText("A", "Complete the current task"), sourceCheckpointIds: ["A"], establishedAtRevision: 1 };
     const state = { ...createInitialTeachingState(), board: { revision: 1, active: existing, support: [], retained: [] } };
     const { request } = buildTeachingInterpretationRequest({ requestId: "cue-current", sessionId, events, currentState: state, newEvidence: [a] });
     const result = validateAndNormalizeProposal({
       proposal: { requestId: request.requestId, baseBoardRevision: 1, baseCueRevision: 0, steps: [{
         consumesCheckpointIds: ["A"], boardDelta: { action: "KEEP", reason: "no_board_value" },
-        cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: "A", text: "Complete the current task" }, targetBoardItemId: "board-current" }, evidenceRefs: [{ checkpointId: "A", text: "Complete the current task" }],
+        cueDelta: { action: "SET", cueKind: "NOTE", contribution: visibleText("A", "Complete the current task"), targetBoardItemId: "board-current" }, evidenceRefs: [speech("A", "Complete the current task")],
       }] }, request, allCheckpoints: [a], state, model: "test-model",
     });
     expect(result.ok).toBe(true);
@@ -361,12 +365,12 @@ describe("proposal validation and deterministic state", () => {
     const result = validateAndNormalizeProposal({
       proposal: { requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 0, steps: [{
         consumesCheckpointIds: ["A"], boardDelta: { action: "KEEP", reason: "no_board_value" },
-        cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: "A", text: "Complete the task" }, targetBoardItemId: "hallucinated-board" }, evidenceRefs: [{ checkpointId: "A", text: "Complete the task" }],
+        cueDelta: { action: "SET", cueKind: "NOTE", contribution: visibleText("A", "Complete the task"), targetBoardItemId: "hallucinated-board" }, evidenceRefs: [speech("A", "Complete the task")],
       }] }, request, allCheckpoints: [a], state, model: "test-model",
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.steps[0]!.cueDelta).toEqual({ action: "SET", cueKind: "TASK", source: { checkpointId: "A", text: "Complete the task" } });
+    expect(result.steps[0]!.cueDelta).toEqual({ action: "SET", cueKind: "NOTE", contribution: visibleText("A", "Complete the task") });
     expect(result.steps[0]!.warnings).toContainEqual({ code: "cue_target_dropped" });
   });
 
@@ -379,8 +383,8 @@ describe("proposal validation and deterministic state", () => {
     const { request } = buildTeachingInterpretationRequest({ requestId: "cue-earlier", sessionId, events, currentState: state, newEvidence: [a, b] });
     const result = validateAndNormalizeProposal({
       proposal: { requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 0, steps: [
-        { consumesCheckpointIds: ["A"], boardDelta: { action: "SET_ACTIVE", content: { kind: "TEXT", source: { checkpointId: "A", text: "activation energy" } }, continuity: "same_thread", retainPrevious: false }, cueDelta: { action: "KEEP" }, evidenceRefs: [{ checkpointId: "A", text: "activation energy" }] },
-        { consumesCheckpointIds: ["B"], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: "B", text: "Complete the activation energy task" }, targetBoardItemId: "board-cue-earlier-accepted-0" }, evidenceRefs: [{ checkpointId: "B", text: "Complete the activation energy task" }] },
+        { consumesCheckpointIds: ["A"], boardDelta: { action: "SET_ACTIVE", contribution: boardText("A", "activation energy"), continuity: "same_thread", retainPrevious: false }, cueDelta: { action: "KEEP" }, evidenceRefs: [speech("A", "activation energy")] },
+        { consumesCheckpointIds: ["B"], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "SET", cueKind: "NOTE", contribution: visibleText("B", "Complete the activation energy task"), targetBoardItemId: "board-cue-earlier-accepted-0" }, evidenceRefs: [speech("B", "Complete the activation energy task")] },
       ] }, request, allCheckpoints: [a, b], state, model: "test-model",
     });
     expect(result.ok).toBe(true);
@@ -390,15 +394,15 @@ describe("proposal validation and deterministic state", () => {
   it("rejects a Board support target retired earlier in the same batch before persistence", () => {
     const a = checkpoint("A", 1, "Change topic entirely.");
     const b = checkpoint("B", 2, "Support the old topic.");
-    const existing = { id: "existing", content: { kind: "TEXT" as const, source: { checkpointId: "A", text: "Change topic entirely" } }, sourceCheckpointIds: ["A"], establishedAtRevision: 1 };
+    const existing = { id: "existing", contribution: boardText("A", "Change topic entirely"), sourceCheckpointIds: ["A"], establishedAtRevision: 1 };
     const state = { ...createInitialTeachingState(), board: { revision: 1, active: existing, support: [], retained: [] } };
     const sessionId = "lesson-retired-target";
     const events = [lessonStartedEvent(sessionId, 1), groundedEvent(sessionId, 2, a), groundedEvent(sessionId, 3, b)];
     const { request } = buildTeachingInterpretationRequest({ requestId: "retired-target", sessionId, events, currentState: state, newEvidence: [a, b] });
     const result = validateAndNormalizeProposal({
       proposal: { requestId: request.requestId, baseBoardRevision: 1, baseCueRevision: 0, steps: [
-        { consumesCheckpointIds: ["A"], boardDelta: { action: "SET_ACTIVE", content: { kind: "TEXT", source: { checkpointId: "A", text: "Change topic entirely" } }, continuity: "topic_shift", retainPrevious: false }, cueDelta: { action: "KEEP" }, evidenceRefs: [{ checkpointId: "A", text: "Change topic entirely" }] },
-        { consumesCheckpointIds: ["B"], boardDelta: { action: "ADD_SUPPORT", targetBoardItemId: "existing", support: { checkpointId: "B", text: "Support the old topic" } }, cueDelta: { action: "KEEP" }, evidenceRefs: [{ checkpointId: "B", text: "Support the old topic" }] },
+        { consumesCheckpointIds: ["A"], boardDelta: { action: "SET_ACTIVE", contribution: boardText("A", "Change topic entirely"), continuity: "topic_shift", retainPrevious: false }, cueDelta: { action: "KEEP" }, evidenceRefs: [speech("A", "Change topic entirely")] },
+        { consumesCheckpointIds: ["B"], boardDelta: { action: "ADD_SUPPORT", targetBoardItemId: "existing", support: visibleText("B", "Support the old topic") }, cueDelta: { action: "KEEP" }, evidenceRefs: [speech("B", "Support the old topic")] },
       ] }, request, allCheckpoints: [a, b], state, model: "test-model",
     });
     expect(result).toEqual({ ok: false, error: "proposal-support-target-missing" });
@@ -418,15 +422,15 @@ describe("proposal validation and deterministic state", () => {
         steps: [
           {
             consumesCheckpointIds: ["A"],
-            boardDelta: { action: "SET_ACTIVE", content: { kind: "TEXT", source: { checkpointId: "A", text: "Activation energy" } }, continuity: "same_thread", retainPrevious: false },
+            boardDelta: { action: "SET_ACTIVE", contribution: boardText("A", "Activation energy", "Energy threshold"), continuity: "same_thread", retainPrevious: false },
             cueDelta: { action: "KEEP" },
-            evidenceRefs: [{ checkpointId: "A", text: "Activation energy" }],
+            evidenceRefs: [speech("A", "Activation energy")],
           },
           {
             consumesCheckpointIds: ["B"],
-            boardDelta: { action: "ADD_SUPPORT", support: { checkpointId: "B", text: "Temperature increases successful collisions" }, targetBoardItemId: "board-request-1-accepted-0" },
-            cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: "B", text: "Temperature increases successful collisions" } },
-            evidenceRefs: [{ checkpointId: "B", text: "Temperature increases successful collisions" }],
+            boardDelta: { action: "ADD_SUPPORT", support: visibleText("B", "Temperature increases successful collisions", "More successful collisions"), targetBoardItemId: "board-request-1-accepted-0" },
+            cueDelta: { action: "SET", cueKind: "NOTE", contribution: visibleText("B", "Temperature increases successful collisions", "Notice the collision change") },
+            evidenceRefs: [speech("B", "Temperature increases successful collisions")],
           },
         ],
       },
@@ -442,7 +446,7 @@ describe("proposal validation and deterministic state", () => {
       ...valid.steps.map((step, index) => interpretationAcceptedEvent(sessionId, 4 + index, step)),
     ]);
     expect(replay.state.board).toMatchObject({ revision: 2, support: [{ targetBoardItemId: "board-request-1-accepted-0" }] });
-    expect(replay.state.cue).toMatchObject({ revision: 1, active: { kind: "TASK" } });
+    expect(replay.state.cue).toMatchObject({ revision: 1, active: { kind: "NOTE" } });
     expect(replay.state.processedThroughSequence).toBe(2);
 
     const invalid = validateAndNormalizeProposal({
@@ -468,9 +472,9 @@ describe("proposal validation and deterministic state", () => {
         baseCueRevision: 0,
         steps: [{
           consumesCheckpointIds: ["A"],
-          boardDelta: { action: "SET_ACTIVE", content: { kind: "TEXT", source: { checkpointId: "A", text: "Compare the two pathways" } }, continuity: "same_thread", retainPrevious: false },
-          cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: "A", text: "Compare the two pathways. Which is faster?" } },
-          evidenceRefs: [{ checkpointId: "A", text: "Compare the two pathways" }],
+          boardDelta: { action: "SET_ACTIVE", contribution: boardText("A", "Compare the two pathways", "Compare pathways"), continuity: "same_thread", retainPrevious: false },
+          cueDelta: { action: "SET", cueKind: "NOTE", contribution: visibleText("A", "Compare the two pathways. Which is faster?", "Compare pathways") },
+          evidenceRefs: [speech("A", "Compare the two pathways")],
         }],
       },
       request,
@@ -499,27 +503,27 @@ describe("proposal validation and deterministic state", () => {
     const baseEvents = [lessonStartedEvent(sessionId, 1), ...items.map((item, index) => groundedEvent(sessionId, index + 2, item))];
     const setActive = (requestId: string, item: CompactEvidenceCheckpoint, retainPrevious: boolean, cueDelta: TeachingCueDelta = { action: "KEEP" }) => acceptedStep(requestId, [item.checkpointId], {
       action: "SET_ACTIVE",
-      content: { kind: "TEXT", source: { checkpointId: item.checkpointId, text: item.text } },
+      contribution: boardText(item.checkpointId, item.text),
       continuity: "same_thread",
       retainPrevious,
     }, cueDelta);
     const steps = [
-      setActive("state-a", items[0]!, false, { action: "SET", cueKind: "TASK", source: { checkpointId: "A", text: "Define activation energy" } }),
+      setActive("state-a", items[0]!, false, { action: "SET", cueKind: "NOTE", contribution: visibleText("A", "Define activation energy") }),
       setActive("state-b", items[1]!, true),
       setActive("state-c", items[2]!, true),
-      acceptedStep("state-d", ["D"], { action: "KEEP", reason: "no_board_value" }, { action: "RESOLVE_CURRENT", reason: "completed", evidence: { checkpointId: "D", text: "task is complete" } }),
+      acceptedStep("state-d", ["D"], { action: "KEEP", reason: "no_board_value" }, { action: "RESOLVE_CURRENT", reason: "completed", evidence: speech("D", "task is complete") }),
       acceptedStep("state-e", ["E"], {
         action: "SET_ACTIVE",
-        content: { kind: "TEXT", source: { checkpointId: "E", text: items[4]!.text } },
+        contribution: boardText("E", items[4]!.text),
         continuity: "correction",
         retainPrevious: false,
         invalidatesBoardItemIds: ["board-state-c-accepted-0"],
       }),
-      acceptedStep("state-f", ["F"], { action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "NOTE", source: { checkpointId: "F", text: "Take note of the corrected relationship" } }),
+      acceptedStep("state-f", ["F"], { action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "NOTE", contribution: visibleText("F", "Take note of the corrected relationship") }),
     ];
     const acceptedEvents = steps.map((step, index) => interpretationAcceptedEvent(sessionId, baseEvents.length + index + 1, step));
     const beforeExpiry = replayLessonEvents([...baseEvents, ...acceptedEvents]);
-    expect(beforeExpiry.state.board.active?.content).toEqual({ kind: "TEXT", source: { checkpointId: "E", text: items[4]!.text } });
+    expect(beforeExpiry.state.board.active?.contribution.content).toEqual({ kind: "TEXT", text: items[4]!.text });
     expect(beforeExpiry.state.board.retained).toEqual([]);
     expect(beforeExpiry.state.board.support.length).toBeLessThanOrEqual(2);
     expect(beforeExpiry.state.cue.active).toMatchObject({ kind: "NOTE" });

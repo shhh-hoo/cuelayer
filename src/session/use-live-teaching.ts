@@ -31,7 +31,16 @@ export function emitAcceptedStepTrace({
 }) {
   const { step, stateBefore, stateAfter } = transition;
   const correlation = { rootId: `interpretation:${plannerRequestId}`, runId: speechRunId, plannerRequestId, interpretationId: step.interpretationId, stepIndex: step.stepIndex, boardRevision: stateAfter.board.revision, cueRevision: stateAfter.cue.revision };
-  emit(traceDraft("interpretation.step_accepted", { requestId: plannerRequestId, interpretationId: step.interpretationId, stepIndex: step.stepIndex, checkpointIds: step.consumesCheckpointIds, boardAction: step.boardDelta.action, cueAction: step.cueDelta.action }, { correlation }));
+  emit(traceDraft("interpretation.step_accepted", {
+    requestId: plannerRequestId,
+    interpretationId: step.interpretationId,
+    stepIndex: step.stepIndex,
+    checkpointIds: step.consumesCheckpointIds,
+    boardAction: step.boardDelta.action,
+    cueAction: step.cueDelta.action,
+    ...(step.boardDelta.action === "SET_ACTIVE" ? { boardMode: step.boardDelta.contribution.mode, boardSpeechRefCount: step.boardDelta.contribution.provenance.speechRefs.length } : {}),
+    ...(step.cueDelta.action === "SET" ? { cueMode: step.cueDelta.contribution.mode, cueSpeechRefCount: step.cueDelta.contribution.provenance.speechRefs.length } : {}),
+  }, { correlation }));
   if (step.boardDelta.action === "KEEP") emit(traceDraft("board.keep", { reason: step.boardDelta.reason }, { correlation }));
   if (step.boardDelta.action === "SET_ACTIVE") {
     const boardItemId = `board-${step.interpretationId}-${step.stepIndex}`;

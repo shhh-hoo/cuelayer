@@ -1,6 +1,6 @@
 # CueLayer Live Teaching System Specification
 
-**Version:** v0.1  
+**Version:** v0.2 / `bounded-agent-p4-bootstrap-v1`
 **Status:** `LIVE-STATE` / `SEMANTICS` execution baseline  
 **Date:** 2026-09-02  
 **Scope:** single-session live teaching: speech evidence, stream processing, LLM interpretation, Teaching State, Teaching Board, Teaching Cue, and learner rendering.
@@ -19,6 +19,14 @@ Stable work-package identifiers in this specification are authoritative. Current
 6. PR descriptions explain implementation against this document; they do not redefine the system.
 
 If code and this document disagree, update this document intentionally before changing product semantics.
+
+### Alpha contract correction (LIVE-STATE)
+
+Alpha is a bounded learner-surface agent. New evidence remains the sole deliberation trigger; teacher speech is primary evidence, rather than the literal output boundary. A Board contribution may be `RECONSTRUCT`, `REPRESENT`, or narrow `AUGMENT`; a Cue may be `RECONSTRUCT` or `REPRESENT`. `AUGMENT` is disabled by the normal live bootstrap policy until locked `SEMANTICS` holdout gates pass.
+
+Alpha never autonomously creates `TASK`, `QUESTION`, or `HINT`, corrects the teacher, or initiates an activity. A `HINT` is allowed only when traceable to a teacher-provided exact speech quote. Teacher self-correction remains a Board correction semantic. Teacher override is event-contract-only; no UI is implied. Personality, avatar, intervention-level controls, and proactive timers remain future work.
+
+The lesson domain/event schema is versioned as `lesson-event-v2-contribution-provenance`. A persisted prior shape is an explicitly incompatible session boundary: it must be rejected or migrated deliberately, never silently replayed as this schema.
 
 ---
 
@@ -215,7 +223,7 @@ type AcceptedInterpretationStep = {
   baseCueRevision: number;
   boardDelta: BoardDelta;
   cueDelta: TeachingCueDelta;
-  evidenceRefs: GroundedReference[];
+  evidenceRefs: SpeechReference[];
   warnings: InterpretationWarning[];
   model: string;
   policyVersion: string;
@@ -583,7 +591,7 @@ type TeachingInterpretationStepProposal = {
   consumesCheckpointIds: string[];
   boardDelta: BoardDelta;
   cueDelta: TeachingCueDelta;
-  evidenceRefs: GroundedReference[];
+  evidenceRefs: SpeechReference[];
   warnings?: InterpretationWarning[];
 };
 ```
@@ -606,15 +614,15 @@ type BoardDelta =
     }
   | {
       action: "SET_ACTIVE";
-      content: BoardContent;
+      contribution: TeachingContribution<BoardContent>;
       continuity: "same_thread" | "topic_shift" | "correction";
       retainPrevious: boolean;
-      support?: GroundedReference[];
+      support?: TeachingContribution<string>[];
       invalidatesBoardItemIds?: string[];
     }
   | {
       action: "ADD_SUPPORT";
-      support: GroundedReference;
+      support: TeachingContribution<string>;
       targetBoardItemId: string;
     };
 ```
@@ -631,18 +639,34 @@ Deterministic rules:
 ### BoardContent
 
 ```ts
+type SpeechReference = { checkpointId: string; quote: string };
+
+type ContributionProvenance = {
+  speechRefs: SpeechReference[];
+  stateRefs?: StateReference[];
+  basis: "SPEECH" | "SPEECH_AND_STATE" | "DOMAIN_KNOWLEDGE";
+};
+
+type StateReference = { kind: "BOARD_ITEM" | "ACTIVE_CUE"; id: string };
+
+type TeachingContribution<TContent> = {
+  mode: "RECONSTRUCT" | "REPRESENT" | "AUGMENT";
+  content: TContent;
+  provenance: ContributionProvenance;
+};
+
 type BoardContent =
-  | { kind: "TEXT"; source: GroundedReference }
-  | { kind: "FOCUS"; target: GroundedReference }
+  | { kind: "TEXT"; text: string }
+  | { kind: "FOCUS"; target: string }
   | {
       kind: "RELATION";
       relation: "cause" | "sequence" | "contrast";
-      targets: GroundedReference[];
+      targets: string[];
     }
   | {
       kind: "TRANSFORM";
-      from: GroundedReference;
-      to: GroundedReference;
+      from: string;
+      to: string;
     };
 ```
 
@@ -655,26 +679,24 @@ type TeachingCueDelta =
   | { action: "KEEP" }
   | {
       action: "SET";
-      cueKind: "QUESTION" | "TASK" | "NOTE" | "HINT";
-      source?: GroundedReference;
+      cueKind: "NOTE" | "HINT";
+      contribution: TeachingContribution<string>;
       targetBoardItemId?: string;
     }
   | {
       action: "RESOLVE_CURRENT";
       reason: "answered" | "completed" | "teacher_moved_on" | "replaced";
-      evidence: GroundedReference;
+      evidence: SpeechReference;
     };
 ```
 
 Alpha defaults:
 
-- QUESTION/TASK/HINT persist;
-- NOTE expires deterministically;
+- HINT persists only when it is teacher-provided and exactly speech-traceable; NOTE expires deterministically;
 - Board changes never resolve a cue by themselves;
 - cue resolution never clears Board;
-- an instruction containing a question is one TASK, not competing TASK + QUESTION;
-- HINT must come from teacher speech;
-- one visible active cue remains the Alpha default; TASK + transient HINT is a `SEMANTICS` evaluation question.
+- TASK and QUESTION are not Alpha proposal actions; model-created HINT is rejected;
+- one visible active cue remains the Alpha default.
 
 ---
 
@@ -715,7 +737,8 @@ reduce Teaching State
 
 ### Grounding
 
-- learner-visible references must exact-locate through local grounding records;
+- exact substring validation applies only to `SpeechReference.quote` through local grounding records;
+- learner-visible contribution content is not required to be a speech substring; state references must exist;
 - relation/transform may use historical evidence plus the current batch;
 - every non-KEEP step must contain at least one trigger reference from checkpoints it consumes now;
 - historical evidence cannot establish a new Board object without a current trigger;
@@ -856,10 +879,10 @@ KEEP
 → active cue unchanged
 
 SET
-→ validate source/kind
+→ validate contribution mode, provenance, and permitted kind
 → replace current visible cue
 → NOTE receives deterministic expiry
-→ QUESTION/TASK/HINT do not auto-expire
+→ HINT does not auto-expire
 
 RESOLVE_CURRENT
 → require active cue
@@ -1300,9 +1323,10 @@ Current phase rejects:
 | Board Support limit | 2 |
 | Board Retained limit | 2 |
 | Visible active cue | 1 |
-| QUESTION/TASK/HINT expiry | none |
+| HINT expiry | none |
 | NOTE expiry | deterministic 4s |
-| Free paraphrase | disabled |
+| RECONSTRUCT / REPRESENT | enabled |
+| AUGMENT | disabled pending locked `SEMANTICS` holdout gates |
 | Planner failure fallback | last state or visual quiet |
 | Single-lesson retrieval/summary | disabled |
 
@@ -1312,4 +1336,4 @@ These are engineering defaults, not immutable product truths. If evaluation cont
 
 ## 20. One-sentence system definition
 
-> CueLayer preserves a lesson's speech evidence and accepted interpretations, deterministically materializes current Teaching State, asks the LLM only to interpret still-unprocessed evidence as validated ordered deltas, and renders the resulting state through a stable Teaching Board and Teaching Cue.
+> CueLayer preserves a lesson's speech evidence and accepted contribution provenance, deterministically materializes current Teaching State, asks the LLM only to interpret still-unprocessed evidence as validated ordered deltas, and renders the resulting state through a stable Teaching Board and Teaching Cue.
