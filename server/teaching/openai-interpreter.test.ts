@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { TeachingInterpretationRequest } from "../../src/lesson-stream/contracts";
+import { LESSON_POLICY_VERSION, type TeachingInterpretationRequest } from "../../src/lesson-stream/contracts";
 import { createInitialTeachingState } from "../../src/lesson-stream/teaching-state";
 
 const mocks = vi.hoisted(() => ({ constructor: vi.fn(), parse: vi.fn() }));
@@ -17,7 +17,7 @@ import { validateAndNormalizeProposal } from "../../src/lesson-stream/accepted-i
 const input: TeachingInterpretationRequest = {
   requestId: "request-1",
   sessionId: "session-1",
-  policyVersion: "bounded-agent-p4-bootstrap-v1",
+  policyVersion: LESSON_POLICY_VERSION,
   processedTimeline: [{ type: "evidence", checkpointId: "checkpoint-0", sequence: 1, text: "Activation energy is required.", warnings: [] }],
   currentState: createInitialTeachingState(),
   newEvidence: [{ checkpointId: "checkpoint-1", lessonSequence: 2, speechRunId: 1, startMs: 100, endMs: 200, text: "Temperature increases.", sourceFinalIds: ["provider-final-1"], warnings: [] }],
@@ -55,6 +55,9 @@ describe("OpenAI Teaching State interpreter", () => {
     expect(request.temperature).toBe(0);
     expect(request.input[0].content).toContain("currentState is current authority");
     expect(request.input[0].content).toContain("newEvidence is the only allowed trigger");
+    expect(request.input[0].content).toContain("not a content-permission boundary");
+    expect(request.input[0].content).toContain("STATE_AND_DOMAIN_KNOWLEDGE");
+    expect(request.input[0].content).toContain("SET(NOTE|QUESTION|TASK|HINT)");
     expect(request.input[0].content).toContain("board-${requestId}-accepted-N");
     expect(request.input[0].content).toContain("zero-based earlier step index");
     expect(request.input[0].content).toContain("Cue SET targetBoardItemId is optional");

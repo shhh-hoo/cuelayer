@@ -6,17 +6,19 @@ This Charter is the product-level source of truth for CueLayer. Phase-specific i
 
 ## Product definition
 
-CueLayer is an AI-native presentation layer for teaching.
+CueLayer is an AI-native learner-surface agent for live teaching.
 
 It listens to teaching as it unfolds, maintains a speech-faithful semantic source of truth, and adaptively decides what learners should see and when a learner-facing cue is useful. The product aims to reduce tracking and transcription effort while preserving the learner's work of understanding, organising, reviewing, and reflecting.
 
 The canonical speech representation is a grounding layer. Learner-visible output is adaptive rather than synonymous with a continuous transcript.
 
-### Alpha learner-surface boundary
+### Alpha learner-surface authority
 
-CueLayer Alpha is a bounded learner-surface agent. New lesson evidence is the only deliberation trigger. Teacher speech is primary evidence, but it is not the literal learner-output boundary: the Board may reconstruct, represent, or (when enabled by policy) narrowly augment a teacher assertion; Teaching Cue may reconstruct or represent it. Every visible contribution carries exact speech provenance and, where used, references to existing Teaching State.
+CueLayer Alpha optimizes for the quality of the learner's current learning state, not fidelity to the teacher transcript. New lesson evidence is the only deliberation trigger: it controls when the model deliberates, not what the learner surface is permitted to contain. Once triggered, Alpha reasons from new evidence, processed lesson history, current Teaching State, and domain knowledge.
 
-Alpha does not autonomously create a task, question, or hint; it does not correct the teacher or initiate a new activity. A teacher-provided hint and an explicit teacher self-correction remain supported state semantics. Teacher override is a contract-only event, with no Alpha UI. Personality, avatar, intervention-level controls, and proactive timers are future work.
+Teacher speech is primary classroom evidence and context, rather than an authorization boundary. Alpha may reconstruct, reorganize, supplement, connect, correct, and initiate bounded learner actions. Contributions carry attributable provenance: exact speech quotes are required when speech is claimed, while domain- and state-based contributions must not manufacture speech provenance. Interventions are governed by epistemic correctness, contextual relevance, pedagogical timing, attention value, and reversible classroom control.
+
+Teacher override remains a contract-only event, with no Alpha UI. Personality, avatar, intervention-level controls, and proactive timers remain future work.
 
 ## Primary experience
 
@@ -77,24 +79,23 @@ Display intents are planner-level semantic decisions. They compile into renderer
 
 `QUIET` is a successful decision. A useful CueLayer session should contain substantial visually quiet time.
 
-Every learner-visible representation remains grounded in the teacher's speech, Teaching State, and approved context. Grounding proves provenance, not literal display equality: exact speech quotes support the contribution while the bounded contribution may reconstruct or represent stated meaning. Symbolic or spatial compression may make stated meaning easier to follow while preserving the teacher's asserted meaning, corrections, uncertainty, and deliberate wording.
+Every learner-visible representation remains attributable to speech evidence, Teaching State, domain knowledge, or their combination. Grounding proves provenance, not literal display equality or subject-matter truth: exact claimed speech quotes support a contribution, while bounded reconstructions, representations, augmentations, and corrections may use the appropriate non-speech provenance. Symbolic or spatial compression may make meaning easier to follow while preserving evidence history, corrections, uncertainty, and reversible classroom control.
 
 ## Learning cues
 
 Content representation and learner-action timing are separate channels.
 
-The initial learner-intent grammar is:
+The Alpha learner-action grammar is:
 
 - `NONE`: the learner continues naturally without an additional cue.
 - `NOTE`: the teaching content has formed a stable, worthwhile recording point.
-- `REVIEW`: a completed segment or structure warrants brief consolidation before the teaching flow moves on.
-- `REFLECT`: the teacher has created a genuine handoff of cognitive work to the learner.
+- `QUESTION`: a diagnostic or comparison question is useful now.
+- `TASK`: a bounded cognitive action should remain active.
+- `HINT`: a bounded nudge supports progress without supplying the complete answer.
 
 Learning cues are intentionally sparse. Their role is to clarify timing of attention, note-taking, review, and reflection while preserving the learner's responsibility to think and organise.
 
-AI determines pedagogical eligibility for a learner cue. The deterministic runtime determines delivery timing. For example, AI may determine that a structure is worth noting; the runtime can wait until the associated `RELATE` or `TRANSFORM` progression has settled before showing the `NOTE` cue. Visual completion alone does not establish note-worthiness.
-
-`REVIEW` is grounded in a meaningful teaching boundary or consolidation opportunity. `REFLECT` is grounded in pedagogical evidence such as a teacher question, prediction request, comparison prompt, or deliberate invitation to think.
+AI determines pedagogical eligibility and may originate a learner action; deterministic code owns validation, lifecycle, timing, and bounds. A new action must not gratuitously replace an unresolved high-priority task or question, and the surface must not reveal a complete answer while productive learner work remains unresolved. Visual completion alone does not establish note-worthiness.
 
 ## Product invariants
 

@@ -14,7 +14,7 @@ function boardItemFor(step: AcceptedInterpretationStep, revision: number): Board
   return {
     id: `board-${step.interpretationId}-${step.stepIndex}`,
     contribution: step.boardDelta.contribution,
-    sourceCheckpointIds: [...new Set(step.boardDelta.contribution.provenance.speechRefs.map((reference) => reference.checkpointId))],
+    sourceCheckpointIds: [...new Set((step.boardDelta.contribution.provenance.speechRefs ?? []).map((reference) => reference.checkpointId))],
     establishedAtRevision: revision,
   };
 }
@@ -59,7 +59,7 @@ function reduceCue(state: TeachingStateSnapshot["cue"], step: AcceptedInterpreta
       id: `cue-${step.interpretationId}-${step.stepIndex}`,
       kind: delta.cueKind,
       contribution: delta.contribution,
-      sourceSegmentIds: [...new Set(delta.contribution.provenance.speechRefs.map((reference) => reference.checkpointId))],
+      sourceSegmentIds: [...new Set((delta.contribution.provenance.speechRefs ?? []).map((reference) => reference.checkpointId))],
       activatedAt,
       ...(delta.targetBoardItemId ? { targetBoardItemId: delta.targetBoardItemId } : {}),
       ...(delta.cueKind === "NOTE" ? { expiresAt: activatedAt + NOTE_EXPIRY_MS } : {}),

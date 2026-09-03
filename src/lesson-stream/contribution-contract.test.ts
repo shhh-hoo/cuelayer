@@ -3,52 +3,122 @@ import { validateAndNormalizeProposal } from "./accepted-interpretations";
 import { buildTeachingInterpretationRequest, projectProcessedTimeline } from "./context-projection";
 import { checkpointCommittedEvent, interpretationAcceptedEvent, lessonStartedEvent } from "./events";
 import { replayLessonEvents } from "./replay";
-import { createInitialTeachingState } from "./teaching-state";
-import type { CompactEvidenceCheckpoint } from "./contracts";
+import { createInitialTeachingState, reduceAcceptedStep } from "./teaching-state";
+import { interventionRiskFor, type AcceptedInterpretationStep, type CompactEvidenceCheckpoint, type ContributionProvenance, type TeachingStateSnapshot } from "./contracts";
 
-const checkpoint: CompactEvidenceCheckpoint = { checkpointId: "A", lessonSequence: 1, speechRunId: 1, startMs: 0, endMs: 100, text: "Temperature increases successful collisions.", sourceFinalIds: ["final-A"], warnings: [] };
+const checkpoint: CompactEvidenceCheckpoint = { checkpointId: "A", lessonSequence: 1, speechRunId: 1, startMs: 0, endMs: 100, text: "The formula sounded like d6.", sourceFinalIds: ["final-A"], warnings: [] };
 const grounding = { checkpointId: "A", canonicalSpanIds: [{ spanId: "span-A", spanRevision: 1 }], words: [], providerEvidence: [{ providerFinalId: "final-A" }] };
-const speech = (quote = "Temperature increases") => ({ checkpointId: "A", quote });
-const board = (mode: "RECONSTRUCT" | "REPRESENT" | "AUGMENT" = "REPRESENT") => ({ mode, content: { kind: "TEXT" as const, text: "Higher temperature → more successful collisions" }, provenance: { basis: "SPEECH" as const, speechRefs: [speech()] } });
-const cue = (mode: "RECONSTRUCT" | "REPRESENT" | "AUGMENT" = "REPRESENT") => ({ mode, content: "Notice the collision-rate effect", provenance: { basis: "SPEECH" as const, speechRefs: [speech()] } });
+const speech = (quote = "d6") => ({ checkpointId: "A", quote });
+const speechBoard = () => ({ mode: "REPRESENT" as const, content: { kind: "TEXT" as const, text: "Higher temperature → more successful collisions" }, provenance: { basis: "SPEECH" as const, speechRefs: [speech()] } });
+const domainBoard = (mode: "AUGMENT" | "CORRECT" = "AUGMENT", provenance: ContributionProvenance = { basis: "DOMAIN_KNOWLEDGE" }) => ({ mode, content: { kind: "TEXT" as const, text: "Al₂Cl₆" }, provenance });
+const initiatedCue = (cueKind: "QUESTION" | "TASK" | "HINT") => ({ action: "SET" as const, cueKind, contribution: { mode: "INITIATE" as const, content: `Consider ${cueKind.toLowerCase()}`, provenance: { basis: "DOMAIN_KNOWLEDGE" as const } } });
 
-function request() {
+function request(state = createInitialTeachingState()) {
   const events = [lessonStartedEvent("s", 1), checkpointCommittedEvent("s", 2, checkpoint, grounding)];
-  return { events, request: buildTeachingInterpretationRequest({ requestId: "request", sessionId: "s", events, currentState: createInitialTeachingState(), newEvidence: [checkpoint] }).request };
+  return { events, request: buildTeachingInterpretationRequest({ requestId: "request", sessionId: "s", events, currentState: state, newEvidence: [checkpoint] }).request };
 }
-function proposal(boardDelta: unknown, cueDelta: unknown, evidenceRefs = [speech()]) {
-  return { requestId: "request", baseBoardRevision: 0, baseCueRevision: 0, steps: [{ consumesCheckpointIds: ["A"], boardDelta, cueDelta, evidenceRefs }] };
+function proposal(boardDelta: unknown, cueDelta: unknown, evidenceRefs: unknown[] = [speech()], revisions = { board: 0, cue: 0 }) {
+  return { requestId: "request", baseBoardRevision: revisions.board, baseCueRevision: revisions.cue, steps: [{ consumesCheckpointIds: ["A"], boardDelta, cueDelta, evidenceRefs }] };
+}
+function stateWithBoard(): TeachingStateSnapshot {
+  return {
+    ...createInitialTeachingState(),
+    board: {
+      revision: 1,
+      active: { id: "board-old", contribution: { mode: "REPRESENT", content: { kind: "TEXT", text: "AlCl₃ is monomeric." }, provenance: { basis: "DOMAIN_KNOWLEDGE" } }, sourceCheckpointIds: [], establishedAtRevision: 1 },
+      support: [], retained: [],
+    },
+  };
 }
 
-describe("contribution provenance contract", () => {
-  it("persists represented learner content separately from exact teacher speech", () => {
+describe("contribution provenance and learner-agency contract", () => {
+  it("classifies intervention risk without using it as an authorship prohibition", () => {
+    expect(interventionRiskFor("RECONSTRUCT")).toBe("LOW");
+    expect(interventionRiskFor("AUGMENT")).toBe("MEDIUM");
+    expect(interventionRiskFor("CORRECT")).toBe("HIGH");
+    expect(interventionRiskFor("INITIATE", "TASK")).toBe("HIGH");
+  });
+
+  it("reconstructs Al₂Cl₆ from corrupted speech with contextual provenance", () => {
+    const state = stateWithBoard();
+    const input = request(state);
+    const result = validateAndNormalizeProposal({
+      proposal: proposal({ action: "SET_ACTIVE", contribution: { mode: "RECONSTRUCT", content: { kind: "TEXT", text: "Al₂Cl₆" }, provenance: { basis: "SPEECH_AND_STATE", speechRefs: [speech()], stateRefs: [{ kind: "BOARD_ITEM", id: "board-old" }] } }, continuity: "same_thread", retainPrevious: false }, { action: "KEEP" }, [speech()], { board: 1, cue: 0 }),
+      request: input.request, allCheckpoints: [checkpoint], state, model: "test",
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts an unspoken AUGMENT with DOMAIN_KNOWLEDGE and no fabricated quote", () => {
     const input = request();
-    const accepted = validateAndNormalizeProposal({ proposal: proposal({ action: "SET_ACTIVE", contribution: board(), continuity: "same_thread", retainPrevious: false }, { action: "SET", cueKind: "NOTE", contribution: cue() }), request: input.request, allCheckpoints: [checkpoint], state: createInitialTeachingState(), model: "test" });
-    expect(accepted.ok).toBe(true);
-    if (!accepted.ok) return;
-    expect(accepted.steps[0]!.boardDelta).toMatchObject({ action: "SET_ACTIVE", contribution: { content: { text: "Higher temperature → more successful collisions" }, provenance: { speechRefs: [{ quote: "Temperature increases" }] } } });
-    const events = [...input.events, interpretationAcceptedEvent("s", 3, accepted.steps[0]!)];
+    const result = validateAndNormalizeProposal({ proposal: proposal({ action: "SET_ACTIVE", contribution: domainBoard(), continuity: "same_thread", retainPrevious: false }, { action: "KEEP" }, []), request: input.request, allCheckpoints: [checkpoint], state: createInitialTeachingState(), model: "test" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.steps[0]!.boardDelta).toMatchObject({ action: "SET_ACTIVE", contribution: { mode: "AUGMENT", content: { text: "Al₂Cl₆" }, provenance: { basis: "DOMAIN_KNOWLEDGE" } } });
+  });
+
+  it("validates STATE_AND_DOMAIN_KNOWLEDGE against existing state", () => {
+    const state = stateWithBoard();
+    const input = request(state);
+    const valid = validateAndNormalizeProposal({ proposal: proposal({ action: "ADD_SUPPORT", targetBoardItemId: "board-old", support: { mode: "AUGMENT", content: "Dimerization is contextually useful", provenance: { basis: "STATE_AND_DOMAIN_KNOWLEDGE", stateRefs: [{ kind: "BOARD_ITEM", id: "board-old" }] } } }, { action: "KEEP" }, [], { board: 1, cue: 0 }), request: input.request, allCheckpoints: [checkpoint], state, model: "test" });
+    expect(valid.ok).toBe(true);
+    const invalid = validateAndNormalizeProposal({ proposal: proposal({ action: "ADD_SUPPORT", targetBoardItemId: "board-old", support: { mode: "AUGMENT", content: "Unsupported state", provenance: { basis: "STATE_AND_DOMAIN_KNOWLEDGE", stateRefs: [{ kind: "BOARD_ITEM", id: "missing" }] } } }, { action: "KEEP" }, [], { board: 1, cue: 0 }), request: input.request, allCheckpoints: [checkpoint], state, model: "test" });
+    expect(invalid).toEqual({ ok: false, error: "proposal-state-reference-missing" });
+  });
+
+  it("accepts AI-initiated QUESTION, TASK, and HINT", () => {
+    const input = request();
+    for (const cue of [initiatedCue("QUESTION"), initiatedCue("TASK"), initiatedCue("HINT")]) {
+      expect(validateAndNormalizeProposal({ proposal: proposal({ action: "KEEP", reason: "no_board_value" }, cue, []), request: input.request, allCheckpoints: [checkpoint], state: createInitialTeachingState(), model: "test" }).ok).toBe(true);
+    }
+  });
+
+  it("records a CORRECT contribution that invalidates the superseded Board item", () => {
+    const state = stateWithBoard();
+    const input = request(state);
+    const result = validateAndNormalizeProposal({
+      proposal: proposal({ action: "SET_ACTIVE", contribution: domainBoard("CORRECT", { basis: "STATE_AND_DOMAIN_KNOWLEDGE", stateRefs: [{ kind: "BOARD_ITEM", id: "board-old" }] }), continuity: "correction", retainPrevious: false, invalidatesBoardItemIds: ["board-old"] }, { action: "KEEP" }, [], { board: 1, cue: 0 }),
+      request: input.request, allCheckpoints: [checkpoint], state, model: "test",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const events = [...input.events, interpretationAcceptedEvent("s", 3, result.steps[0]!)];
     const replay = replayLessonEvents(events);
-    expect(replay.state.board.active?.contribution.content).toEqual({ kind: "TEXT", text: "Higher temperature → more successful collisions" });
-    expect(projectProcessedTimeline(events)[1]).toMatchObject({ type: "accepted_interpretation", contributionIds: { board: "board-request-accepted-0", cue: "cue-request-accepted-0" } });
-    expect(replay.state).toEqual(replayLessonEvents(events).state);
+    expect(replay.state.board.active?.contribution).toMatchObject({ mode: "CORRECT", provenance: { basis: "STATE_AND_DOMAIN_KNOWLEDGE" } });
+    expect(replay.state.board.retained).toEqual([]);
   });
 
-  it("requires exact speech quotes but never requires display text to be a substring", () => {
+  it("preserves an unresolved TASK across unrelated Board work", () => {
+    const task: AcceptedInterpretationStep = {
+      interpretationId: "task", requestId: "task", stepIndex: 0, consumesCheckpointIds: ["A"], baseBoardRevision: 0, baseCueRevision: 0,
+      boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: initiatedCue("TASK"), evidenceRefs: [], warnings: [], model: "test", policyVersion: "test", acceptedAt: "2026-09-03T00:00:00.000Z",
+    };
+    const afterTask = reduceAcceptedStep(createInitialTeachingState(), task, new Map([["A", 1]]));
+    const board: AcceptedInterpretationStep = { ...task, interpretationId: "board", requestId: "board", consumesCheckpointIds: ["B"], baseCueRevision: afterTask.cue.revision, boardDelta: { action: "SET_ACTIVE", contribution: domainBoard(), continuity: "same_thread", retainPrevious: false }, cueDelta: { action: "KEEP" } };
+    const afterBoard = reduceAcceptedStep(afterTask, board, new Map([["A", 1], ["B", 2]]));
+    expect(afterBoard.cue.active).toMatchObject({ kind: "TASK", contribution: { mode: "INITIATE" } });
+  });
+
+  it("requires explicit resolution before replacing an unresolved QUESTION or TASK", () => {
+    const task: AcceptedInterpretationStep = {
+      interpretationId: "task", requestId: "task", stepIndex: 0, consumesCheckpointIds: ["A"], baseBoardRevision: 0, baseCueRevision: 0,
+      boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: initiatedCue("TASK"), evidenceRefs: [], warnings: [], model: "test", policyVersion: "test", acceptedAt: "2026-09-03T00:00:00.000Z",
+    };
+    const state = reduceAcceptedStep(createInitialTeachingState(), task, new Map([["A", 1]]));
+    const input = request(state);
+    const replacement = validateAndNormalizeProposal({ proposal: proposal({ action: "KEEP", reason: "no_board_value" }, initiatedCue("HINT"), [], { board: 0, cue: 1 }), request: input.request, allCheckpoints: [checkpoint], state, model: "test" });
+    expect(replacement).toEqual({ ok: false, error: "proposal-active-learning-action-must-resolve-first" });
+  });
+
+  it("still enforces exact claimed speech quotes and persists mode/provenance through replay", () => {
     const input = request();
-    const accepted = validateAndNormalizeProposal({ proposal: proposal({ action: "SET_ACTIVE", contribution: board(), continuity: "same_thread", retainPrevious: false }, { action: "KEEP" }), request: input.request, allCheckpoints: [checkpoint], state: createInitialTeachingState(), model: "test" });
-    expect(accepted.ok).toBe(true);
-    const rejected = validateAndNormalizeProposal({ proposal: proposal({ action: "SET_ACTIVE", contribution: { ...board(), provenance: { basis: "SPEECH", speechRefs: [speech("invented quote")] } }, continuity: "same_thread", retainPrevious: false }, { action: "KEEP" }, [speech("invented quote")]), request: input.request, allCheckpoints: [checkpoint], state: createInitialTeachingState(), model: "test" });
+    const rejected = validateAndNormalizeProposal({ proposal: proposal({ action: "SET_ACTIVE", contribution: { ...speechBoard(), provenance: { basis: "SPEECH", speechRefs: [speech("invented quote")] } }, continuity: "same_thread", retainPrevious: false }, { action: "KEEP" }, [speech("invented quote")]), request: input.request, allCheckpoints: [checkpoint], state: createInitialTeachingState(), model: "test" });
     expect(rejected).toEqual({ ok: false, error: "proposal-speech-grounding-invalid" });
-  });
-
-  it("enforces Alpha contribution modes and cue action boundary", () => {
-    const input = request();
-    const base = { request: input.request, allCheckpoints: [checkpoint], state: createInitialTeachingState(), model: "test" };
-    expect(validateAndNormalizeProposal({ ...base, proposal: proposal({ action: "SET_ACTIVE", contribution: board("AUGMENT"), continuity: "same_thread", retainPrevious: false }, { action: "KEEP" }) })).toMatchObject({ ok: false, error: "proposal-contribution-mode-not-permitted" });
-    expect(validateAndNormalizeProposal({ ...base, allowAugment: true, proposal: proposal({ action: "SET_ACTIVE", contribution: board("AUGMENT"), continuity: "same_thread", retainPrevious: false }, { action: "KEEP" }) }).ok).toBe(true);
-    expect(validateAndNormalizeProposal({ ...base, proposal: proposal({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "NOTE", contribution: cue("AUGMENT") }) })).toMatchObject({ ok: false, error: "proposal-step-schema-invalid:step-0:cueDelta:object" });
-    expect(validateAndNormalizeProposal({ ...base, proposal: proposal({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "TASK", contribution: cue() }) })).toMatchObject({ ok: false, error: "proposal-step-schema-invalid:step-0:cueDelta:object" });
+    const accepted = validateAndNormalizeProposal({ proposal: proposal({ action: "SET_ACTIVE", contribution: domainBoard(), continuity: "same_thread", retainPrevious: false }, { action: "KEEP" }, []), request: input.request, allCheckpoints: [checkpoint], state: createInitialTeachingState(), model: "test" });
+    if (!accepted.ok) throw new Error("expected accepted domain contribution");
+    const events = [...input.events, interpretationAcceptedEvent("s", 3, accepted.steps[0]!)];
+    expect(projectProcessedTimeline(events)[1]).toMatchObject({ type: "accepted_interpretation", boardDelta: { action: "SET_ACTIVE", contribution: { mode: "AUGMENT", provenance: { basis: "DOMAIN_KNOWLEDGE" } } } });
+    expect(replayLessonEvents(events).state).toEqual(replayLessonEvents(events).state);
   });
 
   it("makes old event records an explicit incompatible-session boundary", () => {

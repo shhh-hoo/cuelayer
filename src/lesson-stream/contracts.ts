@@ -1,7 +1,7 @@
 import type { SpeechWord } from "../session/speech-types";
 
-export const LESSON_POLICY_VERSION = "bounded-agent-p4-bootstrap-v1";
-export const LESSON_EVENT_SCHEMA_VERSION = "lesson-event-v2-contribution-provenance";
+export const LESSON_POLICY_VERSION = "bounded-agent-p4-alpha-v2";
+export const LESSON_EVENT_SCHEMA_VERSION = "lesson-event-v3-learner-agency";
 export const NOTE_EXPIRY_MS = 4_000;
 
 export type SpeechEvidenceWarning = {
@@ -33,12 +33,19 @@ export type SpeechReference = {
   quote: string;
 };
 
-export type ContributionMode = "RECONSTRUCT" | "REPRESENT" | "AUGMENT";
+export type ContributionMode = "RECONSTRUCT" | "REPRESENT" | "AUGMENT" | "CORRECT" | "INITIATE";
+export type InterventionRisk = "LOW" | "MEDIUM" | "HIGH";
+/** A stable policy seam for future confidence thresholds; it never claims subject-matter correctness. */
+export function interventionRiskFor(mode: ContributionMode, cueKind?: TeachingCueKind): InterventionRisk {
+  if (mode === "CORRECT" || mode === "INITIATE") return "HIGH";
+  if (mode === "AUGMENT" || cueKind === "NOTE") return "MEDIUM";
+  return "LOW";
+}
 export type StateReference = { kind: "BOARD_ITEM" | "ACTIVE_CUE"; id: string };
 export type ContributionProvenance = {
-  speechRefs: SpeechReference[];
+  speechRefs?: SpeechReference[];
   stateRefs?: StateReference[];
-  basis: "SPEECH" | "SPEECH_AND_STATE" | "DOMAIN_KNOWLEDGE";
+  basis: "SPEECH" | "SPEECH_AND_STATE" | "DOMAIN_KNOWLEDGE" | "STATE_AND_DOMAIN_KNOWLEDGE";
 };
 export type TeachingContribution<TContent> = {
   mode: ContributionMode;
@@ -67,9 +74,11 @@ export type BoardDelta =
     }
   | { action: "ADD_SUPPORT"; support: TeachingContribution<string>; targetBoardItemId: string };
 
+export type TeachingCueKind = "NOTE" | "QUESTION" | "TASK" | "HINT";
+
 export type TeachingCueDelta =
   | { action: "KEEP" }
-  | { action: "SET"; cueKind: "NOTE" | "HINT"; contribution: TeachingContribution<string>; targetBoardItemId?: string }
+  | { action: "SET"; cueKind: TeachingCueKind; contribution: TeachingContribution<string>; targetBoardItemId?: string }
   | { action: "RESOLVE_CURRENT"; reason: "answered" | "completed" | "teacher_moved_on" | "replaced"; evidence: SpeechReference };
 
 export type InterpretationWarning = {
@@ -108,7 +117,7 @@ export type BoardSupport = {
 
 export type ActiveLessonCue = {
   id: string;
-  kind: "NOTE" | "HINT";
+  kind: TeachingCueKind;
   contribution: TeachingContribution<string>;
   sourceSegmentIds: string[];
   activatedAt: number;

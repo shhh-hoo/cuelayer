@@ -1,6 +1,6 @@
 # CueLayer Live Teaching System Specification
 
-**Version:** v0.2 / `bounded-agent-p4-bootstrap-v1`
+**Version:** v0.3 / `bounded-agent-p4-alpha-v2`
 **Status:** `LIVE-STATE` / `SEMANTICS` execution baseline  
 **Date:** 2026-09-02  
 **Scope:** single-session live teaching: speech evidence, stream processing, LLM interpretation, Teaching State, Teaching Board, Teaching Cue, and learner rendering.
@@ -20,13 +20,13 @@ Stable work-package identifiers in this specification are authoritative. Current
 
 If code and this document disagree, update this document intentionally before changing product semantics.
 
-### Alpha contract correction (LIVE-STATE)
+### Alpha learner-surface authority
 
-Alpha is a bounded learner-surface agent. New evidence remains the sole deliberation trigger; teacher speech is primary evidence, rather than the literal output boundary. A Board contribution may be `RECONSTRUCT`, `REPRESENT`, or narrow `AUGMENT`; a Cue may be `RECONSTRUCT` or `REPRESENT`. `AUGMENT` is disabled by the normal live bootstrap policy until locked `SEMANTICS` holdout gates pass.
+Alpha is an AI-native learner-surface agent. The learner surface optimizes for the learner's current learning state, not fidelity to the teacher transcript. New evidence remains the sole deliberation trigger: it controls when Luna deliberates. Once triggered, Luna may reason from current evidence, processed lesson history, current Teaching State, and domain knowledge.
 
-Alpha never autonomously creates `TASK`, `QUESTION`, or `HINT`, corrects the teacher, or initiates an activity. A `HINT` is allowed only when traceable to a teacher-provided exact speech quote. Teacher self-correction remains a Board correction semantic. Teacher override is event-contract-only; no UI is implied. Personality, avatar, intervention-level controls, and proactive timers remain future work.
+Teacher speech is primary classroom evidence and context, not a permission boundary. Board contributions may `RECONSTRUCT`, `REPRESENT`, `AUGMENT`, or `CORRECT`; Teaching Cue may represent teacher activity or `INITIATE` a bounded `QUESTION`, `TASK`, or `HINT`. Provenance is accountability rather than authorization: claimed speech quotes exact-match immutable evidence, while domain- and state-based contributions must never manufacture speech provenance. Higher-risk interventions require stronger confidence and contextual justification in model policy; schema validation preserves boundedness and replayability without pretending to certify subject-matter truth.
 
-The lesson domain/event schema is versioned as `lesson-event-v2-contribution-provenance`. A persisted prior shape is an explicitly incompatible session boundary: it must be rejected or migrated deliberately, never silently replayed as this schema.
+The lesson domain/event schema is versioned as `lesson-event-v3-learner-agency`. A persisted prior shape is an explicitly incompatible session boundary: it must be rejected or migrated deliberately, never silently replayed as this schema.
 
 ---
 
@@ -119,7 +119,7 @@ Do not add:
 - arbitrary LaTeX or full chemical structure/mechanism generation;
 - slide OCR, slide understanding, or spatial grounding;
 - post-lesson summary, student model, or cross-lesson knowledge graph;
-- model-invented hints, answers, or teaching claims.
+- unrestricted answer disclosure, arbitrary content generation, or learner-action replacement that disrupts unresolved productive work.
 
 ---
 
@@ -598,6 +598,8 @@ type TeachingInterpretationStepProposal = {
 
 ### BoardDelta
 
+Teaching Board is the current shared knowledge workspace that the AI judges should be available to learners now. It is not limited to what the teacher most recently established. Its bounded contributions may reconstruct, represent, augment, or correct while retaining evidence history and reversible invalidation.
+
 ```ts
 type BoardDelta =
   | {
@@ -642,18 +644,27 @@ Deterministic rules:
 type SpeechReference = { checkpointId: string; quote: string };
 
 type ContributionProvenance = {
-  speechRefs: SpeechReference[];
+  speechRefs?: SpeechReference[];
   stateRefs?: StateReference[];
-  basis: "SPEECH" | "SPEECH_AND_STATE" | "DOMAIN_KNOWLEDGE";
+  basis:
+    | "SPEECH"
+    | "SPEECH_AND_STATE"
+    | "DOMAIN_KNOWLEDGE"
+    | "STATE_AND_DOMAIN_KNOWLEDGE";
 };
 
 type StateReference = { kind: "BOARD_ITEM" | "ACTIVE_CUE"; id: string };
 
 type TeachingContribution<TContent> = {
-  mode: "RECONSTRUCT" | "REPRESENT" | "AUGMENT";
+  mode: "RECONSTRUCT" | "REPRESENT" | "AUGMENT" | "CORRECT" | "INITIATE";
   content: TContent;
   provenance: ContributionProvenance;
 };
+
+type InterventionRisk = "LOW" | "MEDIUM" | "HIGH";
+// LOW: RECONSTRUCT, REPRESENT
+// MEDIUM: AUGMENT, NOTE
+// HIGH: CORRECT, INITIATE QUESTION/TASK/HINT
 
 type BoardContent =
   | { kind: "TEXT"; text: string }
@@ -670,16 +681,18 @@ type BoardContent =
     };
 ```
 
-No model-authored free prose, React, HTML, CSS, layout, timing, animation, or TeX in `LIVE-STATE` / `SEMANTICS`.
+No arbitrary React, HTML, CSS, layout, timing, animation, or TeX enters `LIVE-STATE` / `SEMANTICS`; learner-visible strings remain bounded contribution content.
 
 ### TeachingCueDelta
+
+Teaching Cue is the learner cognitive action that should remain active now, whether represented from teacher activity or initiated by the AI. It is a sibling of Board with its own revision and lifecycle.
 
 ```ts
 type TeachingCueDelta =
   | { action: "KEEP" }
   | {
       action: "SET";
-      cueKind: "NOTE" | "HINT";
+      cueKind: "NOTE" | "QUESTION" | "TASK" | "HINT";
       contribution: TeachingContribution<string>;
       targetBoardItemId?: string;
     }
@@ -692,10 +705,10 @@ type TeachingCueDelta =
 
 Alpha defaults:
 
-- HINT persists only when it is teacher-provided and exactly speech-traceable; NOTE expires deterministically;
+- NOTE expires deterministically; QUESTION, TASK, and HINT persist until resolved or replaced;
 - Board changes never resolve a cue by themselves;
 - cue resolution never clears Board;
-- TASK and QUESTION are not Alpha proposal actions; model-created HINT is rejected;
+- an unresolved TASK or QUESTION must be explicitly resolved before another cue replaces it;
 - one visible active cue remains the Alpha default.
 
 ---
@@ -738,10 +751,10 @@ reduce Teaching State
 ### Grounding
 
 - exact substring validation applies only to `SpeechReference.quote` through local grounding records;
-- learner-visible contribution content is not required to be a speech substring; state references must exist;
+- learner-visible contribution content is not required to be a speech substring; exact claimed speech references and all claimed state references must validate;
 - relation/transform may use historical evidence plus the current batch;
-- every non-KEEP step must contain at least one trigger reference from checkpoints it consumes now;
-- historical evidence cannot establish a new Board object without a current trigger;
+- non-KEEP steps remain bounded by the current request's ordered checkpoint consumption; domain knowledge is not required to manufacture a speech reference;
+- historical evidence and current state may inform a new Board object only after current evidence has triggered deliberation;
 - critical ASR warning defaults to KEEP unless clear evidence resolves the ambiguity.
 
 ### KEEP semantics
@@ -882,7 +895,8 @@ SET
 → validate contribution mode, provenance, and permitted kind
 → replace current visible cue
 → NOTE receives deterministic expiry
-→ HINT does not auto-expire
+→ QUESTION, TASK, and HINT do not auto-expire
+→ unresolved TASK/QUESTION require explicit resolution before replacement
 
 RESOLVE_CURRENT
 → require active cue
@@ -1057,8 +1071,8 @@ Critical gates:
 
 | Metric | Gate |
 |---|---:|
-| Ungrounded learner-visible content | 0 |
-| Invented HINT / answer | 0 |
+| Invalid claimed provenance | 0 |
+| Gratuitous learner-action replacement / answer leakage | 0 |
 | Corrected error remains Active/Retained | 0 |
 | Persistent TASK/QUESTION resolves early | 0 |
 | Unconsumed checkpoint loss | 0 |
@@ -1068,6 +1082,8 @@ Critical gates:
 | Structured parse | 100% |
 | State transition accuracy | `SEMANTICS` target ≥95% |
 | Cue lifecycle accuracy | `SEMANTICS` target ≥95% |
+| Subject-matter correctness / ASR recovery | `SEMANTICS` target ≥95% |
+| Augmentation precision / false-correction rate / answer leakage | locked `SEMANTICS` gates |
 | Successful provider response accepted or explicitly channel-conflicted | near 100% |
 | Trace volume | <1 MB/min |
 | Normal raw transcript mounts | 0 |
@@ -1325,8 +1341,7 @@ Current phase rejects:
 | Visible active cue | 1 |
 | HINT expiry | none |
 | NOTE expiry | deterministic 4s |
-| RECONSTRUCT / REPRESENT | enabled |
-| AUGMENT | disabled pending locked `SEMANTICS` holdout gates |
+| RECONSTRUCT / REPRESENT / AUGMENT / CORRECT / INITIATE | enabled within bounded schema |
 | Planner failure fallback | last state or visual quiet |
 | Single-lesson retrieval/summary | disabled |
 

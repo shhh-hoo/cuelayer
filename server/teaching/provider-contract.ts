@@ -7,12 +7,12 @@ const text = z.string().min(1).max(600);
 const speechReference = z.object({ checkpointId: id, quote: text }).strict();
 const stateReference = z.object({ kind: z.enum(["BOARD_ITEM", "ACTIVE_CUE"]), id }).strict();
 const provenance = z.object({
-  speechRefs: z.array(speechReference).min(1).max(12),
+  speechRefs: z.array(speechReference).max(12).nullable(),
   stateRefs: z.array(stateReference).max(6).nullable(),
-  basis: z.enum(["SPEECH", "SPEECH_AND_STATE", "DOMAIN_KNOWLEDGE"]),
+  basis: z.enum(["SPEECH", "SPEECH_AND_STATE", "DOMAIN_KNOWLEDGE", "STATE_AND_DOMAIN_KNOWLEDGE"]),
 }).strict();
 const contribution = <T extends z.ZodType>(content: T) => z.object({
-  mode: z.enum(["RECONSTRUCT", "REPRESENT", "AUGMENT"]), content, provenance,
+  mode: z.enum(["RECONSTRUCT", "REPRESENT", "AUGMENT", "CORRECT", "INITIATE"]), content, provenance,
 }).strict();
 const keepReason = z.enum(["filler", "transition", "repetition", "unfinished", "insufficient_evidence", "ambiguous_reference", "classroom_management", "no_board_value"]);
 const boardContent = z.discriminatedUnion("kind", [
@@ -35,7 +35,7 @@ const boardDelta = z.discriminatedUnion("action", [
 ]);
 const cueDelta = z.discriminatedUnion("action", [
   z.object({ action: z.literal("KEEP") }).strict(),
-  z.object({ action: z.literal("SET"), cueKind: z.enum(["NOTE", "HINT"]), contribution: contribution(text), targetBoardItemId: id.nullable() }).strict(),
+  z.object({ action: z.literal("SET"), cueKind: z.enum(["NOTE", "QUESTION", "TASK", "HINT"]), contribution: contribution(text), targetBoardItemId: id.nullable() }).strict(),
   z.object({ action: z.literal("RESOLVE_CURRENT"), reason: z.enum(["answered", "completed", "teacher_moved_on", "replaced"]), evidence: speechReference }).strict(),
 ]);
 const warning = z.object({ code: z.string().min(1).max(80), detail: z.string().min(1).max(240).nullable() }).strict();
@@ -66,13 +66,15 @@ Authority order:
 
 Copy requestId exactly. Set baseBoardRevision and baseCueRevision to currentState.board.revision and currentState.cue.revision.
 
-Only SpeechReference.quote must be an exact non-empty substring of its checkpoint text. Contribution content is a bounded learner-visible reconstruction or representation and may differ from the quote. Historical evidence may clarify a relation or reference, but every non-KEEP step needs a speech reference from a checkpoint it consumes now. Never invent a hint, task, question, answer, teacher correction, teaching claim, HTML, CSS, layout, timing, animation, TeX, or whole replacement state.
+The learner surface optimizes for the learner's current learning state, not fidelity to the teacher transcript. Teacher speech is primary classroom evidence and context; newEvidence is the sole deliberation trigger, not a content-permission boundary. Once triggered, you may reason from new evidence, processed history, currentState, and domain knowledge. Never return HTML, CSS, layout, timing, animation, TeX, or a whole replacement state.
 
-Board supports KEEP, SET_ACTIVE, and ADD_SUPPORT. Board contributions may use RECONSTRUCT or conservative REPRESENT. AUGMENT is disabled by this bootstrap policy. Use correction only with retainPrevious=false and explicit invalidatesBoardItemIds. Board content is limited to TEXT, FOCUS, RELATION(cause|sequence|contrast), and TRANSFORM.
+Provenance is accountability, not authorization. SPEECH requires one or more exact SpeechReference quotes. SPEECH_AND_STATE requires exact speech quotes and existing state references. DOMAIN_KNOWLEDGE needs neither speech nor state references. STATE_AND_DOMAIN_KNOWLEDGE requires existing state references and may include exact speech quotes. Never fabricate a speech quote. If a speech quote is supplied, it must be an exact non-empty substring of its checkpoint text.
+
+Board supports KEEP, SET_ACTIVE, and ADD_SUPPORT. Board contributions may use RECONSTRUCT, REPRESENT, AUGMENT, or CORRECT; INITIATE is not a Board mode. CORRECT requires continuity=correction, retainPrevious=false, and explicit invalidatesBoardItemIds. Board content is limited to TEXT, FOCUS, RELATION(cause|sequence|contrast), and TRANSFORM. Keep augmentation concise and contextually useful; correct but irrelevant knowledge should remain QUIET.
 
 Within one ordered proposal only, a SET_ACTIVE in step N creates the deterministic Board item ID \`board-\${requestId}-accepted-N\`. A later step may reference that exact ID in targetBoardItemId; replace N with the zero-based earlier step index. Do not invent another intra-batch ID, and do not target a Board item that has been retired or invalidated by an earlier step.
 
-Cue supports KEEP, SET(NOTE|HINT), and RESOLVE_CURRENT. Cue contributions may use RECONSTRUCT or REPRESENT only. A HINT must be traceable through an exact teacher-provided speech quote. Cue SET targetBoardItemId is optional: include it only for a current active or retained Board item, an earlier step's deterministic SET_ACTIVE ID, or this step's own deterministic SET_ACTIVE ID. If no target is confidently valid, omit targetBoardItemId. Board changes never resolve Cue; Cue resolution never clears Board.`;
+Cue supports KEEP, SET(NOTE|QUESTION|TASK|HINT), and RESOLVE_CURRENT. NOTE may use RECONSTRUCT, REPRESENT, or AUGMENT. QUESTION, TASK, and HINT may use RECONSTRUCT, REPRESENT, or INITIATE; INITIATE is appropriate only for a bounded learner action. CORRECT is not a Cue mode. High-risk CORRECT and INITIATE interventions need strong contextual justification and must protect active learning: do not reveal a complete answer while a genuine QUESTION or TASK remains unresolved, and explicitly resolve an active QUESTION or TASK before replacing it. Cue SET targetBoardItemId is optional: include it only for a current active or retained Board item, an earlier step's deterministic SET_ACTIVE ID, or this step's own deterministic SET_ACTIVE ID. If no target is confidently valid, omit targetBoardItemId. Board changes never resolve Cue; Cue resolution never clears Board.`;
 
 export function teachingResponseRequest(input: TeachingInterpretationRequest) {
   return {
@@ -93,9 +95,9 @@ function normalizeWarnings(warnings: z.infer<typeof warning>[] | null) {
 }
 
 function normalizeProvenance(item: z.infer<typeof provenance>) {
-  return { speechRefs: item.speechRefs, ...(item.stateRefs === null ? {} : { stateRefs: item.stateRefs }), basis: item.basis };
+  return { ...(item.speechRefs === null ? {} : { speechRefs: item.speechRefs }), ...(item.stateRefs === null ? {} : { stateRefs: item.stateRefs }), basis: item.basis };
 }
-function normalizeContribution<T>(item: { mode: "RECONSTRUCT" | "REPRESENT" | "AUGMENT"; content: T; provenance: z.infer<typeof provenance> }) {
+function normalizeContribution<T>(item: { mode: "RECONSTRUCT" | "REPRESENT" | "AUGMENT" | "CORRECT" | "INITIATE"; content: T; provenance: z.infer<typeof provenance> }) {
   return { mode: item.mode, content: item.content, provenance: normalizeProvenance(item.provenance) };
 }
 

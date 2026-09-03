@@ -38,8 +38,8 @@ export function emitAcceptedStepTrace({
     checkpointIds: step.consumesCheckpointIds,
     boardAction: step.boardDelta.action,
     cueAction: step.cueDelta.action,
-    ...(step.boardDelta.action === "SET_ACTIVE" ? { boardMode: step.boardDelta.contribution.mode, boardSpeechRefCount: step.boardDelta.contribution.provenance.speechRefs.length } : {}),
-    ...(step.cueDelta.action === "SET" ? { cueMode: step.cueDelta.contribution.mode, cueSpeechRefCount: step.cueDelta.contribution.provenance.speechRefs.length } : {}),
+    ...(step.boardDelta.action === "SET_ACTIVE" ? { boardMode: step.boardDelta.contribution.mode, boardSpeechRefCount: step.boardDelta.contribution.provenance.speechRefs?.length ?? 0 } : {}),
+    ...(step.cueDelta.action === "SET" ? { cueMode: step.cueDelta.contribution.mode, cueSpeechRefCount: step.cueDelta.contribution.provenance.speechRefs?.length ?? 0 } : {}),
   }, { correlation }));
   if (step.boardDelta.action === "KEEP") emit(traceDraft("board.keep", { reason: step.boardDelta.reason }, { correlation }));
   if (step.boardDelta.action === "SET_ACTIVE") {
