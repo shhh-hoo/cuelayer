@@ -1,15 +1,20 @@
 import type { CanonicalSpeechSpan } from "../session/speech-types";
 import { checkpointFromClosedSpan } from "./evidence-checkpoints";
+import { validateAndNormalizeProposal } from "./accepted-interpretations";
 import { checkpointCommittedEvent, cueExpiredEvent, interpretationAcceptedEvent, lessonEndedEvent, lessonStartedEvent } from "./events";
 import { pendingEvidence, replayLessonEvents, type LessonReplay } from "./replay";
 import { LocalLessonEventStore } from "./store";
-import type { AcceptedInterpretationStep, LessonEvent } from "./contracts";
+import type { AcceptedInterpretationStep, LessonEvent, TeachingInterpretationRequest, TeachingStateSnapshot } from "./contracts";
 
 export type LessonEventStore = {
   append(events: readonly LessonEvent[]): Promise<void>;
   readSession(sessionId: string): Promise<LessonEvent[]>;
   close?(): void;
 };
+
+export type ProposalAcceptance =
+  | { ok: true; steps: AcceptedInterpretationStep[]; boardConflict: boolean; cueConflict: boolean; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot }
+  | { ok: false; error: string };
 
 export class LessonStreamRuntime {
   private writeChain: Promise<unknown> = Promise.resolve();
@@ -39,13 +44,17 @@ export class LessonStreamRuntime {
   get checkpoints() { return this.replayValue.checkpoints; }
   get pending() { return pendingEvidence(this.replayValue); }
 
+  private serialize<T>(operation: () => Promise<T>) {
+    const queued = this.writeChain.then(operation);
+    this.writeChain = queued.catch(() => undefined);
+    return queued;
+  }
+
   async start(timestamp = new Date().toISOString()) {
-    const operation = this.writeChain.then(async () => {
+    return this.serialize(async () => {
       if (this.replayValue.events.some((event) => event.type === "lesson.started")) return;
       await this.appendNow([lessonStartedEvent(this.sessionId, this.nextEventSequence(), timestamp)]);
     });
-    this.writeChain = operation.catch(() => undefined);
-    return operation;
   }
 
   private nextEventSequence() {
@@ -63,45 +72,69 @@ export class LessonStreamRuntime {
     this.listeners.forEach((listener) => listener());
   }
 
-  private append(events: LessonEvent[]) {
-    const operation = this.writeChain.then(() => this.appendNow(events));
-    this.writeChain = operation.catch(() => undefined);
-    return operation;
-  }
-
   async commitClosedSpan(span: CanonicalSpeechSpan, speechRunId: number) {
-    const operation = this.writeChain.then(async () => {
+    return this.serialize(async () => {
       if (!this.replayValue.events.some((event) => event.type === "lesson.started")) throw new Error("lesson-not-started");
-      const alreadyCommitted = this.replayValue.events.some((event) => event.type === "evidence.checkpoint_committed" && event.grounding.canonicalSpanIds.some((item) => item.spanId === span.id));
-      if (alreadyCommitted) return undefined;
       const result = checkpointFromClosedSpan(span, speechRunId, this.nextLessonSequence());
       if (!result) return undefined;
+      const alreadyCommitted = this.replayValue.checkpoints.some((checkpoint) => checkpoint.checkpointId === result.checkpoint.checkpointId);
+      if (alreadyCommitted) return undefined;
       const event = checkpointCommittedEvent(this.sessionId, this.nextEventSequence(), result.checkpoint, result.grounding);
       await this.appendNow([event]);
       return result.checkpoint;
     });
-    this.writeChain = operation.catch(() => undefined);
-    return operation;
   }
 
   async acceptSteps(steps: readonly AcceptedInterpretationStep[]) {
-    const firstSequence = this.nextEventSequence();
-    const events = steps.map((step, index) => interpretationAcceptedEvent(this.sessionId, firstSequence + index, step));
-    await this.append(events);
+    return this.serialize(async () => {
+      const firstSequence = this.nextEventSequence();
+      const events = steps.map((step, index) => interpretationAcceptedEvent(this.sessionId, firstSequence + index, step));
+      await this.appendNow(events);
+    });
+  }
+
+  async acceptProposal({
+    proposal,
+    request,
+    model,
+    isCurrent = () => true,
+  }: {
+    proposal: unknown;
+    request: TeachingInterpretationRequest;
+    model: string;
+    isCurrent?: () => boolean;
+  }): Promise<ProposalAcceptance> {
+    return this.serialize(async () => {
+      if (!isCurrent()) return { ok: false, error: "interpretation-stale-speech-run" };
+      const stateBefore = this.replayValue.state;
+      const validation = validateAndNormalizeProposal({ proposal, request, allCheckpoints: this.replayValue.checkpoints, state: stateBefore, model });
+      if (!validation.ok) return validation;
+      const firstSequence = this.nextEventSequence();
+      const events = validation.steps.map((step, index) => interpretationAcceptedEvent(this.sessionId, firstSequence + index, step));
+      await this.appendNow(events);
+      return {
+        ok: true,
+        steps: validation.steps,
+        boardConflict: validation.boardConflict,
+        cueConflict: validation.cueConflict,
+        stateBefore,
+        stateAfter: this.replayValue.state,
+      };
+    });
   }
 
   async expireCue(cueId: string, baseCueRevision: number, timestamp = new Date().toISOString()) {
-    if (this.state.cue.active?.id !== cueId || this.state.cue.revision !== baseCueRevision) return false;
-    await this.append([cueExpiredEvent(this.sessionId, this.nextEventSequence(), cueId, baseCueRevision, timestamp)]);
-    return true;
+    return this.serialize(async () => {
+      if (this.replayValue.state.cue.active?.id !== cueId || this.replayValue.state.cue.revision !== baseCueRevision) return false;
+      await this.appendNow([cueExpiredEvent(this.sessionId, this.nextEventSequence(), cueId, baseCueRevision, timestamp)]);
+      return true;
+    });
   }
 
   async end(timestamp = new Date().toISOString()) {
-    const operation = this.writeChain.then(async () => {
+    return this.serialize(async () => {
       if (this.replayValue.ended || !this.replayValue.events.some((event) => event.type === "lesson.started")) return;
       await this.appendNow([lessonEndedEvent(this.sessionId, this.nextEventSequence(), timestamp)]);
     });
-    this.writeChain = operation.catch(() => undefined);
-    return operation;
   }
 }

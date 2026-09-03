@@ -23,9 +23,11 @@ export function replayLessonEvents(input: readonly LessonEvent[]): LessonReplay 
   let state = createInitialTeachingState();
   let sessionId: string | undefined;
   let ended = false;
+  const sequences = new Set<number>();
 
-  for (const event of [...input].sort((left, right) => left.sequence - right.sequence || left.eventId.localeCompare(right.eventId))) {
+  for (const event of [...input].sort((left, right) => left.sequence - right.sequence)) {
     if (eventIds.has(event.eventId)) continue;
+    if (sequences.has(event.sequence)) throw new Error("lesson-event-sequence-collision");
     if (sessionId && event.sessionId !== sessionId) throw new Error("lesson-event-session-mismatch");
     sessionId ??= event.sessionId;
     if (ended && event.type !== "lesson.ended") throw new Error("lesson-already-ended");
@@ -52,6 +54,7 @@ export function replayLessonEvents(input: readonly LessonEvent[]): LessonReplay 
     state = reduceLessonEvent(state, event, checkpointSequences);
     if (event.type === "lesson.ended") ended = true;
     eventIds.add(event.eventId);
+    sequences.add(event.sequence);
     events.push(event);
   }
 
