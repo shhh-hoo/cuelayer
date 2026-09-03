@@ -240,8 +240,12 @@ export function SessionPage() {
         droppedCount={trace.snapshot.droppedCount}
         error={traceViewer.error ?? trace.snapshot.error}
         loading={traceViewer.loading}
+        sessions={traceViewer.sessions}
+        selectedSessionId={traceViewer.selectedSessionId}
+        viewingArchive={traceViewer.viewingArchive}
         onReload={() => void traceViewer.reload()}
         onExport={() => void traceViewer.downloadJsonl()}
+        onSelectSession={traceViewer.selectSession}
       /> : null}
       {fullscreenError ? <p className="session-error" role="alert">{fullscreenError}</p> : null}
     </section>

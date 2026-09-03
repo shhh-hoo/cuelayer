@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { TeachingTraceEvent, TeachingTraceState } from "./teaching-trace";
 import { SYNTHETIC_INTENT_KINDS, type SyntheticIntentKind } from "./dev-semantic-fixtures";
 import type { SessionTraceEvent } from "../trace/contracts";
+import type { TraceArchiveSession } from "../trace/store";
 
 type LegacyProps = { trace: TeachingTraceState; onInject?(kind: SyntheticIntentKind): void };
 type DurableProps = {
@@ -12,8 +13,12 @@ type DurableProps = {
   droppedCount: number;
   error?: string;
   loading?: boolean;
+  sessions: TraceArchiveSession[];
+  selectedSessionId: string;
+  viewingArchive: boolean;
   onReload(): void;
   onExport(): void;
+  onSelectSession(sessionId: string): void;
   onInject?(kind: SyntheticIntentKind): void;
 };
 
@@ -66,13 +71,25 @@ function LegacyTraceDrawer({ trace, onInject }: LegacyProps) {
   </details>;
 }
 
-function DurableTraceDrawer({ sessionId, events, status, pendingCount, droppedCount, error, loading, onReload, onExport, onInject }: DurableProps) {
+function sessionOptionLabel(session: TraceArchiveSession) {
+  if (!session.createdAt) return `${session.sessionId} · current active`;
+  const completedAt = session.completedAt ? ` · completed ${clock(session.completedAt)}` : "";
+  return `${session.sessionId} · ${session.status} · created ${clock(session.createdAt)}${completedAt} · ${session.path}`;
+}
+
+function DurableTraceDrawer({ sessionId, events, status, pendingCount, droppedCount, error, loading, sessions, selectedSessionId, viewingArchive, onReload, onExport, onSelectSession, onInject }: DurableProps) {
+  const currentSession = sessions.find((session) => session.sessionId === sessionId)
+    ?? { sessionId, status: "active" as const, createdAt: "", updatedAt: "", appVersion: "", environment: "", path: "" };
+  const selectableSessions = [currentSession, ...sessions.filter((session) => session.sessionId !== sessionId && session.status !== "active")];
   return <details className="teaching-trace-drawer" open>
-    <summary>Persistent trace · {events.length} loaded · {status} · {sessionId}</summary>
+    <summary>Persistent trace · {events.length} loaded · {viewingArchive ? "archived read-only" : status} · {selectedSessionId}</summary>
     <div className="semantic-injector" aria-label="Persistent trace actions">
+      <label>Trace session: <select value={selectedSessionId} onChange={(event) => onSelectSession(event.target.value)}>
+        {selectableSessions.map((session) => <option key={session.sessionId} value={session.sessionId}>{sessionOptionLabel(session)}</option>)}
+      </select></label>
       <button type="button" onClick={onReload} disabled={loading}>{loading ? "Loading…" : "Reload trace"}</button>
       <button type="button" onClick={onExport}>Export JSONL</button>
-      <span>{pendingCount} pending · {droppedCount} dropped</span>
+      {viewingArchive ? <span>Archived trace · read-only</span> : <span>{pendingCount} pending · {droppedCount} dropped</span>}
     </div>
     {error ? <p className="trace-error" role="status">Trace degraded: {error}</p> : null}
     <Injector onInject={onInject} />

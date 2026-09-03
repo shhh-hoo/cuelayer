@@ -81,4 +81,27 @@ describe("session debug visibility", () => {
     expect(developmentHtml).toContain("FOCUS");
     expect(developmentHtml).toContain("TRANSFORM");
   });
+
+  it("marks a selected completed trace as read-only while keeping it exportable", () => {
+    const html = renderToStaticMarkup(<TeachingTraceDrawer
+      sessionId="session-current"
+      events={[]}
+      status="healthy"
+      pendingCount={0}
+      droppedCount={0}
+      sessions={[
+        { sessionId: "session-current", status: "active", createdAt: "2026-09-03T10:00:00.000Z", updatedAt: "2026-09-03T10:00:00.000Z", appVersion: "0.1.0", environment: "test", path: "/session" },
+        { sessionId: "session-completed", status: "completed", createdAt: "2026-09-03T09:00:00.000Z", updatedAt: "2026-09-03T09:10:00.000Z", completedAt: "2026-09-03T09:10:00.000Z", appVersion: "0.1.0", environment: "test", path: "/session" },
+      ]}
+      selectedSessionId="session-completed"
+      viewingArchive
+      onReload={() => undefined}
+      onExport={() => undefined}
+      onSelectSession={() => undefined}
+    />);
+    expect(html).toContain("Trace session:");
+    expect(html).toContain("session-completed · completed");
+    expect(html).toContain("Archived trace · read-only");
+    expect(html).toContain("Export JSONL");
+  });
 });

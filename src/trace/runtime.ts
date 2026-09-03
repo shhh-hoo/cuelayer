@@ -1,7 +1,7 @@
 import packageMetadata from "../../package.json";
 import { traceDraft, type SessionTraceDraft, type SessionTraceEvent } from "./contracts";
 import { createTraceSessionId } from "./session-identity";
-import { LocalTraceStore, type TraceSessionMetadata } from "./store";
+import { LocalTraceStore, type TraceArchiveSession, type TraceSessionMetadata } from "./store";
 import { TraceWriter, type TraceWriterSnapshot } from "./writer";
 
 export type SessionTraceRuntimeOptions = {
@@ -106,6 +106,18 @@ export class SessionTraceRuntime {
     // The viewer reads the latest durable prefix. It never forces the live
     // writer to flush outside its normal batching schedule.
     return this.store.readRecent(this.sessionId, limit);
+  }
+
+  async listTraceSessions(): Promise<TraceArchiveSession[]> {
+    return this.store.listSessions();
+  }
+
+  async readTraceSession(sessionId: string, limit = 240): Promise<SessionTraceEvent[]> {
+    return this.store.readRecent(sessionId, limit);
+  }
+
+  async exportTraceSessionJsonl(sessionId: string): Promise<Blob> {
+    return this.store.exportJsonlBlob(sessionId);
   }
 
   async exportJsonlBlob() {

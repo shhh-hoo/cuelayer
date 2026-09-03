@@ -23,6 +23,7 @@ export type TraceSessionRecord = {
 };
 
 export type TraceSessionMetadata = Pick<TraceSessionRecord, "appVersion" | "environment" | "path">;
+export type TraceArchiveSession = Readonly<TraceSessionRecord>;
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
