@@ -42,7 +42,7 @@ export function TeachingSurfaceLayer({ state, presentationMode, onCueExpire, onR
       active={state.board.active ? <div className="teaching-board-active" data-board-item-id={state.board.active.id}><Content content={state.board.active.contribution.content} /></div> : null}
       support={state.board.support.length ? <div className="teaching-board-support-list">{state.board.support.map((support) => <p key={support.id}>{support.contribution.content}</p>)}</div> : undefined}
       retained={state.board.retained.map((item) => <RetainedItem key={item.id} item={item} />)}
-      cue={state.cue.active ? { ...state.cue.active, text: state.cue.active.contribution.content } : undefined}
+      cue={state.cue.active}
       onCueExpire={onCueExpire}
     />
   </section>;

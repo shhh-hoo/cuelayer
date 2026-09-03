@@ -27,11 +27,10 @@ export function developmentSpeechDebugEnabled(isDevelopment: boolean, search: st
 
 export function SessionPage() {
   const showSpeechDebug = speechDebugEnabled(window.location.search);
-  const developmentDebug = developmentSpeechDebugEnabled(import.meta.env.DEV, window.location.search);
   const trace = useSessionTrace({ observeStatus: showSpeechDebug });
   const traceViewer = useTraceViewer(trace, showSpeechDebug);
-  const pageReducer = useMemo(() => createSessionPageReducer(developmentDebug), [developmentDebug]);
-  const [state, dispatch] = useReducer(pageReducer, developmentDebug, createInitialSessionState);
+  const pageReducer = useMemo(() => createSessionPageReducer(), []);
+  const [state, dispatch] = useReducer(pageReducer, undefined, createInitialSessionState);
   const stateRef = useRef(state);
   const dispatchSession = useCallback((action: import("./page-session-reducer").SessionPageAction) => {
     stateRef.current = pageReducer(stateRef.current, action);

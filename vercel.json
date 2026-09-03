@@ -1,9 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/planner/decision.ts": {
-      "includeFiles": "server/planner/**"
-    },
     "api/teaching/interpretation.ts": {
       "includeFiles": "server/teaching/**"
     }

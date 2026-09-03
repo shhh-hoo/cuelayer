@@ -21,7 +21,7 @@ export default async function handler(request: Request, response: Response): Pro
   response.setHeader("Cache-Control", "no-store");
   if (request.method !== "POST") { response.status(405).json({ error: "method-not-allowed" }); return; }
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) { response.status(503).json({ error: "planner-not-configured" }); return; }
+  if (!apiKey) { response.status(503).json({ error: "teaching-not-configured" }); return; }
   const input = request.body as TeachingInterpretationRequest | undefined;
   if (!input?.requestId || !input.sessionId || !input.newEvidence?.length) { response.status(400).json({ error: "invalid-teaching-interpretation-input" }); return; }
 

@@ -1,7 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { createSpeechmaticsJWT } from "@speechmatics/auth";
-import { requestOpenAIPlannerDecision } from "./server/planner/openai-planner.ts";
 import { estimateTeachingCost, requestOpenAITeachingInterpretation } from "./server/teaching/openai-interpreter.ts";
 
 async function requestBody(request: import("http").IncomingMessage): Promise<unknown> {
@@ -13,13 +12,13 @@ async function requestBody(request: import("http").IncomingMessage): Promise<unk
   return JSON.parse(new TextDecoder().decode(body));
 }
 
-function plannerFailureReason(error: unknown) {
+function teachingFailureReason(error: unknown) {
   const value = error && typeof error === "object" ? error as { status?: unknown; code?: unknown; message?: unknown } : undefined;
-  if (typeof value?.message === "string" && value.message.includes("invalid structured output JSON")) return "planner-invalid-structured-output";
-  if (value?.message === "planner-empty-response") return "planner-empty-response";
-  if (typeof value?.status === "number") return `planner-provider-http-${value.status}`;
-  if (typeof value?.code === "string" && /^[a-z0-9_-]{1,80}$/i.test(value.code)) return `planner-provider-${value.code}`;
-  return "planner-provider-unavailable";
+  if (typeof value?.message === "string" && value.message.includes("invalid structured output JSON")) return "teaching-invalid-structured-output";
+  if (value?.message === "teaching-empty-response") return "teaching-empty-response";
+  if (typeof value?.status === "number") return `teaching-provider-http-${value.status}`;
+  if (typeof value?.code === "string" && /^[a-z0-9_-]{1,80}$/i.test(value.code)) return `teaching-provider-${value.code}`;
+  return "teaching-provider-unavailable";
 }
 
 export default defineConfig(({ mode }) => {
@@ -36,22 +35,11 @@ export default defineConfig(({ mode }) => {
         try { response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ token: await createSpeechmaticsJWT({ type: "rt", apiKey, ttl: 60 }) })); }
         catch { response.statusCode = 502; response.end(JSON.stringify({ error: "speech-token-unavailable" })); }
       });
-      server.middlewares.use("/api/planner/decision", async (request, response) => {
-        response.setHeader("Cache-Control", "no-store");
-        if (request.method !== "POST") { response.statusCode = 405; response.end(JSON.stringify({ error: "method-not-allowed" })); return; }
-        const openAIApiKey = env.OPENAI_API_KEY;
-        if (!openAIApiKey) { response.statusCode = 503; response.end(JSON.stringify({ error: "planner-not-configured" })); return; }
-        try {
-          const input = await requestBody(request);
-          const decision = await requestOpenAIPlannerDecision(input as never, openAIApiKey, env.OPENAI_MODEL || "gpt-5.6-luna");
-          response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ decision }));
-        } catch (error) { response.statusCode = 502; response.end(JSON.stringify({ error: plannerFailureReason(error) })); }
-      });
       server.middlewares.use("/api/teaching/interpretation", async (request, response) => {
         response.setHeader("Cache-Control", "no-store");
         if (request.method !== "POST") { response.statusCode = 405; response.end(JSON.stringify({ error: "method-not-allowed" })); return; }
         const openAIApiKey = env.OPENAI_API_KEY;
-        if (!openAIApiKey) { response.statusCode = 503; response.end(JSON.stringify({ error: "planner-not-configured" })); return; }
+        if (!openAIApiKey) { response.statusCode = 503; response.end(JSON.stringify({ error: "teaching-not-configured" })); return; }
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort("hard_deadline"), 6_000);
         try {
@@ -66,7 +54,7 @@ export default defineConfig(({ mode }) => {
           response.end(JSON.stringify({ ...result, ...(estimatedCostUsd === undefined ? {} : { estimatedCostUsd }) }));
         } catch (error) {
           response.statusCode = 502;
-          response.end(JSON.stringify({ error: controller.signal.aborted ? "teaching-interpretation-timeout" : plannerFailureReason(error) }));
+          response.end(JSON.stringify({ error: controller.signal.aborted ? "teaching-interpretation-timeout" : teachingFailureReason(error) }));
         } finally {
           clearTimeout(timeout);
         }

@@ -98,54 +98,6 @@ export type SessionTracePayloads = {
     transcript: string;
     sourceFinalIds: string[];
   };
-  "planner.gate": {
-    runId: number;
-    spanId: string;
-    spanRevision: number;
-    decision: "run" | "skip";
-    reason: string;
-    requestId?: number;
-  };
-  "planner.started": {
-    runId: number;
-    requestId: number;
-    spanId: string;
-    spanRevision: number;
-    input: unknown;
-  };
-  "planner.completed": {
-    runId: number;
-    requestId: number;
-    spanId: string;
-    spanRevision: number;
-    latencyMs: number;
-    decision: unknown;
-  };
-  "planner.aborted": {
-    runId: number;
-    requestId: number;
-    spanId: string;
-    spanRevision: number;
-    latencyMs: number;
-    reason: string;
-  };
-  "planner.failed": {
-    runId: number;
-    requestId: number;
-    spanId: string;
-    spanRevision: number;
-    latencyMs: number;
-    message: string;
-  };
-  "renderer.activated": {
-    runId: number;
-    episodeId: string;
-    captionText: string;
-    displayKind: string;
-    presentationMode?: string;
-    sourceSegmentIds: string[];
-  };
-  "renderer.expired": { episodeId: string };
   "evidence.checkpoint_opened": { runId: number; spanId: string; spanRevision: number };
   "evidence.checkpoint_committed": { runId: number; checkpointId: string; lessonSequence: number; sourceFinalIds: string[]; warningCodes: string[] };
   "evidence.checkpoint_pending": { checkpointId: string; pendingCount: number; oldestPendingAgeMs: number; estimatedTokens: number };

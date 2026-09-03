@@ -5,11 +5,7 @@ export const SPEECH_SPAN_ASSEMBLY = {
   idleCloseMs: 900,
   maxDurationMs: 6_500,
   maxWords: 28,
-  plannerCheckpointMs: 2_500,
 } as const;
-
-/** One live semantic budget: planner work must not outlive the checkpoint cadence it serves. */
-export const LIVE_PLANNER_BUDGET_MS = SPEECH_SPAN_ASSEMBLY.plannerCheckpointMs;
 
 export type SpeechAssemblyChange = {
   decision: "opened" | "appended" | "closed";
@@ -20,17 +16,6 @@ export type SpeechAssemblyChange = {
 };
 
 export type CanonicalSpeechUpdate = { state: CanonicalSpeechState; changes: SpeechAssemblyChange[] };
-
-export type PlannerCheckpointCursor = {
-  durationCheckpoint: number;
-  sourceFinalCount: number;
-};
-
-export type DuePlannerCheckpoint = {
-  spanId: string;
-  spanRevision: number;
-  cursor: PlannerCheckpointCursor;
-};
 
 export function createInitialCanonicalSpeechState(): CanonicalSpeechState {
   return { finals: [], spans: [] };
@@ -172,23 +157,4 @@ export function closeOpenCanonicalSpeechSpans(state: CanonicalSpeechState, reaso
   return state.spans.reduce((next, span) => span.status === "open"
     ? closeCanonicalSpeechSpan(next, span.id, span.revision, reason, now).state
     : next, state);
-}
-
-export function isPlannerCheckpoint(span: CanonicalSpeechSpan) {
-  return span.status === "closed" || span.endMs - span.startMs >= SPEECH_SPAN_ASSEMBLY.plannerCheckpointMs;
-}
-
-/** Open spans become eligible once per elapsed checkpoint; closure only adds work for newer speech. */
-export function duePlannerCheckpoint(span: CanonicalSpeechSpan, previous?: PlannerCheckpointCursor): DuePlannerCheckpoint | undefined {
-  const prior = previous ?? { durationCheckpoint: 0, sourceFinalCount: 0 };
-  const durationCheckpoint = Math.floor(Math.max(0, span.endMs - span.startMs) / SPEECH_SPAN_ASSEMBLY.plannerCheckpointMs);
-  const sourceFinalCount = span.sourceFinalIds.length;
-  if (sourceFinalCount <= prior.sourceFinalCount) return undefined;
-  if (span.status === "open" && durationCheckpoint <= prior.durationCheckpoint) return undefined;
-  if (span.status === "open" && durationCheckpoint === 0) return undefined;
-  return {
-    spanId: span.id,
-    spanRevision: span.revision,
-    cursor: { durationCheckpoint: Math.max(prior.durationCheckpoint, durationCheckpoint), sourceFinalCount },
-  };
 }
