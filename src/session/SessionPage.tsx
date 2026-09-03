@@ -15,6 +15,7 @@ import { useCanonicalTrace } from "../trace/use-canonical-trace";
 import { useSessionTrace } from "../trace/use-session-trace";
 import { useTraceViewer } from "../trace/use-trace-viewer";
 import type { BoardDensity } from "../teaching-cue/BoardLayout";
+import { stopCurrentSpeechRun } from "./session-speech-lifecycle";
 
 export function speechDebugEnabled(search: string) {
   return new URLSearchParams(search).getAll("debug").includes("speech");
@@ -103,12 +104,17 @@ export function SessionPage() {
   }, []);
 
   const stopSpeech = useCallback(async () => {
-    const runId = state.speech.debug.runId;
-    await stopSpeechmatics();
-    dispatchSession({ type: "speech-stopped", runId, now: Date.now() });
-  }, [dispatchSession, state.speech.debug.runId, stopSpeechmatics]);
+    await stopCurrentSpeechRun({ stateRef, stopSpeechmatics, dispatchSession });
+  }, [dispatchSession, stopSpeechmatics]);
+  const stopSpeechRef = useRef(stopSpeech);
+  stopSpeechRef.current = stopSpeech;
 
-  useEffect(() => () => { releasePresentation(true); void stopSpeech(); }, [releasePresentation, stopSpeech]);
+  // This is deliberately unmount-only. Speech callbacks may change identity as
+  // a new run starts; cleanup must never be interpreted as an explicit stop.
+  useEffect(() => () => {
+    releasePresentation(true);
+    void stopSpeechRef.current().catch(() => undefined);
+  }, [releasePresentation]);
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === stageRef.current);
@@ -148,7 +154,13 @@ export function SessionPage() {
   };
 
   const endSession = async () => {
-    await stopSpeech();
+    try {
+      await stopSpeech();
+    } catch {
+      // The hook has emitted a drain-incomplete diagnostic and preserved every
+      // final it saw. Ending the lesson would falsely claim lossless closure.
+      return;
+    }
     const speechRunId = stateRef.current.speech.debug.runId;
     const finalCanonicalSpeech = closeOpenCanonicalSpeechSpans(stateRef.current.speech.canonical, "explicit_stop", Date.now());
     releasePresentation(true);
