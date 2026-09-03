@@ -5,6 +5,7 @@ import { getAudioDevicesStore, useAudioDevices, usePCMAudioListener, usePCMAudio
 import { speechEventFromSpeechmatics } from "./speechmatics-adapter";
 import type { SpeechEvent } from "./speech-types";
 import { AudioDeliveryMonitor } from "./audio-delivery-window";
+import { drainSpeechmaticsStop } from "./speechmatics-stop-drain";
 import { traceDraft, type SessionTraceDraft, type SessionTracePayloads, type TraceEmitter } from "../trace/contracts";
 
 const TOKEN_ENDPOINT = "/api/speechmatics/token";
@@ -290,14 +291,16 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
   }, [audioContext, audioDevices, lifecycle, onReady, startDeliveryMonitor, startRecording, startTranscription, stopDeliveryMonitor, stopRecording, stopTranscription]);
 
   const stop = useCallback(async () => {
-    const runId = activeRunIdRef.current;
-    activeRunIdRef.current = null;
-    stoppingRef.current = true;
-    stopRecording();
-    try { await stopTranscription(); } catch { /* Official client already closed the socket. */ }
-    stopDeliveryMonitor(true);
-    stoppingRef.current = false;
-    if (runId !== null) lifecycle(runId, "stopped");
+    await drainSpeechmaticsStop({
+      activeRunId: activeRunIdRef,
+      stopping: stoppingRef,
+      stopRecording,
+      stopTranscription,
+      finish: (runId) => {
+        stopDeliveryMonitor(true);
+        lifecycle(runId, "stopped");
+      },
+    });
   }, [lifecycle, stopDeliveryMonitor, stopRecording, stopTranscription]);
 
   const pause = useCallback(() => {

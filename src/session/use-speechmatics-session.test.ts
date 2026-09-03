@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { activateBrowserAudio, createSpeechmaticsConfig, speechStartFailureFrom } from "./use-speechmatics-session";
+import { drainSpeechmaticsStop } from "./speechmatics-stop-drain";
 
 describe("Speechmatics configuration", () => {
   it("uses the actual browser audio sample rate for raw PCM", () => {
@@ -31,5 +32,30 @@ describe("Speechmatics configuration", () => {
     });
 
     expect(order).toEqual(["permission", "audio-context"]);
+  });
+
+  it("keeps the original run addressable through EndOfStream drain final transcripts", async () => {
+    const activeRunId = { current: 7 as number | null };
+    const stopping = { current: false };
+    let resolveDrain: (() => void) | undefined;
+    const stopTranscription = () => new Promise<void>((resolve) => { resolveDrain = resolve; });
+    const delivered: Array<{ runId: number; kind: string; text: string }> = [];
+    const stop = drainSpeechmaticsStop({
+      activeRunId,
+      stopping,
+      stopRecording: () => undefined,
+      stopTranscription,
+      finish: () => undefined,
+    });
+    await Promise.resolve();
+    expect(stopping.current).toBe(true);
+    expect(activeRunId.current).toBe(7);
+    // Simulated AddTranscript during the official client's EndOfStream drain.
+    if (activeRunId.current !== null) delivered.push({ runId: activeRunId.current, kind: "committed", text: "unterminated tail phrase" });
+    resolveDrain?.();
+    await stop;
+    expect(delivered).toEqual([{ runId: 7, kind: "committed", text: "unterminated tail phrase" }]);
+    expect(activeRunId.current).toBeNull();
+    expect(stopping.current).toBe(false);
   });
 });
