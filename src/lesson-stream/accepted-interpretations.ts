@@ -10,6 +10,7 @@ import type {
   SpeechReference,
   StateReference,
   TeachingContribution,
+  TeachingCueKind,
   TeachingCueDelta,
   TeachingInterpretationProposal,
   TeachingInterpretationRequest,
@@ -70,18 +71,20 @@ function contribution<T>(value: unknown, content: (candidate: unknown) => candid
   return object(value) && ["RECONSTRUCT", "REPRESENT", "AUGMENT", "CORRECT", "INITIATE"].includes(String(value.mode)) && content(value.content) && validProvenance(value.provenance);
 }
 function textContribution(value: unknown): value is TeachingContribution<string> { return contribution(value, (item): item is string => typeof item === "string" && item.trim().length > 0); }
-function boardContribution<T>(value: unknown, content: (candidate: unknown) => candidate is T): value is TeachingContribution<T> {
-  return contribution(value, content) && value.mode !== "INITIATE";
-}
+const boardActiveModeAllowed = (mode: ContributionMode) => ["RECONSTRUCT", "REPRESENT", "AUGMENT", "CORRECT"].includes(mode);
+const boardSupportModeAllowed = (mode: ContributionMode) => ["RECONSTRUCT", "REPRESENT", "AUGMENT"].includes(mode);
+const cueModeAllowed = (cueKind: TeachingCueKind, mode: ContributionMode) => cueKind === "NOTE"
+  ? ["RECONSTRUCT", "REPRESENT", "AUGMENT"].includes(mode)
+  : ["RECONSTRUCT", "REPRESENT", "INITIATE"].includes(mode);
 
 function validBoardDelta(value: unknown): value is BoardDelta {
   if (!object(value) || typeof value.action !== "string") return false;
   if (value.action === "KEEP") return ["filler", "transition", "repetition", "unfinished", "insufficient_evidence", "ambiguous_reference", "classroom_management", "no_board_value"].includes(String(value.reason));
-  if (value.action === "ADD_SUPPORT") return boardContribution(value.support, (item): item is string => typeof item === "string" && item.trim().length > 0) && typeof value.targetBoardItemId === "string";
-  if (value.action !== "SET_ACTIVE" || !boardContribution(value.contribution, validBoardContent)) return false;
+  if (value.action === "ADD_SUPPORT") return textContribution(value.support) && boardSupportModeAllowed(value.support.mode) && typeof value.targetBoardItemId === "string";
+  if (value.action !== "SET_ACTIVE" || !contribution(value.contribution, validBoardContent) || !boardActiveModeAllowed(value.contribution.mode)) return false;
   return ["same_thread", "topic_shift", "correction"].includes(String(value.continuity))
     && typeof value.retainPrevious === "boolean"
-    && (value.support === undefined || Array.isArray(value.support) && value.support.every(textContribution))
+    && (value.support === undefined || Array.isArray(value.support) && value.support.every((support) => textContribution(support) && boardSupportModeAllowed(support.mode)))
     && (value.invalidatesBoardItemIds === undefined || Array.isArray(value.invalidatesBoardItemIds) && value.invalidatesBoardItemIds.every((id) => typeof id === "string"));
 }
 
@@ -90,10 +93,8 @@ function validCueDelta(value: unknown): value is TeachingCueDelta {
   if (value.action === "KEEP") return true;
   if (value.action === "SET") {
     if (!["NOTE", "QUESTION", "TASK", "HINT"].includes(String(value.cueKind)) || !textContribution(value.contribution)) return false;
-    const actionCue = ["QUESTION", "TASK", "HINT"].includes(String(value.cueKind));
-    if (actionCue ? value.contribution.mode === "CORRECT" : ["CORRECT", "INITIATE"].includes(value.contribution.mode)) return false;
-    if (value.contribution.mode === "INITIATE" && !actionCue) return false;
-    return value.targetBoardItemId === undefined || typeof value.targetBoardItemId === "string";
+    return cueModeAllowed(value.cueKind as TeachingCueKind, value.contribution.mode)
+      && (value.targetBoardItemId === undefined || typeof value.targetBoardItemId === "string");
   }
   return value.action === "RESOLVE_CURRENT" && ["answered", "completed", "teacher_moved_on", "replaced"].includes(String(value.reason)) && reference(value.evidence);
 }

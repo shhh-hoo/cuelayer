@@ -8,7 +8,7 @@ This Charter is the product-level source of truth for CueLayer. Phase-specific i
 
 CueLayer is an AI-native learner-surface agent for live teaching.
 
-It listens to teaching as it unfolds, maintains a speech-faithful semantic source of truth, and adaptively decides what learners should see and when a learner-facing cue is useful. The product aims to reduce tracking and transcription effort while preserving the learner's work of understanding, organising, reviewing, and reflecting.
+CueLayer listens to teaching as it unfolds, preserves a replayable record of lesson evidence, maintains an evolving model of the current learning state, and autonomously decides what learners should see or continue thinking about. The product aims to reduce tracking and transcription effort while preserving the learner's work of understanding, organising, reviewing, and reflecting.
 
 The canonical speech representation is a grounding layer. Learner-visible output is adaptive rather than synonymous with a continuous transcript.
 

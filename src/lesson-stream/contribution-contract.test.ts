@@ -4,7 +4,7 @@ import { buildTeachingInterpretationRequest, projectProcessedTimeline } from "./
 import { checkpointCommittedEvent, interpretationAcceptedEvent, lessonStartedEvent } from "./events";
 import { replayLessonEvents } from "./replay";
 import { createInitialTeachingState, reduceAcceptedStep } from "./teaching-state";
-import { interventionRiskFor, type AcceptedInterpretationStep, type CompactEvidenceCheckpoint, type ContributionProvenance, type TeachingStateSnapshot } from "./contracts";
+import { interventionRiskFor, type AcceptedInterpretationStep, type CompactEvidenceCheckpoint, type ContributionMode, type ContributionProvenance, type TeachingStateSnapshot } from "./contracts";
 
 const checkpoint: CompactEvidenceCheckpoint = { checkpointId: "A", lessonSequence: 1, speechRunId: 1, startMs: 0, endMs: 100, text: "The formula sounded like d6.", sourceFinalIds: ["final-A"], warnings: [] };
 const grounding = { checkpointId: "A", canonicalSpanIds: [{ spanId: "span-A", spanRevision: 1 }], words: [], providerEvidence: [{ providerFinalId: "final-A" }] };
@@ -12,6 +12,8 @@ const speech = (quote = "d6") => ({ checkpointId: "A", quote });
 const speechBoard = () => ({ mode: "REPRESENT" as const, content: { kind: "TEXT" as const, text: "Higher temperature → more successful collisions" }, provenance: { basis: "SPEECH" as const, speechRefs: [speech()] } });
 const domainBoard = (mode: "AUGMENT" | "CORRECT" = "AUGMENT", provenance: ContributionProvenance = { basis: "DOMAIN_KNOWLEDGE" }) => ({ mode, content: { kind: "TEXT" as const, text: "Al₂Cl₆" }, provenance });
 const initiatedCue = (cueKind: "QUESTION" | "TASK" | "HINT") => ({ action: "SET" as const, cueKind, contribution: { mode: "INITIATE" as const, content: `Consider ${cueKind.toLowerCase()}`, provenance: { basis: "DOMAIN_KNOWLEDGE" as const } } });
+const domainBoardContribution = (mode: ContributionMode) => ({ mode, content: { kind: "TEXT" as const, text: "Bounded board contribution" }, provenance: { basis: "DOMAIN_KNOWLEDGE" as const } });
+const domainTextContribution = (mode: ContributionMode) => ({ mode, content: "Bounded learner contribution", provenance: { basis: "DOMAIN_KNOWLEDGE" as const } });
 
 function request(state = createInitialTeachingState()) {
   const events = [lessonStartedEvent("s", 1), checkpointCommittedEvent("s", 2, checkpoint, grounding)];
@@ -70,6 +72,46 @@ describe("contribution provenance and learner-agency contract", () => {
     const input = request();
     for (const cue of [initiatedCue("QUESTION"), initiatedCue("TASK"), initiatedCue("HINT")]) {
       expect(validateAndNormalizeProposal({ proposal: proposal({ action: "KEEP", reason: "no_board_value" }, cue, []), request: input.request, allCheckpoints: [checkpoint], state: createInitialTeachingState(), model: "test" }).ok).toBe(true);
+    }
+  });
+
+  it("enforces the Board contribution-mode matrix", () => {
+    const initialState = createInitialTeachingState();
+    const initial = request(initialState);
+    for (const mode of ["RECONSTRUCT", "REPRESENT", "AUGMENT"] as const) {
+      expect(validateAndNormalizeProposal({ proposal: proposal({ action: "SET_ACTIVE", contribution: domainBoardContribution(mode), continuity: "same_thread", retainPrevious: false }, { action: "KEEP" }, []), request: initial.request, allCheckpoints: [checkpoint], state: initialState, model: "test" }).ok).toBe(true);
+      expect(validateAndNormalizeProposal({ proposal: proposal({ action: "SET_ACTIVE", contribution: domainBoardContribution("RECONSTRUCT"), continuity: "same_thread", retainPrevious: false, support: [domainTextContribution(mode)] }, { action: "KEEP" }, []), request: initial.request, allCheckpoints: [checkpoint], state: initialState, model: "test" }).ok).toBe(true);
+    }
+
+    const state = stateWithBoard();
+    const input = request(state);
+    for (const mode of ["RECONSTRUCT", "REPRESENT", "AUGMENT"] as const) {
+      expect(validateAndNormalizeProposal({ proposal: proposal({ action: "ADD_SUPPORT", targetBoardItemId: "board-old", support: domainTextContribution(mode) }, { action: "KEEP" }, [], { board: 1, cue: 0 }), request: input.request, allCheckpoints: [checkpoint], state, model: "test" }).ok).toBe(true);
+    }
+
+    const correction = validateAndNormalizeProposal({ proposal: proposal({ action: "SET_ACTIVE", contribution: { ...domainBoardContribution("CORRECT"), provenance: { basis: "STATE_AND_DOMAIN_KNOWLEDGE", stateRefs: [{ kind: "BOARD_ITEM", id: "board-old" }] } }, continuity: "correction", retainPrevious: false, invalidatesBoardItemIds: ["board-old"] }, { action: "KEEP" }, [], { board: 1, cue: 0 }), request: input.request, allCheckpoints: [checkpoint], state, model: "test" });
+    expect(correction.ok).toBe(true);
+
+    for (const mode of ["INITIATE", "CORRECT"] as const) {
+      expect(validateAndNormalizeProposal({ proposal: proposal({ action: "SET_ACTIVE", contribution: domainBoardContribution("RECONSTRUCT"), continuity: "same_thread", retainPrevious: false, support: [domainTextContribution(mode)] }, { action: "KEEP" }, []), request: initial.request, allCheckpoints: [checkpoint], state: initialState, model: "test" }).ok).toBe(false);
+      expect(validateAndNormalizeProposal({ proposal: proposal({ action: "ADD_SUPPORT", targetBoardItemId: "board-old", support: domainTextContribution(mode) }, { action: "KEEP" }, [], { board: 1, cue: 0 }), request: input.request, allCheckpoints: [checkpoint], state, model: "test" }).ok).toBe(false);
+    }
+  });
+
+  it("enforces the Teaching Cue contribution-mode matrix", () => {
+    const state = createInitialTeachingState();
+    const input = request(state);
+    for (const mode of ["RECONSTRUCT", "REPRESENT", "AUGMENT"] as const) {
+      expect(validateAndNormalizeProposal({ proposal: proposal({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "NOTE", contribution: domainTextContribution(mode) }, []), request: input.request, allCheckpoints: [checkpoint], state, model: "test" }).ok).toBe(true);
+    }
+    for (const cueKind of ["QUESTION", "TASK", "HINT"] as const) {
+      for (const mode of ["RECONSTRUCT", "REPRESENT", "INITIATE"] as const) {
+        expect(validateAndNormalizeProposal({ proposal: proposal({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind, contribution: domainTextContribution(mode) }, []), request: input.request, allCheckpoints: [checkpoint], state, model: "test" }).ok).toBe(true);
+      }
+      expect(validateAndNormalizeProposal({ proposal: proposal({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind, contribution: domainTextContribution("AUGMENT") }, []), request: input.request, allCheckpoints: [checkpoint], state, model: "test" }).ok).toBe(false);
+    }
+    for (const mode of ["INITIATE", "CORRECT"] as const) {
+      expect(validateAndNormalizeProposal({ proposal: proposal({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "NOTE", contribution: domainTextContribution(mode) }, []), request: input.request, allCheckpoints: [checkpoint], state, model: "test" }).ok).toBe(false);
     }
   });
 
