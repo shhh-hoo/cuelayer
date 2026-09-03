@@ -248,7 +248,11 @@ export function useLiveTeaching({
     if (!runtime) return;
     await runtime.start();
     if (canonicalSpeech && speechRunId !== undefined) {
-      for (const span of canonicalSpeech.spans.filter((item) => item.status === "closed")) await runtime.commitClosedSpan(span, speechRunId);
+      for (const span of canonicalSpeech.spans.filter((item) => item.status === "closed")) {
+        const committed = await runtime.commitClosedSpan(span, speechRunId);
+        if (!committed) continue;
+        onTrace?.(traceDraft("evidence.checkpoint_committed", { runId: speechRunId, checkpointId: committed.checkpointId, lessonSequence: committed.lessonSequence, sourceFinalIds: committed.sourceFinalIds, warningCodes: committed.warnings.map((warning) => warning.code) }, { correlation: { rootId: `checkpoint:${committed.checkpointId}`, runId: speechRunId, lessonSequence: committed.lessonSequence, checkpointId: committed.checkpointId } }));
+      }
     }
     await runtime.end();
   }, []);

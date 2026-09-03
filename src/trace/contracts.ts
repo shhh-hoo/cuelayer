@@ -68,6 +68,8 @@ export type SessionTracePayloads = {
     startMs?: number;
     endMs?: number;
   };
+  "speech.drain_completed": { runId: number };
+  "speech.drain_incomplete": { runId: number; code: string; message: string };
   "speech.transport_window": {
     runId: number;
     scope: "window" | "run";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { activateBrowserAudio, createSpeechmaticsConfig, speechStartFailureFrom } from "./use-speechmatics-session";
-import { drainSpeechmaticsStop } from "./speechmatics-stop-drain";
+import { createSpeechmaticsDrainBarrier, drainSpeechmaticsStop } from "./speechmatics-stop-drain";
 
 describe("Speechmatics configuration", () => {
   it("uses the actual browser audio sample rate for raw PCM", () => {
@@ -34,28 +34,56 @@ describe("Speechmatics configuration", () => {
     expect(order).toEqual(["permission", "audio-context"]);
   });
 
-  it("keeps the original run addressable through EndOfStream drain final transcripts", async () => {
+  it("delivers an EndOfStream tail under its original run before local drain completion", async () => {
     const activeRunId = { current: 7 as number | null };
     const stopping = { current: false };
     let resolveDrain: (() => void) | undefined;
     const stopTranscription = () => new Promise<void>((resolve) => { resolveDrain = resolve; });
+    const barrier = createSpeechmaticsDrainBarrier(7);
+    const order: string[] = [];
     const delivered: Array<{ runId: number; kind: string; text: string }> = [];
     const stop = drainSpeechmaticsStop({
       activeRunId,
       stopping,
-      stopRecording: () => undefined,
+      stopRecording: () => { order.push("recorder-stopped"); },
       stopTranscription,
-      finish: () => undefined,
+      barrier,
+      finish: () => { order.push("speech.lifecycle-stopped"); },
+      fail: () => { order.push("speech.lifecycle-failed"); },
     });
     await Promise.resolve();
     expect(stopping.current).toBe(true);
     expect(activeRunId.current).toBe(7);
     // Simulated AddTranscript during the official client's EndOfStream drain.
-    if (activeRunId.current !== null) delivered.push({ runId: activeRunId.current, kind: "committed", text: "unterminated tail phrase" });
+    if (activeRunId.current !== null) {
+      delivered.push({ runId: activeRunId.current, kind: "committed", text: "unterminated tail phrase" });
+      order.push("tail-final");
+    }
+    expect(activeRunId.current).toBe(7);
+    barrier.observeEndOfTranscript();
+    order.push("EndOfTranscript-observed");
     resolveDrain?.();
     await stop;
     expect(delivered).toEqual([{ runId: 7, kind: "committed", text: "unterminated tail phrase" }]);
     expect(activeRunId.current).toBeNull();
     expect(stopping.current).toBe(false);
+    expect(order).toEqual(["recorder-stopped", "tail-final", "EndOfTranscript-observed", "speech.lifecycle-stopped"]);
+  });
+
+  it("does not report a successful stop when the client fails before EndOfTranscript", async () => {
+    const activeRunId = { current: 8 as number | null };
+    const barrier = createSpeechmaticsDrainBarrier(8);
+    const lifecycle: string[] = [];
+    await expect(drainSpeechmaticsStop({
+      activeRunId,
+      stopping: { current: false },
+      stopRecording: () => undefined,
+      stopTranscription: async () => { throw new Error("client timeout"); },
+      barrier,
+      finish: () => lifecycle.push("stopped"),
+      fail: () => lifecycle.push("failed"),
+    })).rejects.toMatchObject({ name: "SpeechDrainIncompleteError", runId: 8 });
+    expect(activeRunId.current).toBeNull();
+    expect(lifecycle).toEqual(["failed"]);
   });
 });

@@ -5,7 +5,7 @@ import { getAudioDevicesStore, useAudioDevices, usePCMAudioListener, usePCMAudio
 import { speechEventFromSpeechmatics } from "./speechmatics-adapter";
 import type { SpeechEvent } from "./speech-types";
 import { AudioDeliveryMonitor } from "./audio-delivery-window";
-import { drainSpeechmaticsStop } from "./speechmatics-stop-drain";
+import { createSpeechmaticsDrainBarrier, drainSpeechmaticsStop, type SpeechmaticsDrainBarrier } from "./speechmatics-stop-drain";
 import { traceDraft, type SessionTraceDraft, type SessionTracePayloads, type TraceEmitter } from "../trace/contracts";
 
 const TOKEN_ENDPOINT = "/api/speechmatics/token";
@@ -130,6 +130,7 @@ function wordBounds(event: Exclude<SpeechEvent, { kind: "error" }>) {
 export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: SpeechmaticsSessionCallbacks) {
   const activeRunIdRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
+  const drainBarrierRef = useRef<SpeechmaticsDrainBarrier | undefined>(undefined);
   const sawRecordingRef = useRef(false);
   const providerMessageSequenceRef = useRef(0);
   const deliveryMonitorRef = useRef<AudioDeliveryMonitor | undefined>(undefined);
@@ -201,6 +202,11 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
   const onProviderMessage = useCallback(({ data }: { data: Parameters<typeof speechEventFromSpeechmatics>[0] }) => {
     const runId = activeRunIdRef.current;
     if (runId === null) return;
+    if (data.message === "EndOfTranscript") {
+      const barrier = drainBarrierRef.current;
+      if (barrier?.runId === runId) barrier.observeEndOfTranscript();
+      return;
+    }
     if (data.message === "AudioAdded") {
       const seqNo = (data as { seq_no?: unknown }).seq_no;
       if (typeof seqNo === "number") deliveryMonitorRef.current?.observe(seqNo);
@@ -245,6 +251,7 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
   const start = useCallback(async (runId: number) => {
     activeRunIdRef.current = runId;
     stoppingRef.current = false;
+    drainBarrierRef.current = undefined;
     sawRecordingRef.current = false;
     providerMessageSequenceRef.current = 0;
     lifecycle(runId, "starting");
@@ -291,17 +298,34 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
   }, [audioContext, audioDevices, lifecycle, onReady, startDeliveryMonitor, startRecording, startTranscription, stopDeliveryMonitor, stopRecording, stopTranscription]);
 
   const stop = useCallback(async () => {
-    await drainSpeechmaticsStop({
-      activeRunId: activeRunIdRef,
-      stopping: stoppingRef,
-      stopRecording,
-      stopTranscription,
-      finish: (runId) => {
-        stopDeliveryMonitor(true);
-        lifecycle(runId, "stopped");
-      },
-    });
-  }, [lifecycle, stopDeliveryMonitor, stopRecording, stopTranscription]);
+    const runId = activeRunIdRef.current;
+    if (runId === null) return;
+    const barrier = createSpeechmaticsDrainBarrier(runId);
+    drainBarrierRef.current = barrier;
+    try {
+      await drainSpeechmaticsStop({
+        activeRunId: activeRunIdRef,
+        stopping: stoppingRef,
+        stopRecording,
+        stopTranscription,
+        barrier,
+        finish: (runId) => {
+          stopDeliveryMonitor(true);
+          emitTrace(traceDraft("speech.drain_completed", { runId }, { priority: "critical", correlation: { rootId: `speech:${runId}`, runId } }));
+          lifecycle(runId, "stopped");
+        },
+        fail: (runId, error) => {
+          stopDeliveryMonitor(true);
+          const code = "speech-drain-incomplete";
+          emitTrace(traceDraft("speech.drain_incomplete", { runId, code, message: error.message }, { priority: "critical", correlation: { rootId: `speech:${runId}`, runId } }));
+          lifecycle(runId, "failed", { code, message: error.message });
+          onEvent(runId, { kind: "error", code, message: error.message });
+        },
+      });
+    } finally {
+      if (drainBarrierRef.current === barrier) drainBarrierRef.current = undefined;
+    }
+  }, [emitTrace, lifecycle, onEvent, stopDeliveryMonitor, stopRecording, stopTranscription]);
 
   const pause = useCallback(() => {
     mute();
