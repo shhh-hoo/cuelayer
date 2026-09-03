@@ -11,6 +11,8 @@ vi.mock("openai", () => ({
 }));
 
 import { estimateTeachingCost, requestOpenAITeachingInterpretation } from "./openai-interpreter";
+import { normalizeTeachingProposal } from "./provider-contract";
+import { validateAndNormalizeProposal } from "../../src/lesson-stream/accepted-interpretations";
 
 const input: TeachingInterpretationRequest = {
   requestId: "request-1",
@@ -65,5 +67,55 @@ describe("OpenAI Teaching State interpreter", () => {
     const usage = { inputTokens: 300, cachedInputTokens: 80, outputTokens: 40, totalTokens: 340 };
     expect(estimateTeachingCost(usage, {})).toBeUndefined();
     expect(estimateTeachingCost(usage, { inputPerMillion: 1, cachedInputPerMillion: 0.25, outputPerMillion: 4 })).toBeCloseTo(0.0004);
+  });
+
+  it("normalizes nullable structured-output fields before domain validation", () => {
+    const parsed = {
+      requestId: "request-1",
+      baseBoardRevision: 0,
+      baseCueRevision: 0,
+      steps: [{
+        consumesCheckpointIds: ["checkpoint-1"],
+        boardDelta: {
+          action: "SET_ACTIVE" as const,
+          content: { kind: "TEXT" as const, source: { checkpointId: "checkpoint-1", text: "Temperature increases" } },
+          continuity: "same_thread" as const,
+          retainPrevious: false,
+          support: null,
+          invalidatesBoardItemIds: null,
+        },
+        cueDelta: { action: "SET" as const, cueKind: "NOTE" as const, source: { checkpointId: "checkpoint-1", text: "Temperature increases" }, targetBoardItemId: null },
+        evidenceRefs: [{ checkpointId: "checkpoint-1", text: "Temperature increases" }],
+        warnings: null,
+      }],
+      warnings: null,
+    };
+    const proposal = normalizeTeachingProposal(parsed);
+    expect(proposal.steps[0]).toMatchObject({ boardDelta: { action: "SET_ACTIVE" }, cueDelta: { action: "SET" } });
+    expect(proposal.steps[0]!.boardDelta).not.toHaveProperty("support");
+    expect(proposal.steps[0]!.boardDelta).not.toHaveProperty("invalidatesBoardItemIds");
+    expect(proposal.steps[0]!.cueDelta).not.toHaveProperty("targetBoardItemId");
+    expect(validateAndNormalizeProposal({ proposal, request: input, allCheckpoints: input.newEvidence, state: createInitialTeachingState(), model: "test" }).ok).toBe(true);
+    const { warnings: _warnings, ...rawWithoutTopLevelWarnings } = parsed;
+    expect(validateAndNormalizeProposal({ proposal: rawWithoutTopLevelWarnings, request: input, allCheckpoints: input.newEvidence, state: createInitialTeachingState(), model: "test" })).toEqual({
+      ok: false,
+      error: "proposal-step-schema-invalid:step-0:boardDelta.support:null",
+    });
+  });
+
+  it("retains non-null structured-output optional fields", () => {
+    const proposal = normalizeTeachingProposal({
+      requestId: "request-1", baseBoardRevision: 0, baseCueRevision: 0,
+      steps: [{
+        consumesCheckpointIds: ["checkpoint-1"],
+        boardDelta: { action: "SET_ACTIVE", content: { kind: "TEXT", source: { checkpointId: "checkpoint-1", text: "Temperature increases" } }, continuity: "same_thread", retainPrevious: false, support: [{ checkpointId: "checkpoint-1", text: "Temperature increases" }], invalidatesBoardItemIds: ["old-board"] },
+        cueDelta: { action: "SET", cueKind: "NOTE", source: { checkpointId: "checkpoint-1", text: "Temperature increases" }, targetBoardItemId: "board-request-1-accepted-0" },
+        evidenceRefs: [], warnings: [{ code: "provider-note", detail: "kept" }],
+      }],
+      warnings: [{ code: "proposal-note", detail: "kept" }],
+    });
+    expect(proposal.steps[0]!.boardDelta).toMatchObject({ support: [{ checkpointId: "checkpoint-1" }], invalidatesBoardItemIds: ["old-board"] });
+    expect(proposal.steps[0]!.cueDelta).toMatchObject({ targetBoardItemId: "board-request-1-accepted-0" });
+    expect(proposal.warnings).toEqual([{ code: "proposal-note", detail: "kept" }]);
   });
 });

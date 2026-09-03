@@ -78,26 +78,56 @@ export function teachingResponseRequest(input: TeachingInterpretationRequest) {
   };
 }
 
+function normalizeWarnings(warnings: z.infer<typeof warning>[] | null) {
+  if (warnings === null) return undefined;
+  return warnings.map((item) => item.detail === null ? { code: item.code } : { code: item.code, detail: item.detail });
+}
+
+function normalizeBoardDelta(delta: z.infer<typeof boardDelta>) {
+  switch (delta.action) {
+    case "KEEP": return { action: "KEEP" as const, reason: delta.reason };
+    case "ADD_SUPPORT": return { action: "ADD_SUPPORT" as const, support: delta.support, targetBoardItemId: delta.targetBoardItemId };
+    case "SET_ACTIVE": return {
+      action: "SET_ACTIVE" as const,
+      content: delta.content,
+      continuity: delta.continuity,
+      retainPrevious: delta.retainPrevious,
+      ...(delta.support === null ? {} : { support: delta.support }),
+      ...(delta.invalidatesBoardItemIds === null ? {} : { invalidatesBoardItemIds: delta.invalidatesBoardItemIds }),
+    };
+  }
+}
+
+function normalizeCueDelta(delta: z.infer<typeof cueDelta>) {
+  switch (delta.action) {
+    case "KEEP": return { action: "KEEP" as const };
+    case "RESOLVE_CURRENT": return { action: "RESOLVE_CURRENT" as const, reason: delta.reason, evidence: delta.evidence };
+    case "SET": return {
+      action: "SET" as const,
+      cueKind: delta.cueKind,
+      source: delta.source,
+      ...(delta.targetBoardItemId === null ? {} : { targetBoardItemId: delta.targetBoardItemId }),
+    };
+  }
+}
+
+/** Converts nullable structured-output DTO fields into the optional domain representation. */
 export function normalizeTeachingProposal(parsed: z.infer<typeof teachingInterpretationSchema>): TeachingInterpretationProposal {
+  const warnings = normalizeWarnings(parsed.warnings);
   return {
     requestId: parsed.requestId,
     baseBoardRevision: parsed.baseBoardRevision,
     baseCueRevision: parsed.baseCueRevision,
-    steps: parsed.steps.map((item) => ({
-      consumesCheckpointIds: item.consumesCheckpointIds,
-      boardDelta: item.boardDelta.action === "SET_ACTIVE"
-        ? {
-            ...item.boardDelta,
-            ...(item.boardDelta.support ? { support: item.boardDelta.support } : {}),
-            ...(item.boardDelta.invalidatesBoardItemIds ? { invalidatesBoardItemIds: item.boardDelta.invalidatesBoardItemIds } : {}),
-          }
-        : item.boardDelta,
-      cueDelta: item.cueDelta.action === "SET"
-        ? { ...item.cueDelta, ...(item.cueDelta.targetBoardItemId ? { targetBoardItemId: item.cueDelta.targetBoardItemId } : {}) }
-        : item.cueDelta,
-      evidenceRefs: item.evidenceRefs,
-      ...(item.warnings ? { warnings: item.warnings.map(({ detail, ...warningItem }) => detail ? { ...warningItem, detail } : warningItem) } : {}),
-    })),
-    ...(parsed.warnings ? { warnings: parsed.warnings.map(({ detail, ...warningItem }) => detail ? { ...warningItem, detail } : warningItem) } : {}),
-  } as TeachingInterpretationProposal;
+    steps: parsed.steps.map((item) => {
+      const warnings = normalizeWarnings(item.warnings);
+      return {
+        consumesCheckpointIds: item.consumesCheckpointIds,
+        boardDelta: normalizeBoardDelta(item.boardDelta),
+        cueDelta: normalizeCueDelta(item.cueDelta),
+        evidenceRefs: item.evidenceRefs,
+        ...(warnings ? { warnings } : {}),
+      };
+    }),
+    ...(warnings ? { warnings } : {}),
+  };
 }

@@ -19,6 +19,27 @@ type ValidationResult =
 const object = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const reference = (value: unknown): value is GroundedReference => object(value) && typeof value.checkpointId === "string" && typeof value.text === "string" && value.text.trim().length > 0;
 const warning = (value: unknown) => object(value) && typeof value.code === "string" && (value.detail === undefined || typeof value.detail === "string");
+const valueType = (value: unknown) => value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
+
+function stepSchemaError(stepIndex: number, step: unknown) {
+  const prefix = `proposal-step-schema-invalid:step-${stepIndex}`;
+  if (!object(step)) return `${prefix}:step:${valueType(step)}`;
+  if (!Array.isArray(step.consumesCheckpointIds) || !step.consumesCheckpointIds.length || !step.consumesCheckpointIds.every((id) => typeof id === "string")) return `${prefix}:consumesCheckpointIds:${valueType(step.consumesCheckpointIds)}`;
+  if (!validBoardDelta(step.boardDelta)) {
+    if (object(step.boardDelta) && step.boardDelta.action === "SET_ACTIVE") {
+      if (step.boardDelta.support !== undefined && !Array.isArray(step.boardDelta.support)) return `${prefix}:boardDelta.support:${valueType(step.boardDelta.support)}`;
+      if (step.boardDelta.invalidatesBoardItemIds !== undefined && !Array.isArray(step.boardDelta.invalidatesBoardItemIds)) return `${prefix}:boardDelta.invalidatesBoardItemIds:${valueType(step.boardDelta.invalidatesBoardItemIds)}`;
+    }
+    return `${prefix}:boardDelta:${valueType(step.boardDelta)}`;
+  }
+  if (!validCueDelta(step.cueDelta)) {
+    if (object(step.cueDelta) && step.cueDelta.action === "SET" && step.cueDelta.targetBoardItemId !== undefined && typeof step.cueDelta.targetBoardItemId !== "string") return `${prefix}:cueDelta.targetBoardItemId:${valueType(step.cueDelta.targetBoardItemId)}`;
+    return `${prefix}:cueDelta:${valueType(step.cueDelta)}`;
+  }
+  if (!Array.isArray(step.evidenceRefs) || !step.evidenceRefs.every(reference)) return `${prefix}:evidenceRefs:${valueType(step.evidenceRefs)}`;
+  if (step.warnings !== undefined && (!Array.isArray(step.warnings) || step.warnings.length > 4 || !step.warnings.every(warning))) return `${prefix}:warnings:${valueType(step.warnings)}`;
+  return undefined;
+}
 
 function contentReferences(content: BoardContent): GroundedReference[] {
   switch (content.kind) {
@@ -94,7 +115,8 @@ export function validateAndNormalizeProposal({
   let rollingState = state;
   const steps: AcceptedInterpretationStep[] = [];
   for (const [stepIndex, step] of proposal.steps.entries()) {
-    if (!object(step) || !Array.isArray(step.consumesCheckpointIds) || !step.consumesCheckpointIds.length || !step.consumesCheckpointIds.every((id) => typeof id === "string") || !validBoardDelta(step.boardDelta) || !validCueDelta(step.cueDelta) || !Array.isArray(step.evidenceRefs) || !step.evidenceRefs.every(reference) || (step.warnings !== undefined && (!Array.isArray(step.warnings) || step.warnings.length > 4 || !step.warnings.every(warning)))) return { ok: false, error: "proposal-step-schema-invalid" };
+    const schemaError = stepSchemaError(stepIndex, step);
+    if (schemaError) return { ok: false, error: schemaError };
     const expected = request.newEvidence.slice(coverageOffset, coverageOffset + step.consumesCheckpointIds.length).map((checkpoint) => checkpoint.checkpointId);
     if (expected.length !== step.consumesCheckpointIds.length || expected.some((id, index) => id !== step.consumesCheckpointIds[index])) return { ok: false, error: "proposal-batch-coverage-invalid" };
     coverageOffset += step.consumesCheckpointIds.length;
