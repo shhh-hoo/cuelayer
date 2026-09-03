@@ -7,11 +7,12 @@ export type SpeechWord = {
 
 export type SpeechEvent =
   | { kind: "provisional"; text: string; words: SpeechWord[] }
-  | { kind: "committed"; text: string; words: SpeechWord[] }
+  | { kind: "committed"; text: string; words: SpeechWord[]; speechEventId?: string }
   | { kind: "error"; code: string; message: string };
 
 export type ProviderFinal = {
   id: string;
+  speechEventId?: string;
   text: string;
   words: SpeechWord[];
   committedAtMs: number;

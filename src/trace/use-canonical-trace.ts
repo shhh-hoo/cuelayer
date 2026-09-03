@@ -6,6 +6,24 @@ export function canonicalRootId(runId: number, spanId: string, revision?: number
   return `speech:${runId}:span:${spanId}${revision === undefined ? "" : `@${revision}`}`;
 }
 
+export function canonicalFinalTraceDraft(runId: number, final: CanonicalSpeechState["finals"][number]) {
+  return traceDraft("canonical.final_committed", {
+    runId,
+    finalId: final.id,
+    ...(final.speechEventId ? { speechEventId: final.speechEventId } : {}),
+    transcript: final.text,
+    wordCount: final.words.length,
+  }, {
+    priority: "critical",
+    correlation: {
+      rootId: `speech:${runId}:final:${final.id}`,
+      runId,
+      finalId: final.id,
+      ...(final.speechEventId ? { speechEventId: final.speechEventId } : {}),
+    },
+  });
+}
+
 export function useCanonicalTrace(sessionId: string, runId: number, canonical: CanonicalSpeechState, emit: TraceEmitter) {
   const observedScope = useRef<string | undefined>(undefined);
   const finalIds = useRef(new Set<string>());
@@ -22,19 +40,7 @@ export function useCanonicalTrace(sessionId: string, runId: number, canonical: C
     for (const final of canonical.finals) {
       if (finalIds.current.has(final.id)) continue;
       finalIds.current.add(final.id);
-      emit(traceDraft("canonical.final_committed", {
-        runId,
-        finalId: final.id,
-        transcript: final.text,
-        wordCount: final.words.length,
-      }, {
-        priority: "critical",
-        correlation: {
-          rootId: `speech:${runId}:final:${final.id}`,
-          runId,
-          finalId: final.id,
-        },
-      }));
+      emit(canonicalFinalTraceDraft(runId, final));
     }
 
     for (const span of canonical.spans) {

@@ -317,6 +317,76 @@ describe("proposal validation and deterministic state", () => {
     expect(replay.consumedCheckpointIds).toEqual(new Set(["A", "B"]));
   });
 
+  it("keeps a Cue SET target when this step creates that Board item", () => {
+    const a = checkpoint("A", 1, "Set the task beside activation energy.");
+    const sessionId = "lesson-cue-prospective-target";
+    const events = [lessonStartedEvent(sessionId, 1), groundedEvent(sessionId, 2, a)];
+    const state = createInitialTeachingState();
+    const { request } = buildTeachingInterpretationRequest({ requestId: "cue-prospective", sessionId, events, currentState: state, newEvidence: [a] });
+    const result = validateAndNormalizeProposal({
+      proposal: { requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 0, steps: [{
+        consumesCheckpointIds: ["A"],
+        boardDelta: { action: "SET_ACTIVE", content: { kind: "TEXT", source: { checkpointId: "A", text: "activation energy" } }, continuity: "same_thread", retainPrevious: false },
+        cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: "A", text: "Set the task" }, targetBoardItemId: "board-cue-prospective-accepted-0" },
+        evidenceRefs: [{ checkpointId: "A", text: "Set the task" }],
+      }] }, request, allCheckpoints: [a], state, model: "test-model",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.steps[0]!.cueDelta).toMatchObject({ action: "SET", targetBoardItemId: "board-cue-prospective-accepted-0" });
+  });
+
+  it("keeps a Cue SET target for the current active Board item", () => {
+    const a = checkpoint("A", 1, "Complete the current task.");
+    const sessionId = "lesson-cue-current-target";
+    const events = [lessonStartedEvent(sessionId, 1), groundedEvent(sessionId, 2, a)];
+    const existing = { id: "board-current", content: { kind: "TEXT" as const, source: { checkpointId: "A", text: "Complete the current task" } }, sourceCheckpointIds: ["A"], establishedAtRevision: 1 };
+    const state = { ...createInitialTeachingState(), board: { revision: 1, active: existing, support: [], retained: [] } };
+    const { request } = buildTeachingInterpretationRequest({ requestId: "cue-current", sessionId, events, currentState: state, newEvidence: [a] });
+    const result = validateAndNormalizeProposal({
+      proposal: { requestId: request.requestId, baseBoardRevision: 1, baseCueRevision: 0, steps: [{
+        consumesCheckpointIds: ["A"], boardDelta: { action: "KEEP", reason: "no_board_value" },
+        cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: "A", text: "Complete the current task" }, targetBoardItemId: "board-current" }, evidenceRefs: [{ checkpointId: "A", text: "Complete the current task" }],
+      }] }, request, allCheckpoints: [a], state, model: "test-model",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.steps[0]!.cueDelta).toMatchObject({ targetBoardItemId: "board-current" });
+  });
+
+  it("drops an invalid optional Cue target while accepting the grounded Cue SET", () => {
+    const a = checkpoint("A", 1, "Complete the task.");
+    const sessionId = "lesson-cue-drop-target";
+    const events = [lessonStartedEvent(sessionId, 1), groundedEvent(sessionId, 2, a)];
+    const state = createInitialTeachingState();
+    const { request } = buildTeachingInterpretationRequest({ requestId: "cue-drop", sessionId, events, currentState: state, newEvidence: [a] });
+    const result = validateAndNormalizeProposal({
+      proposal: { requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 0, steps: [{
+        consumesCheckpointIds: ["A"], boardDelta: { action: "KEEP", reason: "no_board_value" },
+        cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: "A", text: "Complete the task" }, targetBoardItemId: "hallucinated-board" }, evidenceRefs: [{ checkpointId: "A", text: "Complete the task" }],
+      }] }, request, allCheckpoints: [a], state, model: "test-model",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.steps[0]!.cueDelta).toEqual({ action: "SET", cueKind: "TASK", source: { checkpointId: "A", text: "Complete the task" } });
+    expect(result.steps[0]!.warnings).toContainEqual({ code: "cue_target_dropped" });
+  });
+
+  it("keeps a Cue SET target for an earlier same-batch Board item", () => {
+    const a = checkpoint("A", 1, "Write activation energy.");
+    const b = checkpoint("B", 2, "Complete the activation energy task.");
+    const sessionId = "lesson-cue-earlier-target";
+    const events = [lessonStartedEvent(sessionId, 1), groundedEvent(sessionId, 2, a), groundedEvent(sessionId, 3, b)];
+    const state = createInitialTeachingState();
+    const { request } = buildTeachingInterpretationRequest({ requestId: "cue-earlier", sessionId, events, currentState: state, newEvidence: [a, b] });
+    const result = validateAndNormalizeProposal({
+      proposal: { requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 0, steps: [
+        { consumesCheckpointIds: ["A"], boardDelta: { action: "SET_ACTIVE", content: { kind: "TEXT", source: { checkpointId: "A", text: "activation energy" } }, continuity: "same_thread", retainPrevious: false }, cueDelta: { action: "KEEP" }, evidenceRefs: [{ checkpointId: "A", text: "activation energy" }] },
+        { consumesCheckpointIds: ["B"], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: "B", text: "Complete the activation energy task" }, targetBoardItemId: "board-cue-earlier-accepted-0" }, evidenceRefs: [{ checkpointId: "B", text: "Complete the activation energy task" }] },
+      ] }, request, allCheckpoints: [a, b], state, model: "test-model",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.steps[1]!.cueDelta).toMatchObject({ targetBoardItemId: "board-cue-earlier-accepted-0" });
+  });
+
   it("rejects a Board support target retired earlier in the same batch before persistence", () => {
     const a = checkpoint("A", 1, "Change topic entirely.");
     const b = checkpoint("B", 2, "Support the old topic.");

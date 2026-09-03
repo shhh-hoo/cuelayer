@@ -225,7 +225,7 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
     } else {
       emitTrace(traceDraft("speech.final_received", { runId, transcript: event.text, wordCount: event.words.length, ...wordBounds(event) }, { priority: "critical", correlation }));
     }
-    onEvent(runId, event);
+    onEvent(runId, event.kind === "committed" ? { ...event, speechEventId } : event);
   }, [emitTrace, failRun, onEvent]);
 
   useRealtimeEventListener("receiveMessage", onProviderMessage);

@@ -63,7 +63,7 @@ Board supports KEEP, SET_ACTIVE, and ADD_SUPPORT. Use correction only with retai
 
 Within one ordered proposal only, a SET_ACTIVE in step N creates the deterministic Board item ID \`board-\${requestId}-accepted-N\`. A later step may reference that exact ID in targetBoardItemId; replace N with the zero-based earlier step index. Do not invent another intra-batch ID, and do not target a Board item that has been retired or invalidated by an earlier step.
 
-Cue supports KEEP, SET(QUESTION|TASK|NOTE|HINT), and RESOLVE_CURRENT. An instruction containing a question is one TASK. HINT must quote a hint the teacher actually gave. Board changes never resolve Cue; Cue resolution never clears Board.`;
+Cue supports KEEP, SET(QUESTION|TASK|NOTE|HINT), and RESOLVE_CURRENT. Cue SET targetBoardItemId is optional: include it only for a current active or retained Board item, an earlier step's deterministic SET_ACTIVE ID, or this step's own deterministic SET_ACTIVE ID. If no target is confidently valid, omit targetBoardItemId. An instruction containing a question is one TASK. HINT must quote a hint the teacher actually gave. Board changes never resolve Cue; Cue resolution never clears Board.`;
 
 export function teachingResponseRequest(input: TeachingInterpretationRequest) {
   return {

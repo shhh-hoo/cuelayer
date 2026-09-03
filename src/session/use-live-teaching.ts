@@ -9,6 +9,7 @@ import type { AcceptedInterpretationStep } from "../lesson-stream/contracts";
 import { traceDraft, type TraceEmitter } from "../trace/contracts";
 import type { CanonicalSpeechState, SpeechStatus } from "./speech-types";
 import type { SessionStatus } from "./session-types";
+import { RetryBackoff } from "./retry-backoff";
 
 const HARD_DEADLINE_MS = 6_000;
 const MODEL_NAME = "gpt-5.6-luna";
@@ -75,8 +76,7 @@ export function useLiveTeaching({
   const schedulerRef = useRef(new LosslessInterpretationScheduler());
   const pumpRef = useRef<() => void>(() => undefined);
   const activeControllerRef = useRef<AbortController | undefined>(undefined);
-  const retryTimerRef = useRef<number | undefined>(undefined);
-  const consecutiveFailuresRef = useRef(0);
+  const retryBackoffRef = useRef(new RetryBackoff());
   const activeRunRef = useRef(speechRunId);
   const openedCheckpointTraceRef = useRef(new Set<string>());
   const [state, setState] = useState<TeachingStateSnapshot>(createInitialTeachingState);
@@ -120,7 +120,7 @@ export function useLiveTeaching({
         runtimeRef.current = undefined;
       }
       activeControllerRef.current?.abort("lesson_replaced");
-      if (retryTimerRef.current !== undefined) window.clearTimeout(retryTimerRef.current);
+      retryBackoffRef.current.clear();
     };
   }, [sessionId, syncRuntime]);
 
@@ -139,17 +139,13 @@ export function useLiveTeaching({
   }, [runtimeEpoch, sessionStatus]);
 
   const scheduleRetry = useCallback(() => {
-    if (retryTimerRef.current !== undefined) return;
-    const delay = Math.min(5_000, 500 * 2 ** Math.min(4, consecutiveFailuresRef.current));
-    retryTimerRef.current = window.setTimeout(() => {
-      retryTimerRef.current = undefined;
-      pumpRef.current();
-    }, delay);
+    retryBackoffRef.current.fail(() => pumpRef.current());
   }, []);
 
   const pump = useCallback(() => {
     const runtime = runtimeRef.current;
     if (!runtime || sessionStatus !== "active" || speechStatus !== "ready") return;
+    if (retryBackoffRef.current.active) return;
     const scheduled = schedulerRef.current.next(speechRunId);
     if (!scheduled) return;
     const { work, checkpoints } = scheduled;
@@ -181,7 +177,7 @@ export function useLiveTeaching({
       if (acceptance.boardConflict) onTrace?.(traceDraft("interpretation.channel_conflict", { requestId: work.requestId, channel: "board" }, { correlation: { rootId: `interpretation:${work.requestId}`, plannerRequestId: work.requestId } }));
       if (acceptance.cueConflict) onTrace?.(traceDraft("interpretation.channel_conflict", { requestId: work.requestId, channel: "cue" }, { correlation: { rootId: `interpretation:${work.requestId}`, plannerRequestId: work.requestId } }));
       schedulerRef.current.settleAccepted(work.requestId, acceptance.steps.flatMap((step) => step.consumesCheckpointIds));
-      consecutiveFailuresRef.current = 0;
+      retryBackoffRef.current.accept();
       setError(undefined);
       setStatus("ready");
       const latencyMs = Math.max(0, Date.now() - work.startedAtMs);
@@ -190,7 +186,6 @@ export function useLiveTeaching({
       queueMicrotask(() => pumpRef.current());
     }).catch((reason: unknown) => {
       schedulerRef.current.settleFailed(work.requestId);
-      consecutiveFailuresRef.current += 1;
       const message = reason instanceof Error ? reason.message : "teaching-provider-unavailable";
       setError(message);
       setStatus("degraded");
@@ -218,15 +213,17 @@ export function useLiveTeaching({
     if (!closed.length) return;
     void (async () => {
       await runtime.start();
+      let committedAny = false;
       for (const span of closed) {
         const committed = await runtime.commitClosedSpan(span, speechRunId);
         if (!committed) continue;
         schedulerRef.current.enqueue([committed]);
+        committedAny = true;
         setPendingCount(schedulerRef.current.pendingCount);
         onTrace?.(traceDraft("evidence.checkpoint_committed", { runId: speechRunId, checkpointId: committed.checkpointId, lessonSequence: committed.lessonSequence, sourceFinalIds: committed.sourceFinalIds, warningCodes: committed.warnings.map((warning) => warning.code) }, { correlation: { rootId: `checkpoint:${committed.checkpointId}`, runId: speechRunId, lessonSequence: committed.lessonSequence, checkpointId: committed.checkpointId } }));
         onTrace?.(traceDraft("evidence.checkpoint_pending", { checkpointId: committed.checkpointId, pendingCount: schedulerRef.current.pendingCount, oldestPendingAgeMs: 0, estimatedTokens: Math.ceil(committed.text.length / 4) + 16 }, { correlation: { rootId: `checkpoint:${committed.checkpointId}`, runId: speechRunId, lessonSequence: committed.lessonSequence, checkpointId: committed.checkpointId } }));
       }
-      pumpRef.current();
+      if (committedAny) pumpRef.current();
     })().catch((reason: unknown) => {
       setStatus("degraded");
       setError(reason instanceof Error ? reason.message : "checkpoint-commit-failed");

@@ -85,6 +85,7 @@ export type SessionTracePayloads = {
   "canonical.final_committed": {
     runId: number;
     finalId: string;
+    speechEventId?: string;
     transcript: string;
     wordCount: number;
   };

@@ -105,7 +105,13 @@ export function applySpeechEvent(state: CanonicalSpeechState, event: SpeechEvent
   if (event.kind === "error") return { state, changes: [] };
   if (event.kind === "provisional") return { state: { ...state, provisional: provisionalFrom(event, state.finals.length) }, changes: [] };
 
-  const final: ProviderFinal = { id: `provider-final-${state.finals.length}`, text: event.text, words: event.words, committedAtMs: now };
+  const final: ProviderFinal = {
+    id: `provider-final-${state.finals.length}`,
+    ...(event.speechEventId ? { speechEventId: event.speechEventId } : {}),
+    text: event.text,
+    words: event.words,
+    committedAtMs: now,
+  };
   const finals = [...state.finals, final];
   const spans = [...state.spans];
   const changes: SpeechAssemblyChange[] = [];

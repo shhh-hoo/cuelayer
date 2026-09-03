@@ -138,7 +138,20 @@ export function validateAndNormalizeProposal({
     if (effectiveBoardDelta.action === "ADD_SUPPORT" && !boardItemIds.has(effectiveBoardDelta.targetBoardItemId)) return { ok: false, error: "proposal-support-target-missing" };
     if (effectiveBoardDelta.action === "SET_ACTIVE" && effectiveBoardDelta.continuity === "correction" && effectiveBoardDelta.invalidatesBoardItemIds!.some((id) => !boardItemIds.has(id))) return { ok: false, error: "proposal-correction-target-missing" };
     if (effectiveCueDelta.action === "RESOLVE_CURRENT" && !rollingState.cue.active) return { ok: false, error: "proposal-cue-resolution-without-active-cue" };
-    if (effectiveCueDelta.action === "SET" && effectiveCueDelta.targetBoardItemId !== undefined && !boardItemIds.has(effectiveCueDelta.targetBoardItemId)) return { ok: false, error: "proposal-cue-target-missing" };
+    // A cue may optionally point at this step's Board item. This is deliberately
+    // narrower than Board mutation targets: invalid optional presentation linkage
+    // never discards an otherwise grounded, safe cue.
+    const cueTargetIds = new Set(boardItemIds);
+    if (effectiveBoardDelta.action === "SET_ACTIVE") cueTargetIds.add(`board-${request.requestId}-accepted-${stepIndex}`);
+    const cueTargetDropped = effectiveCueDelta.action === "SET"
+      && effectiveCueDelta.targetBoardItemId !== undefined
+      && !cueTargetIds.has(effectiveCueDelta.targetBoardItemId);
+    const normalizedCueDelta = cueTargetDropped
+      ? (() => {
+          const { targetBoardItemId: _droppedTarget, ...cueWithoutTarget } = effectiveCueDelta;
+          return cueWithoutTarget;
+        })()
+      : effectiveCueDelta;
 
     const groundedReferences = refs.filter((item, index, items) => items.findIndex((candidate) => candidate.checkpointId === item.checkpointId && candidate.text === item.text) === index);
     const accepted: AcceptedInterpretationStep = {
@@ -149,9 +162,10 @@ export function validateAndNormalizeProposal({
       baseBoardRevision: rollingState.board.revision,
       baseCueRevision: rollingState.cue.revision,
       boardDelta: effectiveBoardDelta,
-      cueDelta: effectiveCueDelta,
+      cueDelta: normalizedCueDelta,
       evidenceRefs: groundedReferences,
       warnings: [
+        ...(cueTargetDropped ? [{ code: "cue_target_dropped" }] : []),
         ...(step.warnings ?? []).slice(0, 4),
         ...(proposal.warnings ?? []).slice(0, 2),
         ...(boardConflict ? [{ code: "board_channel_conflict" }] : []),
