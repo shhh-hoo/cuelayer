@@ -61,6 +61,8 @@ Ground every learner-visible reference as an exact non-empty substring of its ch
 
 Board supports KEEP, SET_ACTIVE, and ADD_SUPPORT. Use correction only with retainPrevious=false and explicit invalidatesBoardItemIds. Board content is limited to TEXT, FOCUS, RELATION(cause|sequence|contrast), and TRANSFORM.
 
+Within one ordered proposal only, a SET_ACTIVE in step N creates the deterministic Board item ID \`board-\${requestId}-accepted-N\`. A later step may reference that exact ID in targetBoardItemId; replace N with the zero-based earlier step index. Do not invent another intra-batch ID, and do not target a Board item that has been retired or invalidated by an earlier step.
+
 Cue supports KEEP, SET(QUESTION|TASK|NOTE|HINT), and RESOLVE_CURRENT. An instruction containing a question is one TASK. HINT must quote a hint the teacher actually gave. Board changes never resolve Cue; Cue resolution never clears Board.`;
 
 export function teachingResponseRequest(input: TeachingInterpretationRequest) {

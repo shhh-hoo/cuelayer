@@ -53,6 +53,8 @@ describe("OpenAI Teaching State interpreter", () => {
     expect(request.temperature).toBe(0);
     expect(request.input[0].content).toContain("currentState is current authority");
     expect(request.input[0].content).toContain("newEvidence is the only allowed trigger");
+    expect(request.input[0].content).toContain("board-${requestId}-accepted-N");
+    expect(request.input[0].content).toContain("zero-based earlier step index");
     expect(request.input[1].content).toBe(JSON.stringify(input));
     expect(request.input[1].content).not.toContain('"words"');
     expect(request.input[1].content).not.toContain("providerEvidence");
