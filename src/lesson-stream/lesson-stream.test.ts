@@ -121,6 +121,29 @@ describe("lesson evidence and replay", () => {
     expect(restored.pending).toEqual([]);
   });
 
+  it("uses checkpoint identity, not reusable span identity, across speech reconnects and reload", async () => {
+    const persisted: import("./contracts").LessonEvent[] = [];
+    const store: LessonEventStore = {
+      async append(events) { persisted.push(...events); },
+      async readSession(sessionId) { return persisted.filter((event) => event.sessionId === sessionId); },
+    };
+    const runtime = await LessonStreamRuntime.open("lesson-reconnect", store);
+    await runtime.start();
+    const first = await runtime.commitClosedSpan(span({ id: "speech-span-0" }), 1);
+    const duplicate = await runtime.commitClosedSpan(span({ id: "speech-span-0" }), 1);
+    const second = await runtime.commitClosedSpan(span({ id: "speech-span-0", text: "A new run has independent evidence." }), 2);
+    expect(duplicate).toBeUndefined();
+    expect([first?.checkpointId, second?.checkpointId]).toEqual(["checkpoint-1-speech-span-0-2", "checkpoint-2-speech-span-0-2"]);
+    expect(runtime.pending.map((item) => item.checkpointId)).toEqual([first!.checkpointId, second!.checkpointId]);
+    const restored = await LessonStreamRuntime.open("lesson-reconnect", store);
+    expect(restored.pending.map((item) => item.checkpointId)).toEqual([first!.checkpointId, second!.checkpointId]);
+    await restored.acceptSteps([
+      acceptedStep("reconnect-one", [first!.checkpointId]),
+      { ...acceptedStep("reconnect-two", [second!.checkpointId]), stepIndex: 1 },
+    ]);
+    expect(restored.pending).toEqual([]);
+  });
+
   it("publishes one final state update for a multi-step accepted backlog batch", async () => {
     const persisted: import("./contracts").LessonEvent[] = [];
     const store: LessonEventStore = {
@@ -139,6 +162,72 @@ describe("lesson evidence and replay", () => {
     ]);
     expect(updates).toBe(1);
     expect(runtime.pending).toEqual([]);
+  });
+
+  it("allocates unique strictly increasing sequences for overlapping domain operations", async () => {
+    const persisted: import("./contracts").LessonEvent[] = [];
+    const store: LessonEventStore = { async append(events) { persisted.push(...events); }, async readSession() { return persisted; } };
+    const runtime = await LessonStreamRuntime.open("lesson-sequences", store);
+    await runtime.start();
+    await Promise.all([
+      runtime.commitClosedSpan(span({ id: "span-a" }), 1),
+      runtime.commitClosedSpan(span({ id: "span-b", text: "A second closed sentence." }), 1),
+      runtime.end(),
+    ]);
+    const sequences = persisted.map((event) => event.sequence);
+    expect(sequences).toEqual([...sequences].sort((a, b) => a - b));
+    expect(new Set(sequences).size).toBe(sequences.length);
+    expect(sequences).toEqual(sequences.map((_, index) => index + 1));
+  });
+
+  it("validates a proposal at commit time after a queued Cue expiry", async () => {
+    const persisted: import("./contracts").LessonEvent[] = [];
+    const store: LessonEventStore = {
+      async append(events) { persisted.push(...events); },
+      async readSession() { return persisted; },
+    };
+    const runtime = await LessonStreamRuntime.open("lesson-commit-time", store);
+    await runtime.start();
+    const a = await runtime.commitClosedSpan(span({ id: "span-a", text: "Set a task." }), 1);
+    await runtime.acceptSteps([acceptedStep("existing-cue", [a!.checkpointId], { action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "TASK", source: { checkpointId: a!.checkpointId, text: "Set a task" } })]);
+    const b = await runtime.commitClosedSpan(span({ id: "span-b", text: "Add a Board item and another cue." }), 1);
+    const { request } = buildTeachingInterpretationRequest({ requestId: "commit-time", sessionId: "lesson-commit-time", events: runtime.events, currentState: runtime.state, newEvidence: [b!] });
+    const expiry = runtime.expireCue(runtime.state.cue.active!.id, runtime.state.cue.revision);
+    const acceptance = runtime.acceptProposal({
+      request,
+      model: "test-model",
+      proposal: { requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 1, steps: [{
+        consumesCheckpointIds: [b!.checkpointId],
+        boardDelta: { action: "SET_ACTIVE", content: { kind: "TEXT", source: { checkpointId: b!.checkpointId, text: "Add a Board item" } }, continuity: "same_thread", retainPrevious: false },
+        cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: b!.checkpointId, text: "another cue" } },
+        evidenceRefs: [{ checkpointId: b!.checkpointId, text: "Add a Board item" }, { checkpointId: b!.checkpointId, text: "another cue" }],
+      }] },
+    });
+    await expiry;
+    const result = await acceptance;
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.cueConflict).toBe(true);
+    expect(result.steps[0]!.boardDelta.action).toBe("SET_ACTIVE");
+    expect(result.steps[0]!.cueDelta.action).toBe("KEEP");
+  });
+
+  it("does not advance materialized state when an accepted batch fails to append", async () => {
+    const persisted: import("./contracts").LessonEvent[] = [];
+    const store: LessonEventStore = {
+      async append(events) {
+        if (events.some((event) => event.type === "interpretation.step_accepted")) throw new Error("store-down");
+        persisted.push(...events);
+      },
+      async readSession() { return persisted; },
+    };
+    const runtime = await LessonStreamRuntime.open("lesson-append-failure", store);
+    await runtime.start();
+    const item = await runtime.commitClosedSpan(span(), 1);
+    const { request } = buildTeachingInterpretationRequest({ requestId: "append-failure", sessionId: "lesson-append-failure", events: runtime.events, currentState: runtime.state, newEvidence: [item!] });
+    await expect(runtime.acceptProposal({ request, model: "test-model", proposal: { requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 0, steps: [{ consumesCheckpointIds: [item!.checkpointId], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "KEEP" }, evidenceRefs: [] }] } })).rejects.toThrow("store-down");
+    expect(runtime.pending.map((checkpoint) => checkpoint.checkpointId)).toEqual([item!.checkpointId]);
+    expect(runtime.state).toEqual(createInitialTeachingState());
   });
 });
 
@@ -184,6 +273,44 @@ describe("lossless scheduling and P4 projection", () => {
 });
 
 describe("proposal validation and deterministic state", () => {
+  it("validates same-batch cue lifecycle against rolling Cue state", () => {
+    const a = checkpoint("A", 1, "Set the task now.");
+    const b = checkpoint("B", 2, "The task is complete.");
+    const sessionId = "lesson-rolling-cue";
+    const events = [lessonStartedEvent(sessionId, 1), groundedEvent(sessionId, 2, a), groundedEvent(sessionId, 3, b)];
+    const { request } = buildTeachingInterpretationRequest({ requestId: "rolling-cue", sessionId, events, currentState: createInitialTeachingState(), newEvidence: [a, b] });
+    const result = validateAndNormalizeProposal({
+      proposal: {
+        requestId: request.requestId, baseBoardRevision: 0, baseCueRevision: 0,
+        steps: [
+          { consumesCheckpointIds: ["A"], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "SET", cueKind: "TASK", source: { checkpointId: "A", text: "Set the task now" } }, evidenceRefs: [{ checkpointId: "A", text: "Set the task now" }] },
+          { consumesCheckpointIds: ["B"], boardDelta: { action: "KEEP", reason: "no_board_value" }, cueDelta: { action: "RESOLVE_CURRENT", reason: "completed", evidence: { checkpointId: "B", text: "The task is complete" } }, evidenceRefs: [{ checkpointId: "B", text: "The task is complete" }] },
+        ],
+      }, request, allCheckpoints: [a, b], state: createInitialTeachingState(), model: "test-model",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const replay = replayLessonEvents([...events, ...result.steps.map((step, index) => interpretationAcceptedEvent(sessionId, 4 + index, step))]);
+    expect(replay.state.cue.active).toBeUndefined();
+    expect(replay.consumedCheckpointIds).toEqual(new Set(["A", "B"]));
+  });
+
+  it("rejects a Board support target retired earlier in the same batch before persistence", () => {
+    const a = checkpoint("A", 1, "Change topic entirely.");
+    const b = checkpoint("B", 2, "Support the old topic.");
+    const existing = { id: "existing", content: { kind: "TEXT" as const, source: { checkpointId: "A", text: "Change topic entirely" } }, sourceCheckpointIds: ["A"], establishedAtRevision: 1 };
+    const state = { ...createInitialTeachingState(), board: { revision: 1, active: existing, support: [], retained: [] } };
+    const sessionId = "lesson-retired-target";
+    const events = [lessonStartedEvent(sessionId, 1), groundedEvent(sessionId, 2, a), groundedEvent(sessionId, 3, b)];
+    const { request } = buildTeachingInterpretationRequest({ requestId: "retired-target", sessionId, events, currentState: state, newEvidence: [a, b] });
+    const result = validateAndNormalizeProposal({
+      proposal: { requestId: request.requestId, baseBoardRevision: 1, baseCueRevision: 0, steps: [
+        { consumesCheckpointIds: ["A"], boardDelta: { action: "SET_ACTIVE", content: { kind: "TEXT", source: { checkpointId: "A", text: "Change topic entirely" } }, continuity: "topic_shift", retainPrevious: false }, cueDelta: { action: "KEEP" }, evidenceRefs: [{ checkpointId: "A", text: "Change topic entirely" }] },
+        { consumesCheckpointIds: ["B"], boardDelta: { action: "ADD_SUPPORT", targetBoardItemId: "existing", support: { checkpointId: "B", text: "Support the old topic" } }, cueDelta: { action: "KEEP" }, evidenceRefs: [{ checkpointId: "B", text: "Support the old topic" }] },
+      ] }, request, allCheckpoints: [a, b], state, model: "test-model",
+    });
+    expect(result).toEqual({ ok: false, error: "proposal-support-target-missing" });
+  });
   it("requires exact ordered coverage and a current grounded trigger", () => {
     const sessionId = "lesson-validation";
     const a = checkpoint("A", 1, "Activation energy is the minimum energy required.");

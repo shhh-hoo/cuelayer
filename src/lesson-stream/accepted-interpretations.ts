@@ -87,11 +87,12 @@ export function validateAndNormalizeProposal({
   if (raw.requestId !== request.requestId) return { ok: false, error: "proposal-request-id-mismatch" };
 
   const proposal = raw as unknown as TeachingInterpretationProposal;
+  const boardConflict = proposal.baseBoardRevision !== state.board.revision && proposal.steps.some((step) => step.boardDelta.action !== "KEEP");
+  const cueConflict = proposal.baseCueRevision !== state.cue.revision && proposal.steps.some((step) => step.cueDelta.action !== "KEEP");
+  const checkpointSequences = new Map(allCheckpoints.map((checkpoint) => [checkpoint.checkpointId, checkpoint.lessonSequence]));
   let coverageOffset = 0;
-  const knownBoardTargets = new Set([
-    ...(state.board.active ? [state.board.active.id] : []),
-    ...state.board.retained.map((item) => item.id),
-  ]);
+  let rollingState = state;
+  const steps: AcceptedInterpretationStep[] = [];
   for (const [stepIndex, step] of proposal.steps.entries()) {
     if (!object(step) || !Array.isArray(step.consumesCheckpointIds) || !step.consumesCheckpointIds.length || !step.consumesCheckpointIds.every((id) => typeof id === "string") || !validBoardDelta(step.boardDelta) || !validCueDelta(step.cueDelta) || !Array.isArray(step.evidenceRefs) || !step.evidenceRefs.every(reference) || (step.warnings !== undefined && (!Array.isArray(step.warnings) || step.warnings.length > 4 || !step.warnings.every(warning)))) return { ok: false, error: "proposal-step-schema-invalid" };
     const expected = request.newEvidence.slice(coverageOffset, coverageOffset + step.consumesCheckpointIds.length).map((checkpoint) => checkpoint.checkpointId);
@@ -105,18 +106,19 @@ export function validateAndNormalizeProposal({
       if (!refs.some((item) => currentIds.has(item.checkpointId))) return { ok: false, error: "proposal-missing-current-trigger" };
     }
     if (step.boardDelta.action === "SET_ACTIVE" && step.boardDelta.continuity === "correction" && (step.boardDelta.retainPrevious || !step.boardDelta.invalidatesBoardItemIds?.length)) return { ok: false, error: "proposal-correction-invalid" };
-    if (step.boardDelta.action === "ADD_SUPPORT" && !knownBoardTargets.has(step.boardDelta.targetBoardItemId)) return { ok: false, error: "proposal-support-target-missing" };
-    if (step.cueDelta.action === "RESOLVE_CURRENT" && !state.cue.active) return { ok: false, error: "proposal-cue-resolution-without-active-cue" };
-    if (step.boardDelta.action === "SET_ACTIVE") knownBoardTargets.add(`board-${request.requestId}-accepted-${stepIndex}`);
-  }
-  if (coverageOffset !== request.newEvidence.length) return { ok: false, error: "proposal-batch-coverage-invalid" };
 
-  const boardConflict = proposal.baseBoardRevision !== state.board.revision && proposal.steps.some((step) => step.boardDelta.action !== "KEEP");
-  const cueConflict = proposal.baseCueRevision !== state.cue.revision && proposal.steps.some((step) => step.cueDelta.action !== "KEEP");
-  const checkpointSequences = new Map(allCheckpoints.map((checkpoint) => [checkpoint.checkpointId, checkpoint.lessonSequence]));
-  let rollingState = state;
-  const steps = proposal.steps.map((step, stepIndex): AcceptedInterpretationStep => {
-    const groundedReferences = [...step.evidenceRefs, ...boardReferences(step.boardDelta), ...cueReferences(step.cueDelta)].filter((item, index, items) => items.findIndex((candidate) => candidate.checkpointId === item.checkpointId && candidate.text === item.text) === index);
+    const effectiveBoardDelta = boardConflict ? { action: "KEEP" as const, reason: "insufficient_evidence" as const } : step.boardDelta;
+    const effectiveCueDelta = cueConflict ? { action: "KEEP" as const } : step.cueDelta;
+    const boardItemIds = new Set([
+      ...(rollingState.board.active ? [rollingState.board.active.id] : []),
+      ...rollingState.board.retained.map((item) => item.id),
+    ]);
+    if (effectiveBoardDelta.action === "ADD_SUPPORT" && !boardItemIds.has(effectiveBoardDelta.targetBoardItemId)) return { ok: false, error: "proposal-support-target-missing" };
+    if (effectiveBoardDelta.action === "SET_ACTIVE" && effectiveBoardDelta.continuity === "correction" && effectiveBoardDelta.invalidatesBoardItemIds!.some((id) => !boardItemIds.has(id))) return { ok: false, error: "proposal-correction-target-missing" };
+    if (effectiveCueDelta.action === "RESOLVE_CURRENT" && !rollingState.cue.active) return { ok: false, error: "proposal-cue-resolution-without-active-cue" };
+    if (effectiveCueDelta.action === "SET" && effectiveCueDelta.targetBoardItemId !== undefined && !boardItemIds.has(effectiveCueDelta.targetBoardItemId)) return { ok: false, error: "proposal-cue-target-missing" };
+
+    const groundedReferences = refs.filter((item, index, items) => items.findIndex((candidate) => candidate.checkpointId === item.checkpointId && candidate.text === item.text) === index);
     const accepted: AcceptedInterpretationStep = {
       interpretationId: `${request.requestId}-accepted`,
       requestId: request.requestId,
@@ -124,8 +126,8 @@ export function validateAndNormalizeProposal({
       consumesCheckpointIds: [...step.consumesCheckpointIds],
       baseBoardRevision: rollingState.board.revision,
       baseCueRevision: rollingState.cue.revision,
-      boardDelta: boardConflict ? { action: "KEEP", reason: "insufficient_evidence" } : step.boardDelta,
-      cueDelta: cueConflict ? { action: "KEEP" } : step.cueDelta,
+      boardDelta: effectiveBoardDelta,
+      cueDelta: effectiveCueDelta,
       evidenceRefs: groundedReferences,
       warnings: [
         ...(step.warnings ?? []).slice(0, 4),
@@ -137,8 +139,9 @@ export function validateAndNormalizeProposal({
       policyVersion: request.policyVersion,
       acceptedAt,
     };
+    steps.push(accepted);
     rollingState = reduceAcceptedStep(rollingState, accepted, checkpointSequences);
-    return accepted;
-  });
+  }
+  if (coverageOffset !== request.newEvidence.length) return { ok: false, error: "proposal-batch-coverage-invalid" };
   return { ok: true, steps, boardConflict, cueConflict };
 }
