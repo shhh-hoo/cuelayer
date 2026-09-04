@@ -25,11 +25,17 @@ const boardContent = z.discriminatedUnion("kind", [
 ]);
 const warning = z.object({ code: z.string().min(1).max(80), detail: z.string().min(1).max(240).nullable() }).strict();
 
-export function createTeachingInterpretationSchema(profile: AlphaSemanticProfile) {
-  const boardActiveContribution = contribution(boardContent, profile.boardActiveModes);
-  const boardSupportContribution = contribution(text, profile.boardSupportModes);
-  const optionalBoardSupportContribution = contribution(text, ["RECONSTRUCT", "REPRESENT", "AUGMENT"]);
-  const cueContribution = (kind: keyof AlphaSemanticProfile["cueModes"]) => contribution(text, profile.cueModes[kind]);
+export function createTeachingInterpretationSchema(profile: AlphaSemanticProfile, checkpointIds?: readonly string[]) {
+  const checkpointId = checkpointIds?.length ? z.enum(checkpointIds as [string, ...string[]]) : id;
+  const requestCheckpointReference = z.object({ checkpointId }).strict();
+  const requestProvenance = provenance.extend({ speechRefs: z.array(requestCheckpointReference).max(12).nullable() }).strict();
+  const requestContribution = <T extends z.ZodType>(content: T, modes: readonly ContributionMode[]) => z.object({
+    mode: z.enum(modes as [ContributionMode, ...ContributionMode[]]), content, provenance: requestProvenance,
+  }).strict();
+  const boardActiveContribution = requestContribution(boardContent, profile.boardActiveModes);
+  const boardSupportContribution = requestContribution(text, profile.boardSupportModes);
+  const optionalBoardSupportContribution = requestContribution(text, ["RECONSTRUCT", "REPRESENT", "AUGMENT"]);
+  const cueContribution = (kind: keyof AlphaSemanticProfile["cueModes"]) => requestContribution(text, profile.cueModes[kind]);
   const boardDelta = z.discriminatedUnion("action", [
     z.object({ action: z.literal("KEEP"), reason: keepReason }).strict(),
     z.object({ action: z.literal("SET_ACTIVE"), contribution: boardActiveContribution, continuity: z.enum(["same_thread", "topic_shift", "correction"]), retainPrevious: z.boolean(), support: z.array(optionalBoardSupportContribution).max(2).nullable(), invalidatesBoardItemIds: z.array(id).max(4).nullable() }).strict(),
@@ -41,9 +47,9 @@ export function createTeachingInterpretationSchema(profile: AlphaSemanticProfile
     z.object({ action: z.literal("SET"), cueKind: z.literal("QUESTION"), contribution: cueContribution("QUESTION"), targetBoardItemId: id.nullable() }).strict(),
     z.object({ action: z.literal("SET"), cueKind: z.literal("TASK"), contribution: cueContribution("TASK"), targetBoardItemId: id.nullable() }).strict(),
     z.object({ action: z.literal("SET"), cueKind: z.literal("HINT"), contribution: cueContribution("HINT"), targetBoardItemId: id.nullable() }).strict(),
-    z.object({ action: z.literal("RESOLVE_CURRENT"), reason: z.enum(["answered", "completed", "teacher_moved_on", "replaced"]), evidence: checkpointReference }).strict(),
+    z.object({ action: z.literal("RESOLVE_CURRENT"), reason: z.enum(["answered", "completed", "teacher_moved_on", "replaced"]), evidence: requestCheckpointReference }).strict(),
   ]);
-  const step = z.object({ consumesCheckpointIds: z.array(id).min(1).max(20), boardDelta, cueDelta, evidenceRefs: z.array(checkpointReference).max(12), warnings: z.array(warning).max(4).nullable() }).strict();
+  const step = z.object({ consumesCheckpointIds: z.array(checkpointId).min(1).max(20), boardDelta, cueDelta, evidenceRefs: z.array(requestCheckpointReference).max(12), warnings: z.array(warning).max(4).nullable() }).strict();
   return z.object({ requestId: id, baseBoardRevision: z.number().int().nonnegative(), baseCueRevision: z.number().int().nonnegative(), steps: z.array(step).min(1).max(20), warnings: z.array(warning).max(4).nullable() }).strict();
 }
 
@@ -65,6 +71,7 @@ export function teachingProviderContract(profile: AlphaSemanticProfile = ACTIVE_
 export function teachingResponseRequest(input: TeachingInterpretationRequest, profile: AlphaSemanticProfile = ACTIVE_ALPHA_SEMANTIC_PROFILE) {
   if (input.semanticProfileId !== profile.id || input.policyVersion !== profile.policyVersion) throw new Error("teaching-capability-profile-mismatch");
   const contract = teachingProviderContract(profile);
+  const schema = createTeachingInterpretationSchema(profile, input.newEvidence.map((item) => item.checkpointId));
   return {
     reasoning: contract.reasoning,
     max_output_tokens: contract.max_output_tokens,
@@ -72,7 +79,7 @@ export function teachingResponseRequest(input: TeachingInterpretationRequest, pr
       { role: "system" as const, content: contract.systemPolicy },
       { role: "user" as const, content: JSON.stringify(input) },
     ],
-    text: contract.text,
+    text: { format: zodTextFormat(schema, "teaching_interpretation") },
   };
 }
 

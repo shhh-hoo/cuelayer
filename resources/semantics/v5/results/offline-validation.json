@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "errors": [],
+  "caseCount": 60,
+  "developmentCount": 40,
+  "holdoutCount": 20,
+  "hash": "107d2315cf4f64c42256955c05f24e6a7c15508a30def82039c69fcf9e43355c",
+  "corpusVersion": "alpha-semantics-corpus-v5",
+  "evaluatorVersion": "alpha-semantics-evaluator-v5",
+  "core": {
+    "profileVersion": "alpha-core-p4-v7",
+    "policyVersion": "bounded-agent-p4-semantics-v7",
+    "policyDigest": "7875409eb044a9e8e657434841e0c1b96cab5f13ee94ed383be4624c08826ce4",
+    "schemaDigest": "09a31118748507e9b8f5c207f0ff4056fd155a738c6ce0848a09c1f9b6a71de4"
+  },
+  "augment": {
+    "profileVersion": "alpha-augment-p4-v7",
+    "policyVersion": "bounded-agent-p4-semantics-v7",
+    "policyDigest": "aa6335f586197f38a21fbd75bcf3048dc881cbe3835f33b1d1e29b2d9a08514d",
+    "schemaDigest": "a22b45d9fd27bfe9605c2ef15664347dbb4f4dc62e5b851352bb623874829653"
+  }
+}

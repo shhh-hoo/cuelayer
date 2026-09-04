@@ -14,7 +14,7 @@ describe("frozen Alpha semantics corpus and production harness", () => {
     const item = loadSemanticCorpus().cases[0]!;
     const replay = replayLessonEvents(item.initialLessonEvents);
     const { request } = buildTeachingInterpretationRequest({ requestId: "production-path", sessionId: item.id, events: replay.events, currentState: replay.state, newEvidence: item.orderedNewCheckpoints, profile: ACTIVE_ALPHA_SEMANTIC_PROFILE });
-    expect(request).toMatchObject({ semanticProfileId: "alpha-core-p4-v6", processedTimeline: expect.any(Array), currentState: replay.state, newEvidence: item.orderedNewCheckpoints });
+    expect(request).toMatchObject({ semanticProfileId: "alpha-core-p4-v7", processedTimeline: expect.any(Array), currentState: replay.state, newEvidence: item.orderedNewCheckpoints });
     expect(request).not.toHaveProperty("contextPolicy");
   });
 

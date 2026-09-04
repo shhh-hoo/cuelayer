@@ -96,7 +96,7 @@ export async function requestOpenAITeachingInterpretation(
   } catch (error) {
     throw Object.assign(error instanceof Error ? error : new Error("teaching-interpretation-structured-parse-failed"), { audit: { ...knownAudit, providerResponse: responseAudit, failureStage: "structured_parse_error" } satisfies TeachingProviderFailureAudit });
   }
-  const parsed = createTeachingInterpretationSchema(profile).safeParse(rawStructuredOutput);
+  const parsed = createTeachingInterpretationSchema(profile, input.newEvidence.map((item) => item.checkpointId)).safeParse(rawStructuredOutput);
   if (!parsed.success) {
     const rawStructuredOutputDigest = persistedAuditDigest(rawStructuredOutput);
     throw Object.assign(new Error("teaching-interpretation-structured-parse-failed"), { audit: { ...knownAudit, providerResponse: providerResponseSnapshot({ ...responseFact, rawStructuredOutput, rawStructuredOutputDigest }), failureStage: "structured_parse_error" } satisfies TeachingProviderFailureAudit });
