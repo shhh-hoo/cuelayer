@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import type { PresentationMode } from "../session/presentation-mode";
-import type { ActiveTeachingCue } from "./contracts";
+import type { ActiveLessonCue } from "../lesson-stream/contracts";
 import "./teaching-cue.css";
 
-const LABEL: Record<ActiveTeachingCue["kind"], string> = {
+const LABEL: Record<ActiveLessonCue["kind"], string> = {
   QUESTION: "Question",
   TASK: "Task",
   NOTE: "Take note",
@@ -11,7 +11,7 @@ const LABEL: Record<ActiveTeachingCue["kind"], string> = {
 };
 
 export function TeachingCueLayer({ cue, presentationMode, placement = "overlay", onExpire }: {
-  cue?: ActiveTeachingCue;
+  cue?: ActiveLessonCue;
   presentationMode: PresentationMode;
   placement?: "overlay" | "flow";
   onExpire?(cueId: string, now: number): void;
@@ -34,6 +34,6 @@ export function TeachingCueLayer({ cue, presentationMode, placement = "overlay",
       <span className="teaching-cue-marker" aria-hidden="true" />
       <span>{LABEL[cue.kind]}</span>
     </div>
-    <p>{cue.text}</p>
+    <p>{cue.contribution.content}</p>
   </aside>;
 }

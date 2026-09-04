@@ -1,0 +1,25 @@
+.teaching-surface-layer { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.teaching-board-active { max-width: min(980px, 100%); color: #f7fbf6; font-size: clamp(28px, 4.4vw, 66px); font-weight: 650; line-height: 1.12; letter-spacing: -.035em; text-wrap: balance; }
+.teaching-board-text, .teaching-board-focus { margin: 0; }
+.teaching-board-focus { padding-bottom: .12em; border-bottom: .08em solid #d9e469; }
+.teaching-board-relation { display: grid; gap: .28em; align-items: center; justify-items: center; }
+.teaching-board-relation-step { display: grid; justify-items: center; gap: .18em; }
+.teaching-board-connector { color: #8fc9ad; font-size: .72em; line-height: .8; }
+.teaching-board-relation.relation-contrast { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .7em; }
+.teaching-board-relation.relation-contrast .teaching-board-relation-step { grid-template-columns: auto minmax(0, 1fr); text-align: center; }
+.teaching-board-transform { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .5em; }
+.teaching-board-transform > span:first-child { color: #aab9ac; text-decoration: line-through; text-decoration-thickness: .07em; }
+.teaching-board-transform strong { color: #dff5e6; }
+.teaching-board-support-list { display: grid; gap: 6px; }
+.teaching-board-support-list p { margin: 0; }
+.teaching-board-retained-item { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.teaching-board-retained-item .teaching-board-text,
+.teaching-board-retained-item .teaching-board-focus { margin: 0; font: inherit; }
+.teaching-board-retained-item .teaching-board-relation,
+.teaching-board-retained-item .teaching-board-transform { display: block; font: inherit; }
+.teaching-board-retained-item .teaching-board-connector { display: none; }
+.presentation-mode-presentation-overlay .teaching-board-active { font-size: clamp(20px, 2.3vw, 34px); text-align: left; }
+@media (max-width: 760px) {
+  .teaching-board-active { font-size: clamp(26px, 8vw, 44px); }
+  .teaching-board-relation.relation-contrast { grid-template-columns: 1fr; }
+}

@@ -1,12 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { ActiveTeachingCue } from "./contracts";
+import type { ActiveLessonCue } from "../lesson-stream/contracts";
 import { BoardLayout, boardDensityForContent } from "./BoardLayout";
 
-const cue: ActiveTeachingCue = {
+const cue: ActiveLessonCue = {
   id: "task-1",
   kind: "TASK",
-  text: "Compare the two pathways. Which one is faster?",
+  contribution: { mode: "INITIATE", content: "Compare the two pathways. Which one is faster?", provenance: { basis: "DOMAIN_KNOWLEDGE" } },
   sourceSegmentIds: ["speech-1"],
   activatedAt: 100,
 };

@@ -5,11 +5,7 @@ export const SPEECH_SPAN_ASSEMBLY = {
   idleCloseMs: 900,
   maxDurationMs: 6_500,
   maxWords: 28,
-  plannerCheckpointMs: 2_500,
 } as const;
-
-/** One live semantic budget: planner work must not outlive the checkpoint cadence it serves. */
-export const LIVE_PLANNER_BUDGET_MS = SPEECH_SPAN_ASSEMBLY.plannerCheckpointMs;
 
 export type SpeechAssemblyChange = {
   decision: "opened" | "appended" | "closed";
@@ -21,19 +17,8 @@ export type SpeechAssemblyChange = {
 
 export type CanonicalSpeechUpdate = { state: CanonicalSpeechState; changes: SpeechAssemblyChange[] };
 
-export type PlannerCheckpointCursor = {
-  durationCheckpoint: number;
-  sourceFinalCount: number;
-};
-
-export type DuePlannerCheckpoint = {
-  spanId: string;
-  spanRevision: number;
-  cursor: PlannerCheckpointCursor;
-};
-
-export function createInitialCanonicalSpeechState(): CanonicalSpeechState {
-  return { finals: [], spans: [] };
+export function createInitialCanonicalSpeechState(identityScope?: string): CanonicalSpeechState {
+  return { finals: [], spans: [], ...(identityScope ? { identityScope } : {}) };
 }
 
 function provisionalFrom(event: Extract<SpeechEvent, { kind: "provisional" }>, index: number) {
@@ -67,10 +52,10 @@ function closeSpan(span: CanonicalSpeechSpan, reason: CanonicalSpeechSpanCloseRe
   return { ...span, revision: span.revision + 1, status: "closed", closeReason: reason, updatedAtMs: now };
 }
 
-function openedSpan(final: ProviderFinal, index: number): CanonicalSpeechSpan {
+function openedSpan(final: ProviderFinal, index: number, identityScope?: string): CanonicalSpeechSpan {
   const bounds = finalBounds(final.words, final.committedAtMs);
   return {
-    id: `speech-span-${index}`,
+    id: identityScope ? `speech-span-${identityScope}-${index}` : `speech-span-${index}`,
     revision: 1,
     sourceFinalIds: [final.id],
     text: final.text,
@@ -105,7 +90,13 @@ export function applySpeechEvent(state: CanonicalSpeechState, event: SpeechEvent
   if (event.kind === "error") return { state, changes: [] };
   if (event.kind === "provisional") return { state: { ...state, provisional: provisionalFrom(event, state.finals.length) }, changes: [] };
 
-  const final: ProviderFinal = { id: `provider-final-${state.finals.length}`, text: event.text, words: event.words, committedAtMs: now };
+  const final: ProviderFinal = {
+    id: state.identityScope ? `provider-final-${state.identityScope}-${state.finals.length}` : `provider-final-${state.finals.length}`,
+    ...(event.speechEventId ? { speechEventId: event.speechEventId } : {}),
+    text: event.text,
+    words: event.words,
+    committedAtMs: now,
+  };
   const finals = [...state.finals, final];
   const spans = [...state.spans];
   const changes: SpeechAssemblyChange[] = [];
@@ -134,7 +125,7 @@ export function applySpeechEvent(state: CanonicalSpeechState, event: SpeechEvent
 
   let current: CanonicalSpeechSpan;
   if (!open) {
-    current = openedSpan(final, spans.length);
+    current = openedSpan(final, spans.length, state.identityScope);
     spans.push(current);
     changes.push({ decision: "opened", spanId: current.id, spanRevision: current.revision, finalId: final.id });
   } else {
@@ -162,21 +153,8 @@ export function closeCanonicalSpeechSpan(state: CanonicalSpeechState, spanId: st
   return { state: { ...state, spans }, changes: [{ decision: "closed", spanId, spanRevision: closed.revision, closeReason: reason }] };
 }
 
-export function isPlannerCheckpoint(span: CanonicalSpeechSpan) {
-  return span.status === "closed" || span.endMs - span.startMs >= SPEECH_SPAN_ASSEMBLY.plannerCheckpointMs;
-}
-
-/** Open spans become eligible once per elapsed checkpoint; closure only adds work for newer speech. */
-export function duePlannerCheckpoint(span: CanonicalSpeechSpan, previous?: PlannerCheckpointCursor): DuePlannerCheckpoint | undefined {
-  const prior = previous ?? { durationCheckpoint: 0, sourceFinalCount: 0 };
-  const durationCheckpoint = Math.floor(Math.max(0, span.endMs - span.startMs) / SPEECH_SPAN_ASSEMBLY.plannerCheckpointMs);
-  const sourceFinalCount = span.sourceFinalIds.length;
-  if (sourceFinalCount <= prior.sourceFinalCount) return undefined;
-  if (span.status === "open" && durationCheckpoint <= prior.durationCheckpoint) return undefined;
-  if (span.status === "open" && durationCheckpoint === 0) return undefined;
-  return {
-    spanId: span.id,
-    spanRevision: span.revision,
-    cursor: { durationCheckpoint: Math.max(prior.durationCheckpoint, durationCheckpoint), sourceFinalCount },
-  };
+export function closeOpenCanonicalSpeechSpans(state: CanonicalSpeechState, reason: CanonicalSpeechSpanCloseReason, now: number) {
+  return state.spans.reduce((next, span) => span.status === "open"
+    ? closeCanonicalSpeechSpan(next, span.id, span.revision, reason, now).state
+    : next, state);
 }

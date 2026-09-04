@@ -5,19 +5,23 @@ export type SpeechWord = {
   confidence?: number;
 };
 
+/** Durable lesson-scoped opaque capture identity. */
+export type SpeechRunId = string | number;
+
 export type SpeechEvent =
   | { kind: "provisional"; text: string; words: SpeechWord[] }
-  | { kind: "committed"; text: string; words: SpeechWord[] }
+  | { kind: "committed"; text: string; words: SpeechWord[]; speechEventId?: string }
   | { kind: "error"; code: string; message: string };
 
 export type ProviderFinal = {
   id: string;
+  speechEventId?: string;
   text: string;
   words: SpeechWord[];
   committedAtMs: number;
 };
 
-export type CanonicalSpeechSpanCloseReason = "meaningful_pause" | "timing_gap" | "terminal_punctuation" | "max_duration" | "max_words";
+export type CanonicalSpeechSpanCloseReason = "meaningful_pause" | "timing_gap" | "terminal_punctuation" | "max_duration" | "max_words" | "explicit_stop";
 
 export type CanonicalSpeechSpan = {
   id: string;
@@ -34,6 +38,7 @@ export type CanonicalSpeechSpan = {
 };
 
 export type CanonicalSpeechState = {
+  identityScope?: string;
   finals: ProviderFinal[];
   spans: CanonicalSpeechSpan[];
   provisional?: { id: string; text: string; words: SpeechWord[] };
@@ -47,7 +52,7 @@ export type SpeechError = {
 };
 
 export type SpeechDebugState = {
-  runId: number;
+  runId: SpeechRunId;
   provisionalEvents: number;
   committedEvents: number;
   lastError?: SpeechError;

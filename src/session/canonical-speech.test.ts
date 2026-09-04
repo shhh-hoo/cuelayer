@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SingleFlightPlanner } from "../planner/single-flight";
-import { applySpeechEvent, closeCanonicalSpeechSpan, createInitialCanonicalSpeechState, duePlannerCheckpoint, isPlannerCheckpoint, joinTranscript, SPEECH_SPAN_ASSEMBLY } from "./canonical-speech";
-import type { PlannerCheckpointCursor } from "./canonical-speech";
+import { applySpeechEvent, closeCanonicalSpeechSpan, createInitialCanonicalSpeechState, joinTranscript, SPEECH_SPAN_ASSEMBLY } from "./canonical-speech";
 import type { CanonicalSpeechState, SpeechWord } from "./speech-types";
 
 function words(text: string, startMs: number, endMs: number): SpeechWord[] {
@@ -52,9 +50,8 @@ describe("CueLayer canonical speech assembly", () => {
     expect(joinTranscript("反应", "。然后继续")).toBe("反应。然后继续");
   });
 
-  it("closes on a meaningful pause and produces bounded checkpoints during continuous speech", () => {
-    const initial = commit(createInitialCanonicalSpeechState(), "continuous explanation", 0, SPEECH_SPAN_ASSEMBLY.plannerCheckpointMs + 20);
-    expect(isPlannerCheckpoint(initial.spans[0]!)).toBe(true);
+  it("closes on a meaningful pause after continuous speech", () => {
+    const initial = commit(createInitialCanonicalSpeechState(), "continuous explanation", 0, 2_520);
     const closed = closeCanonicalSpeechSpan(initial, "speech-span-0", 1, "meaningful_pause", 4_000);
     expect(closed.state.spans[0]).toMatchObject({ status: "closed", revision: 2, closeReason: "meaningful_pause" });
   });
@@ -66,40 +63,6 @@ describe("CueLayer canonical speech assembly", () => {
     expect(second.spans).toHaveLength(2);
     expect(second.spans[0]).toMatchObject({ status: "closed", closeReason: "max_words" });
     expect(second.spans[1]).toMatchObject({ text: "next", status: "open" });
-  });
-
-  it("requests open-span planning once at 2.5s and once at 5s, not for every intervening final", () => {
-    let state = createInitialCanonicalSpeechState();
-    let cursor: PlannerCheckpointCursor | undefined;
-    const scheduler = new SingleFlightPlanner();
-    const requestedRevisions: number[] = [];
-    const timings = [
-      ["first", 0, 2_520],
-      ["fragment two", 2_540, 2_900],
-      ["fragment three", 2_920, 3_400],
-      ["fragment four", 3_420, 4_200],
-      ["fragment five", 4_220, 4_900],
-      ["cross five seconds", 4_920, 5_100],
-    ] as const;
-
-    timings.forEach(([text, startMs, endMs]) => {
-      state = commit(state, text, startMs, endMs);
-      const checkpoint = duePlannerCheckpoint(state.spans[0]!, cursor);
-      if (checkpoint) {
-        cursor = checkpoint.cursor;
-        scheduler.enqueue([checkpoint]);
-        const work = scheduler.next(1)!;
-        requestedRevisions.push(work.spanRevision);
-        scheduler.complete(work.requestId, work.runId);
-      }
-    });
-
-    expect(requestedRevisions).toEqual([1, 6]);
-
-    state = commit(state, "newer unplanned content", 5_120, 5_400);
-    expect(duePlannerCheckpoint(state.spans[0]!, cursor)).toBeUndefined();
-    const closed = closeCanonicalSpeechSpan(state, "speech-span-0", 7, "meaningful_pause", 6_300).state.spans[0]!;
-    expect(duePlannerCheckpoint(closed, cursor)).toMatchObject({ spanId: "speech-span-0", spanRevision: 8 });
   });
 
   it.each([

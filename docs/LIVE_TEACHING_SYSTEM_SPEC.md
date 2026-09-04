@@ -1,24 +1,29 @@
 # CueLayer Live Teaching System Specification
 
-**Version:** v0.1  
+**Version:** v0.3 / `bounded-agent-p4-alpha-v2`
 **Status:** `LIVE-STATE` / `SEMANTICS` execution baseline  
 **Date:** 2026-09-02  
 **Scope:** single-session live teaching: speech evidence, stream processing, LLM interpretation, Teaching State, Teaching Board, Teaching Cue, and learner rendering.
 
-This document is the execution authority for CueLayer's live teaching system. It is subordinate to `docs/PRODUCT_CHARTER.md`, but supersedes older live-planner implementation descriptions, PR descriptions, fixtures, and code comments where they conflict with this design.
+This document is the execution authority for CueLayer's live teaching system. It is subordinate to `docs/PRODUCT_CHARTER.md` and governs implementation descriptions, PR descriptions, fixtures, and code comments where they conflict with this design.
 
 Stable work-package identifiers in this specification are authoritative. Current GitHub pull-request mappings are operational metadata maintained only in [`docs/LIVE_TEACHING_ROADMAP.md`](LIVE_TEACHING_ROADMAP.md). A changed or inserted PR number must never require semantic renumbering of this specification.
 
-## 0. Authority and migration
+## 0. Authority
 
 1. `docs/PRODUCT_CHARTER.md` remains the highest product authority.
 2. This document is the single execution authority for live teaching dataflow, state, windows, LLM context, `LIVE-STATE`, and `SEMANTICS`.
-3. It supersedes the live product model in `docs/TEACHING_STATE_PLANNER.md`, specifically the semantic-subtitle model built around recent bounded speech, transient `CaptionEpisode`, and the 2.5-second live budget.
-4. `docs/TEACHING_CUE_LAYER.md` remains authoritative for the Board/Teaching Cue visual and lifecycle contracts, except that its deferred-live-integration boundary is now owned by this document.
-5. `CaptionRenderer`, FX Lab, Showcase, and existing FOCUS/RELATE/TRANSFORM renderer assets may remain as laboratories. They no longer define the normal `/session` learner-facing runtime.
-6. PR descriptions explain implementation against this document; they do not redefine the system.
+3. PR descriptions explain implementation against this document; they do not redefine the system.
 
 If code and this document disagree, update this document intentionally before changing product semantics.
+
+### Alpha learner-surface authority
+
+Alpha is an AI-native learner-surface agent. The learner surface optimizes for the learner's current learning state, not fidelity to the teacher transcript. New evidence remains the sole deliberation trigger: it controls when Luna deliberates. Once triggered, Luna may reason from current evidence, processed lesson history, current Teaching State, and domain knowledge.
+
+Teacher speech is primary classroom evidence and context, not a permission boundary. Board contributions may `RECONSTRUCT`, `REPRESENT`, `AUGMENT`, or `CORRECT`; Teaching Cue may represent teacher activity or `INITIATE` a bounded `QUESTION`, `TASK`, or `HINT`. Provenance is accountability rather than authorization: claimed speech quotes exact-match immutable evidence, while domain- and state-based contributions must never manufacture speech provenance. Higher-risk interventions require stronger confidence and contextual justification in model policy; schema validation preserves boundedness and replayability without pretending to certify subject-matter truth.
+
+The lesson domain/event schema is versioned as `lesson-event-v3-learner-agency`. A persisted prior shape is an explicitly incompatible session boundary: it must be rejected or migrated deliberately, never silently replayed as this schema.
 
 ---
 
@@ -92,7 +97,7 @@ The system must:
 - retain and replay a full lesson's speech evidence;
 - retain earlier accepted LLM interpretations even after current state changes;
 - deterministically reconstruct current Teaching State from the lesson event log;
-- never lose unprocessed evidence because of planner coalescing;
+- never lose unprocessed evidence because of scheduler coalescing;
 - allow each LLM call to use full lesson context while returning only bounded deltas;
 - never treat later speech alone as a reason an otherwise valid request is stale;
 - render Teaching State, not rolling transcript, on the normal learner surface;
@@ -111,7 +116,7 @@ Do not add:
 - arbitrary LaTeX or full chemical structure/mechanism generation;
 - slide OCR, slide understanding, or spatial grounding;
 - post-lesson summary, student model, or cross-lesson knowledge graph;
-- model-invented hints, answers, or teaching claims.
+- unrestricted answer disclosure, arbitrary content generation, or learner-action replacement that disrupts unresolved productive work.
 
 ---
 
@@ -166,7 +171,7 @@ type LessonSession = {
 };
 ```
 
-A lesson starts and ends through explicit user action. Silence, waiting for students, presentation interruption, planner failure, or speech reconnect do not end the lesson. Reload may resume the same local session. "Start another session" creates a new session identity.
+A lesson starts and ends through explicit user action. Silence, waiting for students, presentation interruption, interpretation failure, or speech reconnect do not end the lesson. Reload may resume the same local session. "Start another session" creates a new session identity.
 
 ### 4.2 Compact Evidence Checkpoint
 
@@ -215,7 +220,7 @@ type AcceptedInterpretationStep = {
   baseCueRevision: number;
   boardDelta: BoardDelta;
   cueDelta: TeachingCueDelta;
-  evidenceRefs: GroundedReference[];
+  evidenceRefs: SpeechReference[];
   warnings: InterpretationWarning[];
   model: string;
   policyVersion: string;
@@ -387,7 +392,7 @@ Defines the complete history boundary.
 Start session ───────────────────────── End session
 ```
 
-Only explicit user actions start/end it. A 900ms pause, 30-second student wait, presentation end, planner failure, or speech reconnect does not end the lesson.
+Only explicit user actions start/end it. A 900ms pause, 30-second student wait, presentation end, interpretation failure, or speech reconnect does not end the lesson.
 
 ### Window B — Evidence Checkpoint
 
@@ -583,12 +588,14 @@ type TeachingInterpretationStepProposal = {
   consumesCheckpointIds: string[];
   boardDelta: BoardDelta;
   cueDelta: TeachingCueDelta;
-  evidenceRefs: GroundedReference[];
+  evidenceRefs: SpeechReference[];
   warnings?: InterpretationWarning[];
 };
 ```
 
 ### BoardDelta
+
+Teaching Board is the current shared knowledge workspace that the AI judges should be available to learners now. It is not limited to what the teacher most recently established. Its bounded contributions may reconstruct, represent, augment, or correct while retaining evidence history and reversible invalidation.
 
 ```ts
 type BoardDelta =
@@ -606,15 +613,15 @@ type BoardDelta =
     }
   | {
       action: "SET_ACTIVE";
-      content: BoardContent;
+      contribution: TeachingContribution<BoardContent>;
       continuity: "same_thread" | "topic_shift" | "correction";
       retainPrevious: boolean;
-      support?: GroundedReference[];
+      support?: TeachingContribution<string>[];
       invalidatesBoardItemIds?: string[];
     }
   | {
       action: "ADD_SUPPORT";
-      support: GroundedReference;
+      support: TeachingContribution<string>;
       targetBoardItemId: string;
     };
 ```
@@ -631,50 +638,75 @@ Deterministic rules:
 ### BoardContent
 
 ```ts
+type SpeechReference = { checkpointId: string; quote: string };
+
+type ContributionProvenance = {
+  speechRefs?: SpeechReference[];
+  stateRefs?: StateReference[];
+  basis:
+    | "SPEECH"
+    | "SPEECH_AND_STATE"
+    | "DOMAIN_KNOWLEDGE"
+    | "STATE_AND_DOMAIN_KNOWLEDGE";
+};
+
+type StateReference = { kind: "BOARD_ITEM" | "ACTIVE_CUE"; id: string };
+
+type TeachingContribution<TContent> = {
+  mode: "RECONSTRUCT" | "REPRESENT" | "AUGMENT" | "CORRECT" | "INITIATE";
+  content: TContent;
+  provenance: ContributionProvenance;
+};
+
+type InterventionRisk = "LOW" | "MEDIUM" | "HIGH";
+// LOW: RECONSTRUCT, REPRESENT
+// MEDIUM: AUGMENT, NOTE
+// HIGH: CORRECT, INITIATE QUESTION/TASK/HINT
+
 type BoardContent =
-  | { kind: "TEXT"; source: GroundedReference }
-  | { kind: "FOCUS"; target: GroundedReference }
+  | { kind: "TEXT"; text: string }
+  | { kind: "FOCUS"; target: string }
   | {
       kind: "RELATION";
       relation: "cause" | "sequence" | "contrast";
-      targets: GroundedReference[];
+      targets: string[];
     }
   | {
       kind: "TRANSFORM";
-      from: GroundedReference;
-      to: GroundedReference;
+      from: string;
+      to: string;
     };
 ```
 
-No model-authored free prose, React, HTML, CSS, layout, timing, animation, or TeX in `LIVE-STATE` / `SEMANTICS`.
+No arbitrary React, HTML, CSS, layout, timing, animation, or TeX enters `LIVE-STATE` / `SEMANTICS`; learner-visible strings remain bounded contribution content.
 
 ### TeachingCueDelta
+
+Teaching Cue is the learner cognitive action that should remain active now, whether represented from teacher activity or initiated by the AI. It is a sibling of Board with its own revision and lifecycle.
 
 ```ts
 type TeachingCueDelta =
   | { action: "KEEP" }
   | {
       action: "SET";
-      cueKind: "QUESTION" | "TASK" | "NOTE" | "HINT";
-      source?: GroundedReference;
+      cueKind: "NOTE" | "QUESTION" | "TASK" | "HINT";
+      contribution: TeachingContribution<string>;
       targetBoardItemId?: string;
     }
   | {
       action: "RESOLVE_CURRENT";
       reason: "answered" | "completed" | "teacher_moved_on" | "replaced";
-      evidence: GroundedReference;
+      evidence: SpeechReference;
     };
 ```
 
 Alpha defaults:
 
-- QUESTION/TASK/HINT persist;
-- NOTE expires deterministically;
+- NOTE expires deterministically; QUESTION, TASK, and HINT persist until resolved or replaced;
 - Board changes never resolve a cue by themselves;
 - cue resolution never clears Board;
-- an instruction containing a question is one TASK, not competing TASK + QUESTION;
-- HINT must come from teacher speech;
-- one visible active cue remains the Alpha default; TASK + transient HINT is a `SEMANTICS` evaluation question.
+- an unresolved TASK or QUESTION must be explicitly resolved before another cue replaces it;
+- one visible active cue remains the Alpha default.
 
 ---
 
@@ -715,10 +747,11 @@ reduce Teaching State
 
 ### Grounding
 
-- learner-visible references must exact-locate through local grounding records;
+- exact substring validation applies only to `SpeechReference.quote` through local grounding records;
+- learner-visible contribution content is not required to be a speech substring; exact claimed speech references and all claimed state references must validate;
 - relation/transform may use historical evidence plus the current batch;
-- every non-KEEP step must contain at least one trigger reference from checkpoints it consumes now;
-- historical evidence cannot establish a new Board object without a current trigger;
+- non-KEEP steps remain bounded by the current request's ordered checkpoint consumption; domain knowledge is not required to manufacture a speech reference;
+- historical evidence and current state may inform a new Board object only after current evidence has triggered deliberation;
 - critical ASR warning defaults to KEEP unless clear evidence resolves the ambiguity.
 
 ### KEEP semantics
@@ -856,10 +889,11 @@ KEEP
 → active cue unchanged
 
 SET
-→ validate source/kind
+→ validate contribution mode, provenance, and permitted kind
 → replace current visible cue
 → NOTE receives deterministic expiry
-→ QUESTION/TASK/HINT do not auto-expire
+→ QUESTION, TASK, and HINT do not auto-expire
+→ unresolved TASK/QUESTION require explicit resolution before replacement
 
 RESOLVE_CURRENT
 → require active cue
@@ -894,19 +928,19 @@ BoardLayout   TeachingCueLayer
 Hard rules:
 
 - canonical/provisional transcript appears only on explicit debug surfaces;
-- normal session never auto-creates canonical `CaptionEpisode` fallback;
 - without presentation, Board is the primary canvas;
 - with presentation, presentation remains primary and Board uses the essential safe region;
+- Board layout makes the active contribution primary, support secondary, and retained context visibly subordinate;
+- Board density and safe-region allocation are deterministic from presentation mode and bounded content, never runtime measurement;
 - Board and Cue are sibling channels with independent state/lifecycle;
 - Board update does not clear Cue;
 - Cue resolution does not clear Board;
-- planner failure preserves last valid state;
-- no prior state + planner failure means visual quiet;
-- normal live session removes Space-to-lock-caption behaviour;
+- interpretation failure preserves last valid state;
+- no prior state + interpretation failure means visual quiet;
 - accepted backlog batch renders final state once rather than flickering through intermediate steps;
 - render events include resulting Board/Cue revisions.
 
-Old Caption runtime remains available to FX Lab, Showcase, and renderer tests. FOCUS/RELATE/TRANSFORM representation assets may be reused by Board compilation, but their lifetime is controlled by Teaching State rather than a fixed five-second episode.
+Structured notation is a reusable bounded primitive: EquationSpec and ReactionSpec compile deterministically through KaTeX/mhchem, validate their inputs before compilation, and never accept arbitrary model-authored TeX. Notation failure is isolated from Teaching State.
 
 ---
 
@@ -924,7 +958,9 @@ sessionId
 → canonicalSpanId + revision
 → checkpointId
 → interpretationRequestId
+→ providerResponseId
 → interpretationId / stepIndex
+→ lessonEventId / sequence
 → BoardRevision / CueRevision
 → boardItemId / cueId
 → renderId
@@ -940,6 +976,12 @@ Evidence:
 
 Interpretation:
 
+- `interpretation.request_snapshot`
+- `provider.contract_snapshot`
+- `provider.request_snapshot`
+- `provider.response_snapshot`
+- `interpretation.proposal_normalized`
+- `interpretation.validation_result`
 - `interpretation.request_started`
 - `interpretation.request_completed`
 - `interpretation.request_timeout`
@@ -975,6 +1017,8 @@ Context/cost:
 - provider/server/browser latency.
 
 `canonical_speech_mounted` must not be a normal successful learner-render reason after `LIVE-STATE`.
+
+Audit snapshots are complete, typed, and credential-free: the domain request (including its full historical timeline), provider contract/envelope, raw structured output and transport text, normalized proposal, validation result, persisted lesson event, Teaching State before/after, and learner-rendered state are retained with canonical SHA-256 digests. Those digests are recomputable from the exact persisted sanitized DTO. Generic diagnostic payload limits never truncate those snapshots. The Lesson Event Log remains replay authority and domain truth; the audit trace remains observational evidence.
 
 ---
 
@@ -1024,7 +1068,7 @@ At minimum include:
 13. NOTE expiry while Board request is in flight;
 14. several pending checkpoints produce ordered steps;
 15. task issued and resolved inside one backlog batch;
-16. planner failure leaves checkpoint pending;
+16. interpretation failure leaves checkpoint pending;
 17. reload → event replay → identical state;
 18. new speech during request → current result remains valid;
 19. presentation mode change without teaching-state revision;
@@ -1034,8 +1078,8 @@ Critical gates:
 
 | Metric | Gate |
 |---|---:|
-| Ungrounded learner-visible content | 0 |
-| Invented HINT / answer | 0 |
+| Invalid claimed provenance | 0 |
+| Gratuitous learner-action replacement / answer leakage | 0 |
 | Corrected error remains Active/Retained | 0 |
 | Persistent TASK/QUESTION resolves early | 0 |
 | Unconsumed checkpoint loss | 0 |
@@ -1045,6 +1089,8 @@ Critical gates:
 | Structured parse | 100% |
 | State transition accuracy | `SEMANTICS` target ≥95% |
 | Cue lifecycle accuracy | `SEMANTICS` target ≥95% |
+| Subject-matter correctness / ASR recovery | `SEMANTICS` target ≥95% |
+| Augmentation precision / false-correction rate / answer leakage | locked `SEMANTICS` gates |
 | Successful provider response accepted or explicitly channel-conflicted | near 100% |
 | Trace volume | <1 MB/min |
 | Normal raw transcript mounts | 0 |
@@ -1131,8 +1177,6 @@ Implement:
 - `/session` uses `TeachingSurfaceLayer`;
 - reuse `BoardLayout` and `TeachingCueLayer`;
 - remove canonical fallback from normal learner surface;
-- remove normal Space caption lock;
-- retain old Caption runtime only as laboratory;
 - full domain/state/render correlation.
 
 #### `LIVE-STATE` hard gate
@@ -1199,7 +1243,7 @@ After state and grounding are stable:
 - bounded EquationSpec / ReactionSpec;
 - speech evidence → structured object;
 - deterministic compiler → existing KaTeX/mhchem renderer;
-- no planner-authored TeX;
+- no interpreter-authored TeX;
 - notation failure isolated from Board/Cue state.
 
 ---
@@ -1271,7 +1315,7 @@ Future PR descriptions must cite affected acceptance IDs.
 
 Current phase rejects:
 
-1. recent six spans + active caption as the primary lesson context;
+1. a small rolling transcript as the primary lesson context;
 2. calling the LLM every 2.5 seconds regardless of evidence boundaries;
 3. aborting current work whenever newer speech arrives;
 4. latest-only pending coalescing that drops earlier unconsumed evidence;
@@ -1280,7 +1324,7 @@ Current phase rejects:
 7. raw model result as domain truth;
 8. `previous_response_id` as the only lesson memory;
 9. single-lesson rolling summary/RAG before evidence demands it;
-10. rolling transcript learner fallback on planner failure;
+10. rolling transcript learner fallback on interpretation failure;
 11. diagnostic trace as the product event store;
 12. declaring live-product PASS from CI green, fixture screenshots, or component tests alone.
 
@@ -1300,9 +1344,9 @@ Current phase rejects:
 | Board Support limit | 2 |
 | Board Retained limit | 2 |
 | Visible active cue | 1 |
-| QUESTION/TASK/HINT expiry | none |
+| HINT expiry | none |
 | NOTE expiry | deterministic 4s |
-| Free paraphrase | disabled |
+| RECONSTRUCT / REPRESENT / AUGMENT / CORRECT / INITIATE | enabled within bounded schema |
 | Planner failure fallback | last state or visual quiet |
 | Single-lesson retrieval/summary | disabled |
 
@@ -1312,4 +1356,4 @@ These are engineering defaults, not immutable product truths. If evaluation cont
 
 ## 20. One-sentence system definition
 
-> CueLayer preserves a lesson's speech evidence and accepted interpretations, deterministically materializes current Teaching State, asks the LLM only to interpret still-unprocessed evidence as validated ordered deltas, and renders the resulting state through a stable Teaching Board and Teaching Cue.
+> CueLayer preserves a lesson's speech evidence and accepted contribution provenance, deterministically materializes current Teaching State, asks the LLM only to interpret still-unprocessed evidence as validated ordered deltas, and renders the resulting state through a stable Teaching Board and Teaching Cue.

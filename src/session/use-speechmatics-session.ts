@@ -3,8 +3,9 @@ import type { RealtimeTranscriptionConfig } from "@speechmatics/real-time-client
 import { useRealtimeEventListener, useRealtimeTranscription } from "@speechmatics/real-time-client-react";
 import { getAudioDevicesStore, useAudioDevices, usePCMAudioListener, usePCMAudioRecorderContext } from "@speechmatics/browser-audio-input-react";
 import { speechEventFromSpeechmatics } from "./speechmatics-adapter";
-import type { SpeechEvent } from "./speech-types";
+import type { SpeechEvent, SpeechRunId } from "./speech-types";
 import { AudioDeliveryMonitor } from "./audio-delivery-window";
+import { createSpeechmaticsDrainBarrier, drainSpeechmaticsStop, type SpeechmaticsDrainBarrier } from "./speechmatics-stop-drain";
 import { traceDraft, type SessionTraceDraft, type SessionTracePayloads, type TraceEmitter } from "../trace/contracts";
 
 const TOKEN_ENDPOINT = "/api/speechmatics/token";
@@ -109,8 +110,8 @@ async function requestRealtimeToken(): Promise<string> {
 }
 
 type SpeechmaticsSessionCallbacks = {
-  onEvent: (runId: number, event: SpeechEvent) => void;
-  onReady: (runId: number) => void;
+  onEvent: (runId: SpeechRunId, event: SpeechEvent) => void;
+  onReady: (runId: SpeechRunId) => void;
   onTrace?: TraceEmitter;
 };
 
@@ -127,8 +128,9 @@ function wordBounds(event: Exclude<SpeechEvent, { kind: "error" }>) {
  * forwarding and cleanup; CueLayer supplies run identity and canonical events.
  */
 export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: SpeechmaticsSessionCallbacks) {
-  const activeRunIdRef = useRef<number | null>(null);
+  const activeRunIdRef = useRef<SpeechRunId | null>(null);
   const stoppingRef = useRef(false);
+  const drainBarrierRef = useRef<SpeechmaticsDrainBarrier | undefined>(undefined);
   const sawRecordingRef = useRef(false);
   const providerMessageSequenceRef = useRef(0);
   const deliveryMonitorRef = useRef<AudioDeliveryMonitor | undefined>(undefined);
@@ -166,7 +168,7 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
     deliveryMonitorRef.current = undefined;
   }, [emitTrace]);
 
-  const startDeliveryMonitor = useCallback((runId: number) => {
+  const startDeliveryMonitor = useCallback((runId: SpeechRunId) => {
     stopDeliveryMonitor(false);
     const monitor = new AudioDeliveryMonitor(runId, Date.now());
     deliveryMonitorRef.current = monitor;
@@ -179,14 +181,14 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
     }, 1_000);
   }, [emitTrace, stopDeliveryMonitor]);
 
-  const lifecycle = useCallback((runId: number, state: SessionTracePayloads["speech.lifecycle"]["state"], details: Omit<SessionTracePayloads["speech.lifecycle"], "runId" | "state"> = {}) => {
+  const lifecycle = useCallback((runId: SpeechRunId, state: SessionTracePayloads["speech.lifecycle"]["state"], details: Omit<SessionTracePayloads["speech.lifecycle"], "runId" | "state"> = {}) => {
     emitTrace(traceDraft("speech.lifecycle", { runId, state, ...details }, {
       priority: "critical",
       correlation: { rootId: `speech:${runId}`, runId },
     }));
   }, [emitTrace]);
 
-  const failRun = useCallback((runId: number, code: string, message: string) => {
+  const failRun = useCallback((runId: SpeechRunId, code: string, message: string) => {
     if (activeRunIdRef.current !== runId) return;
     activeRunIdRef.current = null;
     stoppingRef.current = true;
@@ -200,6 +202,11 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
   const onProviderMessage = useCallback(({ data }: { data: Parameters<typeof speechEventFromSpeechmatics>[0] }) => {
     const runId = activeRunIdRef.current;
     if (runId === null) return;
+    if (data.message === "EndOfTranscript") {
+      const barrier = drainBarrierRef.current;
+      if (barrier?.runId === runId) barrier.observeEndOfTranscript();
+      return;
+    }
     if (data.message === "AudioAdded") {
       const seqNo = (data as { seq_no?: unknown }).seq_no;
       if (typeof seqNo === "number") deliveryMonitorRef.current?.observe(seqNo);
@@ -218,7 +225,7 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
     } else {
       emitTrace(traceDraft("speech.final_received", { runId, transcript: event.text, wordCount: event.words.length, ...wordBounds(event) }, { priority: "critical", correlation }));
     }
-    onEvent(runId, event);
+    onEvent(runId, event.kind === "committed" ? { ...event, speechEventId } : event);
   }, [emitTrace, failRun, onEvent]);
 
   useRealtimeEventListener("receiveMessage", onProviderMessage);
@@ -241,9 +248,10 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
     }
   }, [failRun, isRecording]);
 
-  const start = useCallback(async (runId: number) => {
+  const start = useCallback(async (runId: SpeechRunId) => {
     activeRunIdRef.current = runId;
     stoppingRef.current = false;
+    drainBarrierRef.current = undefined;
     sawRecordingRef.current = false;
     providerMessageSequenceRef.current = 0;
     lifecycle(runId, "starting");
@@ -291,14 +299,33 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
 
   const stop = useCallback(async () => {
     const runId = activeRunIdRef.current;
-    activeRunIdRef.current = null;
-    stoppingRef.current = true;
-    stopRecording();
-    try { await stopTranscription(); } catch { /* Official client already closed the socket. */ }
-    stopDeliveryMonitor(true);
-    stoppingRef.current = false;
-    if (runId !== null) lifecycle(runId, "stopped");
-  }, [lifecycle, stopDeliveryMonitor, stopRecording, stopTranscription]);
+    if (runId === null) return;
+    const barrier = createSpeechmaticsDrainBarrier(runId);
+    drainBarrierRef.current = barrier;
+    try {
+      await drainSpeechmaticsStop({
+        activeRunId: activeRunIdRef,
+        stopping: stoppingRef,
+        stopRecording,
+        stopTranscription,
+        barrier,
+        finish: (runId) => {
+          stopDeliveryMonitor(true);
+          emitTrace(traceDraft("speech.drain_completed", { runId }, { priority: "critical", correlation: { rootId: `speech:${runId}`, runId } }));
+          lifecycle(runId, "stopped");
+        },
+        fail: (runId, error) => {
+          stopDeliveryMonitor(true);
+          const code = "speech-drain-incomplete";
+          emitTrace(traceDraft("speech.drain_incomplete", { runId, code, message: error.message }, { priority: "critical", correlation: { rootId: `speech:${runId}`, runId } }));
+          lifecycle(runId, "failed", { code, message: error.message });
+          onEvent(runId, { kind: "error", code, message: error.message });
+        },
+      });
+    } finally {
+      if (drainBarrierRef.current === barrier) drainBarrierRef.current = undefined;
+    }
+  }, [emitTrace, lifecycle, onEvent, stopDeliveryMonitor, stopRecording, stopTranscription]);
 
   const pause = useCallback(() => {
     mute();

@@ -16,7 +16,7 @@ export class AudioDeliveryMonitor {
   private runMissingSequenceCount = 0;
   private runDuplicateOrOutOfOrderCount = 0;
 
-  constructor(readonly runId: number, readonly runStartedAtMs = Date.now()) {
+  constructor(readonly runId: SpeechRunId, readonly runStartedAtMs = Date.now()) {
     this.windowStartedAtMs = runStartedAtMs;
   }
 
@@ -77,3 +77,4 @@ export class AudioDeliveryMonitor {
     };
   }
 }
+import type { SpeechRunId } from "./speech-types";

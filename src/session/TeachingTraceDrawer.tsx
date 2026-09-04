@@ -1,10 +1,8 @@
 import { useState } from "react";
-import type { TeachingTraceEvent, TeachingTraceState } from "./teaching-trace";
-import { SYNTHETIC_INTENT_KINDS, type SyntheticIntentKind } from "./dev-semantic-fixtures";
 import type { SessionTraceEvent } from "../trace/contracts";
+import type { TraceArchiveSession } from "../trace/store";
 
-type LegacyProps = { trace: TeachingTraceState; onInject?(kind: SyntheticIntentKind): void };
-type DurableProps = {
+type TeachingTraceDrawerProps = {
   sessionId: string;
   events: SessionTraceEvent[];
   status: string;
@@ -12,20 +10,16 @@ type DurableProps = {
   droppedCount: number;
   error?: string;
   loading?: boolean;
+  sessions: TraceArchiveSession[];
+  selectedSessionId: string;
+  viewingArchive: boolean;
   onReload(): void;
   onExport(): void;
-  onInject?(kind: SyntheticIntentKind): void;
+  onSelectSession(sessionId: string): void;
 };
 
 function clock(timestamp: number | string) {
   return new Date(timestamp).toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 3 });
-}
-
-function legacyLabel(event: TeachingTraceEvent) {
-  const revision = event.spanRevision === undefined ? "" : `@${event.spanRevision}`;
-  const identity = event.cueId ?? (event.spanId ? `${event.spanId}${revision}` : undefined) ?? event.finalId ?? event.commitId ?? event.segmentId ?? event.traceId;
-  const latency = event.latencyMs === undefined ? "" : ` · ${event.latencyMs}ms`;
-  return `${clock(event.timestamp)} · ${event.stage.toUpperCase()} ${event.decision.toUpperCase()} · ${identity}${latency}`;
 }
 
 function durableLine(event: SessionTraceEvent) {
@@ -38,13 +32,6 @@ function durableLine(event: SessionTraceEvent) {
   return `${clock(event.occurredAt)} · ${event.type}${state}${decision}${identity ? ` · ${identity}` : ""}${latency}${transcript}`;
 }
 
-function Injector({ onInject }: { onInject?(kind: SyntheticIntentKind): void }) {
-  return onInject ? <div className="semantic-injector" aria-label="Synthetic semantic cue injector">
-    <span>Inject downstream:</span>
-    {SYNTHETIC_INTENT_KINDS.map((kind) => <button type="button" key={kind} onClick={() => onInject(kind)}>{kind}</button>)}
-  </div> : null;
-}
-
 function DurableEventDetails({ event }: { event: SessionTraceEvent }) {
   const [open, setOpen] = useState(false);
   return <details className="teaching-trace-event" onToggle={(toggleEvent) => setOpen(toggleEvent.currentTarget.open)}>
@@ -53,35 +40,29 @@ function DurableEventDetails({ event }: { event: SessionTraceEvent }) {
   </details>;
 }
 
-function LegacyTraceDrawer({ trace, onInject }: LegacyProps) {
-  return <details className="teaching-trace-drawer" open>
-    <summary>Trace · {trace.events.length}/{trace.limit} events</summary>
-    <Injector onInject={onInject} />
-    {trace.events.length ? <div className="teaching-trace-events">
-      {[...trace.events].reverse().map((event) => <details className="teaching-trace-event" key={event.id}>
-        <summary>{legacyLabel(event)}</summary>
-        <pre>{JSON.stringify(event, null, 2)}</pre>
-      </details>)}
-    </div> : <p>No trace events yet. Inject a semantic cue above, or enable the microphone and wait for a Speechmatics final.</p>}
-  </details>;
+function sessionOptionLabel(session: TraceArchiveSession) {
+  if (!session.createdAt) return `${session.sessionId} · current active`;
+  const completedAt = session.completedAt ? ` · completed ${clock(session.completedAt)}` : "";
+  return `${session.sessionId} · ${session.status} · created ${clock(session.createdAt)}${completedAt} · ${session.path}`;
 }
 
-function DurableTraceDrawer({ sessionId, events, status, pendingCount, droppedCount, error, loading, onReload, onExport, onInject }: DurableProps) {
+export function TeachingTraceDrawer({ sessionId, events, status, pendingCount, droppedCount, error, loading, sessions, selectedSessionId, viewingArchive, onReload, onExport, onSelectSession }: TeachingTraceDrawerProps) {
+  const currentSession = sessions.find((session) => session.sessionId === sessionId)
+    ?? { sessionId, status: "active" as const, createdAt: "", updatedAt: "", appVersion: "", environment: "", path: "" };
+  const selectableSessions = [currentSession, ...sessions.filter((session) => session.sessionId !== sessionId && session.status !== "active")];
   return <details className="teaching-trace-drawer" open>
-    <summary>Persistent trace · {events.length} loaded · {status} · {sessionId}</summary>
-    <div className="semantic-injector" aria-label="Persistent trace actions">
+    <summary>Persistent trace · {events.length} loaded · {viewingArchive ? "archived read-only" : status} · {selectedSessionId}</summary>
+    <div className="trace-actions" aria-label="Persistent trace actions">
+      <label>Trace session: <select value={selectedSessionId} onChange={(event) => onSelectSession(event.target.value)}>
+        {selectableSessions.map((session) => <option key={session.sessionId} value={session.sessionId}>{sessionOptionLabel(session)}</option>)}
+      </select></label>
       <button type="button" onClick={onReload} disabled={loading}>{loading ? "Loading…" : "Reload trace"}</button>
       <button type="button" onClick={onExport}>Export JSONL</button>
-      <span>{pendingCount} pending · {droppedCount} dropped</span>
+      {viewingArchive ? <span>Archived trace · read-only</span> : <span>{pendingCount} pending · {droppedCount} dropped</span>}
     </div>
     {error ? <p className="trace-error" role="status">Trace degraded: {error}</p> : null}
-    <Injector onInject={onInject} />
     {events.length ? <div className="teaching-trace-events">
       {[...events].reverse().map((event) => <DurableEventDetails event={event} key={event.eventId} />)}
-    </div> : <p>No persisted events yet. Enable the microphone or inject a semantic cue.</p>}
+    </div> : <p>No persisted events yet. Enable the microphone and wait for a Speechmatics final.</p>}
   </details>;
-}
-
-export function TeachingTraceDrawer(props: LegacyProps | DurableProps) {
-  return "trace" in props ? <LegacyTraceDrawer {...props} /> : <DurableTraceDrawer {...props} />;
 }

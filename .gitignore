@@ -3,6 +3,8 @@ dist/
 .env*
 !.env.example
 artifacts/
+.cuelayer/
+.vercel/
 skills/9701-cuecaption/eval/generated/
 *.tsbuildinfo
 .DS_Store

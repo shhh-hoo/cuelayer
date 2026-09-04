@@ -1,7 +1,7 @@
 import packageMetadata from "../../package.json";
 import { traceDraft, type SessionTraceDraft, type SessionTraceEvent } from "./contracts";
 import { createTraceSessionId } from "./session-identity";
-import { LocalTraceStore, type TraceSessionMetadata } from "./store";
+import { LocalTraceStore, type TraceArchiveSession, type TraceSessionMetadata } from "./store";
 import { TraceWriter, type TraceWriterSnapshot } from "./writer";
 
 export type SessionTraceRuntimeOptions = {
@@ -27,6 +27,7 @@ export class SessionTraceRuntime {
   readonly sourceInstanceId: string;
   readonly replacedSessionId?: string;
   private completed = false;
+  private completing = false;
   private closed = false;
 
   private constructor(
@@ -93,7 +94,7 @@ export class SessionTraceRuntime {
   }
 
   emit(draft: SessionTraceDraft) {
-    if (this.closed || this.completed) return;
+    if (this.closed || this.completed || this.completing) return;
     this.writer.emit(draft);
   }
 
@@ -108,6 +109,18 @@ export class SessionTraceRuntime {
     return this.store.readRecent(this.sessionId, limit);
   }
 
+  async listTraceSessions(): Promise<TraceArchiveSession[]> {
+    return this.store.listSessions();
+  }
+
+  async readTraceSession(sessionId: string, limit = 240): Promise<SessionTraceEvent[]> {
+    return this.store.readRecent(sessionId, limit);
+  }
+
+  async exportTraceSessionJsonl(sessionId: string): Promise<Blob> {
+    return this.store.exportJsonlBlob(sessionId);
+  }
+
   async exportJsonlBlob() {
     try { await this.writer.flush(); } catch { /* Export the durable prefix and keep degradation visible. */ }
     return this.store.exportJsonlBlob(this.sessionId);
@@ -115,6 +128,10 @@ export class SessionTraceRuntime {
 
   async complete(reason: string) {
     if (this.closed || this.completed) return;
+    this.completing = true;
+    // Drain every earlier event before sealing the trace, then make session.ended
+    // the sole final durable event.
+    await this.writer.flush();
     this.writer.emit(traceDraft("session.ended", { reason }, { priority: "critical" }));
     await this.writer.flush();
     await this.store.completeSession(this.sessionId);

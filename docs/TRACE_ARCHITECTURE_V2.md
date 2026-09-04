@@ -1,4 +1,4 @@
-# Durable Session Trace v2
+# Durable Session Trace v3 (v2 archives retained)
 
 ## Purpose
 
@@ -17,7 +17,7 @@ No trace write, PCM scan, allocation, serialization, React update, IndexedDB tra
 ## Runtime path
 
 ```text
-speech / planner / renderer fact
+speech / interpretation / learner-surface fact
             ↓
       TraceWriter.emit
   assign source-local sequence
@@ -34,11 +34,12 @@ React is not the trace message bus. Normal `/session` retains no durable event a
 
 ## Event policy
 
-- Critical: session lifecycle, speech final, canonical final/span, planner gate/outcome, renderer activation.
+- Critical: session lifecycle, speech final, canonical final/span, interpretation outcome, learner-surface render.
 - Raw: Speechmatics partial transcript snapshots. Rapid revisions for the same speech run are coalesced before persistence.
 - Aggregate: one-second and final-run `AudioAdded` delivery summaries.
 - Queue pressure is never silent. Dropped evidence produces a durable `trace.gap` event when storage recovers.
-- Payload projection is typed. A final sanitization boundary removes credentials, binary values, PCM, audio-shaped values, circular references, and excessive depth before IndexedDB receives a batch.
+- Ordinary diagnostic payloads are bounded. Typed audit snapshots are complete: they retain the full interpretation request/timeline, provider contract/envelope/output, normalized proposal, validation fact, and Teaching State snapshots. Both paths redact credentials and omit binary/audio media.
+- Trace volume is measured and reported, but no arbitrary MiB/min cap may silently discard a critical AI-decision event. High-frequency partial and transport telemetry remains coalesced.
 
 ## Session lifecycle
 
@@ -47,7 +48,7 @@ React is not the trace message bus. Normal `/session` retains no durable event a
 - Creating one session does not complete another session or another tab.
 - A completed session is sealed against later appends. Reloading its URL creates a replacement session ID while preserving the completed trace for export.
 - The current session and five most recent completed sessions are retained.
-- The v2 database uses a new name and performs no expensive migration of earlier experimental trace data.
+- Schema v3 is additive. Existing v2 JSONL remains exportable/readable as legacy records; no archive is destructively migrated.
 
 ## Merge gates
 
@@ -59,3 +60,13 @@ React is not the trace message bus. Normal `/session` retains no durable event a
 6. IndexedDB denial, quota failure, or blocked upgrade cannot stop speech, planning, or rendering.
 7. JSONL explicitly contains `trace.gap` if queue pressure discarded evidence.
 8. Completed sessions remain readable/exportable and cannot accept new events.
+
+## Full-cycle AI audit contract
+
+Each interpretation is correlated by request, checkpoint, lesson-event, and render identities in this durable order: `interpretation.request_snapshot` → `provider.contract_snapshot` → `provider.request_snapshot` → `provider.response_snapshot` → `interpretation.proposal_normalized` → `interpretation.validation_result` → `interpretation.step_accepted` → domain transition facts → `teaching_surface.rendered`.
+
+The trace records the exact teaching-domain request, credential-free OpenAI request envelope, actual provider contract, raw structured output, normalized proposal, deterministic validation outcome, persisted lesson event identity, Teaching State before/after, and the plain state supplied to the learner surface. Every semantic audit fact has a canonical SHA-256 digest. Request, provider request/response, validation-result, lesson-event, and state digests are calculated over the exact safe DTO after the typed audit sanitizer has redacted secrets and omitted media—the same representation persisted to JSONL.
+
+Provider transport and structured parsing are distinct observable stages. A safe response DTO (including response ID/model/status/usage and raw text) is captured immediately after transport succeeds. JSON/schema parsing and normalization then run against that captured response; their failures retain every response fact that was already available. Each request has exactly one terminal validation classification: accepted, rejected, provider error, structured parse error, or normalization error.
+
+The Lesson Event Log and audit trace have different jobs. The Lesson Event Log is domain truth and replay authority. The audit trace is the observable AI decision lifecycle, never the domain source of truth.

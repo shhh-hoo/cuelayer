@@ -1,17 +1,48 @@
-export const TRACE_SCHEMA_VERSION = 2 as const;
+import type { SpeechRunId } from "../session/speech-types.ts";
+import type { LessonEvent, TeachingInterpretationProposal, TeachingInterpretationRequest, TeachingStateSnapshot } from "../lesson-stream/contracts.ts";
+import type { JsonValue } from "./audit.ts";
+import type { ProviderContractSnapshot, ProviderRequestEnvelope, ProviderResponseSnapshot } from "../lesson-stream/audit-contracts.ts";
+
+// V3 is additive. V2 JSONL remains readable because event records are never migrated.
+export const TRACE_SCHEMA_VERSION = 3 as const;
 
 export type TracePriority = "critical" | "raw" | "aggregate";
 export type TraceSource = "browser" | "synthetic";
 
 export type TraceCorrelation = {
   rootId?: string;
-  runId?: number;
+  lessonSequence?: number;
+  runId?: SpeechRunId;
   speechEventId?: string;
   finalId?: string;
   spanId?: string;
   spanRevision?: number;
   plannerRequestId?: string;
+  checkpointId?: string;
+  interpretationId?: string;
+  lessonEventId?: string;
+  stepIndex?: number;
+  boardRevision?: number;
+  cueRevision?: number;
+  boardItemId?: string;
   cueId?: string;
+  renderId?: string;
+};
+
+export type AcceptedContributionAudit = {
+  board: {
+    action: string;
+    contribution?: { mode: string; content: string; provenance: { basis: string; speechRefs: Array<{ checkpointId: string; quote: string }>; stateRefs: Array<{ kind: string; id: string }> } };
+    support: Array<{ mode: string; content: string; provenance: { basis: string; speechRefs: Array<{ checkpointId: string; quote: string }>; stateRefs: Array<{ kind: string; id: string }> } }>;
+    invalidatesBoardItemIds: string[];
+  };
+  cue: {
+    action: string;
+    kind?: string;
+    contribution?: { mode: string; content: string; provenance: { basis: string; speechRefs: Array<{ checkpointId: string; quote: string }>; stateRefs: Array<{ kind: string; id: string }> } };
+    resolutionEvidence?: { checkpointId: string; quote: string };
+  };
+  warnings: Array<{ code: string; detail?: string }>;
 };
 
 export type SessionTracePayloads = {
@@ -30,7 +61,7 @@ export type SessionTracePayloads = {
   "session.ended": { reason: string };
   "presentation.state_changed": { previousStatus?: string; status: string; message?: string };
   "speech.lifecycle": {
-    runId: number;
+    runId: SpeechRunId;
     state:
       | "starting"
       | "browser_audio_ready"
@@ -48,20 +79,22 @@ export type SessionTracePayloads = {
     message?: string;
   };
   "speech.partial": {
-    runId: number;
+    runId: SpeechRunId;
     transcript: string;
     wordCount: number;
     coalescedRevisions?: number;
   };
   "speech.final_received": {
-    runId: number;
+    runId: SpeechRunId;
     transcript: string;
     wordCount: number;
     startMs?: number;
     endMs?: number;
   };
+  "speech.drain_completed": { runId: SpeechRunId };
+  "speech.drain_incomplete": { runId: SpeechRunId; code: string; message: string };
   "speech.transport_window": {
-    runId: number;
+    runId: SpeechRunId;
     scope: "window" | "run";
     windowStartedAt: string;
     windowEndedAt: string;
@@ -73,13 +106,14 @@ export type SessionTracePayloads = {
     final: boolean;
   };
   "canonical.final_committed": {
-    runId: number;
+    runId: SpeechRunId;
     finalId: string;
+    speechEventId?: string;
     transcript: string;
     wordCount: number;
   };
   "canonical.span_changed": {
-    runId: number;
+    runId: SpeechRunId;
     spanId: string;
     revision: number;
     status: "open" | "closed";
@@ -87,54 +121,45 @@ export type SessionTracePayloads = {
     transcript: string;
     sourceFinalIds: string[];
   };
-  "planner.gate": {
-    runId: number;
-    spanId: string;
-    spanRevision: number;
-    decision: "run" | "skip";
-    reason: string;
-    requestId?: number;
+  "evidence.checkpoint_opened": { runId: SpeechRunId; spanId: string; spanRevision: number };
+  "evidence.checkpoint_committed": { runId: SpeechRunId; checkpointId: string; lessonSequence: number; sourceFinalIds: string[]; warningCodes: string[] };
+  "evidence.checkpoint_pending": { checkpointId: string; pendingCount: number; oldestPendingAgeMs: number; estimatedTokens: number };
+  "interpretation.request_started": { requestId: string; checkpointIds: string[]; pendingCount: number; projectedInputTokens: number };
+  "interpretation.request_snapshot": { requestId: string; sessionId: string; policyVersion: string; request: TeachingInterpretationRequest; requestDigest: string; requestBaseState: TeachingStateSnapshot; requestBaseStateDigest: string; checkpointIds: string[]; baseBoardRevision: number; baseCueRevision: number };
+  "provider.contract_snapshot": { contractDigest: string; requestedModel: string; serviceTier?: string; temperature: number; reasoningEffort: string; maxOutputTokens: number; policyVersion: string; systemPolicy: string; systemPolicyDigest: string; structuredOutputSchema: JsonValue; structuredOutputSchemaDigest: string; providerContract: ProviderContractSnapshot };
+  "provider.request_snapshot": { requestId: string; providerRequest: ProviderRequestEnvelope; providerRequestDigest: string; providerContractDigest: string; domainRequestDigest: string; providerSnapshotUnavailable?: "client_abort" | "provider_error" };
+  "provider.response_snapshot": { requestId: string; providerResponse: ProviderResponseSnapshot; providerResponseDigest: string };
+  "interpretation.proposal_normalized": { requestId: string; rawStructuredOutputDigest: string; normalizedProposal: TeachingInterpretationProposal; normalizedProposalDigest: string };
+  "interpretation.validation_result": { requestId: string; status: "accepted" | "rejected" | "provider_error" | "structured_parse_error" | "normalization_error"; reason?: string; normalizedProposal?: TeachingInterpretationProposal; normalizedProposalDigest?: string; boardConflict?: boolean; cueConflict?: boolean; acceptedStepCount?: number; requestBaseState: TeachingStateSnapshot; validationState: TeachingStateSnapshot; currentBoardRevision: number; currentCueRevision: number; validationDigest: string };
+  "audit.unavailable": { requestId: string; stage: "provider_contract" | "provider_response"; reason: "client_abort" | "network_error" | "server_audit_unavailable" };
+  "interpretation.request_completed": { requestId: string; latencyMs: number; inputTokens?: number; cachedInputTokens?: number; outputTokens?: number; estimatedCostUsd?: number; costStatus: "estimated" | "rates_unconfigured" };
+  "interpretation.request_timeout": { requestId: string; latencyMs: number; pendingCount: number };
+  "interpretation.output_rejected": { requestId: string; reason: string; pendingCount: number };
+  "interpretation.channel_conflict": { requestId: string; channel: "board" | "cue" };
+  "interpretation.step_accepted": { requestId: string; interpretationId: string; lessonEventId?: string; lessonEventSequence?: number; acceptedLessonEvent?: Extract<LessonEvent, { type: "interpretation.step_accepted" }>; acceptedLessonEventDigest?: string; actualModel?: string; stepIndex: number; checkpointIds: string[]; boardAction: string; cueAction: string; boardMode?: string; boardSpeechRefCount?: number; cueMode?: string; cueSpeechRefCount?: number; acceptedContribution: AcceptedContributionAudit; stateBefore: TeachingStateSnapshot; stateBeforeDigest: string; stateAfter: TeachingStateSnapshot; stateAfterDigest: string };
+  "board.keep": { reason: string };
+  "board.active_set": { boardItemId: string; continuity: string };
+  "board.support_added": { boardItemId: string; supportId: string };
+  "board.context_retained": { boardItemIds: string[] };
+  "board.context_retired": { boardItemIds: string[] };
+  "board.content_invalidated": { boardItemIds: string[] };
+  "teaching_cue.keep": Record<string, never>;
+  "teaching_cue.set": { cueId: string; kind: string };
+  "teaching_cue.resolved": { cueId: string; reason: string };
+  "teaching_cue.expired": { cueId: string };
+  "teaching_surface.rendered": { renderId: string; boardRevision: number; cueRevision: number; presentationMode: string; density?: string; state?: TeachingStateSnapshot; stateDigest?: string; activeBoardItemId?: string; activeCueId?: string; origin?: { requestId: string; interpretationId: string; lessonEventId: string; stepIndex: number } };
+  "teaching_surface.layout_changed": { presentationMode: string; density: string };
+  "teaching_surface.render_failed": { message: string };
+  "context_projection.created": {
+    requestId: string;
+    policyTokens: number;
+    timelineTokens: number;
+    stateTokens: number;
+    newEvidenceTokens: number;
+    projectedInputTokens: number;
+    pendingCount: number;
+    oldestPendingAgeMs: number;
   };
-  "planner.started": {
-    runId: number;
-    requestId: number;
-    spanId: string;
-    spanRevision: number;
-    input: unknown;
-  };
-  "planner.completed": {
-    runId: number;
-    requestId: number;
-    spanId: string;
-    spanRevision: number;
-    latencyMs: number;
-    decision: unknown;
-  };
-  "planner.aborted": {
-    runId: number;
-    requestId: number;
-    spanId: string;
-    spanRevision: number;
-    latencyMs: number;
-    reason: string;
-  };
-  "planner.failed": {
-    runId: number;
-    requestId: number;
-    spanId: string;
-    spanRevision: number;
-    latencyMs: number;
-    message: string;
-  };
-  "renderer.activated": {
-    runId: number;
-    episodeId: string;
-    captionText: string;
-    displayKind: string;
-    presentationMode?: string;
-    sourceSegmentIds: string[];
-  };
-  "renderer.expired": { episodeId: string };
   "trace.gap": {
     reason: "queue_pressure" | "initialization_pressure";
     dropped: Record<string, number>;
@@ -156,7 +181,7 @@ export type SessionTraceDraft<T extends SessionTraceEventType = SessionTraceEven
 
 export type SessionTraceEvent<T extends SessionTraceEventType = SessionTraceEventType> = {
   [K in T]: {
-    schemaVersion: typeof TRACE_SCHEMA_VERSION;
+    schemaVersion: typeof TRACE_SCHEMA_VERSION | 2;
     eventId: string;
     sessionId: string;
     sourceInstanceId: string;
@@ -220,6 +245,9 @@ export function prepareTraceEvent(
 const SECRET_KEY = /^(?:authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|token|jwt|cookie|credentials?|password|secret)$/i;
 const AUDIO_KEY = /^(?:audio(?:data|frames?|blob|buffer)?|pcm(?:data|frames?|buffer)?|microphone(?:data|frames?)?|recording|waveform|binary|blob|buffer)$/i;
 const SECRET_TEXT = /(?:bearer\s+[a-z0-9._~+/=-]+|sk-[a-z0-9_-]{8,}|eyJ[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+)/gi;
+const AUDIT_EVENT_TYPES = new Set<SessionTraceEventType>([
+  "interpretation.request_snapshot", "provider.contract_snapshot", "provider.request_snapshot", "provider.response_snapshot", "interpretation.proposal_normalized", "interpretation.validation_result", "interpretation.step_accepted", "teaching_surface.rendered",
+]);
 
 function isBinary(value: unknown): boolean {
   return value instanceof ArrayBuffer || ArrayBuffer.isView(value) || (typeof Blob !== "undefined" && value instanceof Blob);
@@ -247,8 +275,31 @@ export function sanitizeTraceValue(value: unknown, key = "payload", depth = 0, s
   return sanitized;
 }
 
+/** Known audit DTOs must be complete; only unsafe values are removed. */
+export function sanitizeAuditValue(value: unknown, key = "payload", seen = new WeakSet<object>()): unknown {
+  if (SECRET_KEY.test(key)) return "[REDACTED_SECRET]";
+  if (AUDIO_KEY.test(key) || isBinary(value)) return "[OMITTED_NON_TEXT_MEDIA]";
+  if (typeof value === "string") return value.replace(SECRET_TEXT, "[REDACTED_SECRET]");
+  if (value === null || typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof value === "undefined") return undefined;
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "function" || typeof value === "symbol") return "[OMITTED_UNSERIALIZABLE]";
+  if (Array.isArray(value)) return value.map((item) => sanitizeAuditValue(item, key, seen));
+  if (typeof value !== "object") return String(value);
+  if (seen.has(value)) return "[OMITTED_CIRCULAR_REFERENCE]";
+  seen.add(value);
+  const sanitized: Record<string, unknown> = {};
+  for (const [childKey, childValue] of Object.entries(value)) {
+    const child = sanitizeAuditValue(childValue, childKey, seen);
+    if (child !== undefined) sanitized[childKey] = child;
+  }
+  seen.delete(value);
+  return sanitized;
+}
+
 export function sanitizeTraceEvent(event: SessionTraceEvent): SessionTraceEvent {
-  return { ...event, payload: sanitizeTraceValue(event.payload) as SessionTraceEvent["payload"] } as SessionTraceEvent;
+  const sanitize = AUDIT_EVENT_TYPES.has(event.type) ? sanitizeAuditValue : sanitizeTraceValue;
+  return { ...event, payload: sanitize(event.payload) as SessionTraceEvent["payload"] } as SessionTraceEvent;
 }
 
 export function compareTraceEvents(left: SessionTraceEvent, right: SessionTraceEvent): number {

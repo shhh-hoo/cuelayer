@@ -11,11 +11,11 @@ describe("batched trace writer", () => {
     const writes: SessionTraceEvent[][] = [];
     const writer = writerFor(async (events) => { writes.push([...events]); });
     writer.emit(traceDraft("session.ended", { reason: "one" }));
-    writer.emit(traceDraft("renderer.expired", { episodeId: "two" }));
+    writer.emit(traceDraft("teaching_cue.expired", { cueId: "two" }));
     expect(writes).toEqual([]);
     await writer.flush();
     expect(writes).toHaveLength(1);
-    expect(writes[0]?.map((event) => event.type)).toEqual(["session.ended", "renderer.expired"]);
+    expect(writes[0]?.map((event) => event.type)).toEqual(["session.ended", "teaching_cue.expired"]);
     writer.close();
   });
 

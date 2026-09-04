@@ -6,15 +6,17 @@ import { createInitialSessionState } from "./session-state";
 import { createSessionPageReducer } from "./page-session-reducer";
 import { usePrepareSpeechmaticsAudioContext } from "./SpeechmaticsSessionProvider";
 import { speechStartFailureFrom, useSpeechmaticsSession } from "./use-speechmatics-session";
-import { useTeachingPlanner } from "./use-teaching-planner";
+import { useLiveTeaching } from "./use-live-teaching";
+import { useCanonicalSpeechSpanLifecycle } from "./use-canonical-speech-span-lifecycle";
+import { closeOpenCanonicalSpeechSpans } from "./canonical-speech";
 import { TeachingTraceDrawer } from "./TeachingTraceDrawer";
-import type { CaptionEpisode } from "../planner/contracts";
-import { createSyntheticSemanticFixture, type SyntheticIntentKind } from "./dev-semantic-fixtures";
-import type { PresentationMode } from "./presentation-mode";
 import { traceDraft } from "../trace/contracts";
+import { persistedAuditDigest } from "../trace/audit";
 import { useCanonicalTrace } from "../trace/use-canonical-trace";
 import { useSessionTrace } from "../trace/use-session-trace";
 import { useTraceViewer } from "../trace/use-trace-viewer";
+import type { BoardDensity } from "../teaching-cue/BoardLayout";
+import { stopCurrentSpeechRun } from "./session-speech-lifecycle";
 
 export function speechDebugEnabled(search: string) {
   return new URLSearchParams(search).getAll("debug").includes("speech");
@@ -26,36 +28,43 @@ export function developmentSpeechDebugEnabled(isDevelopment: boolean, search: st
 
 export function SessionPage() {
   const showSpeechDebug = speechDebugEnabled(window.location.search);
-  const developmentDebug = developmentSpeechDebugEnabled(import.meta.env.DEV, window.location.search);
   const trace = useSessionTrace({ observeStatus: showSpeechDebug });
   const traceViewer = useTraceViewer(trace, showSpeechDebug);
-  const pageReducer = useMemo(() => createSessionPageReducer(developmentDebug), [developmentDebug]);
-  const [state, dispatch] = useReducer(pageReducer, developmentDebug, createInitialSessionState);
+  const pageReducer = useMemo(() => createSessionPageReducer(), []);
+  const [state, dispatch] = useReducer(pageReducer, undefined, createInitialSessionState);
+  const stateRef = useRef(state);
+  const dispatchSession = useCallback((action: import("./page-session-reducer").SessionPageAction) => {
+    stateRef.current = pageReducer(stateRef.current, action);
+    dispatch(action);
+  }, [pageReducer]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
   const stageRef = useRef<HTMLElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const endedListenerRef = useRef<(() => void) | null>(null);
-  const speechRunIdRef = useRef(0);
-  const syntheticSequenceRef = useRef(0);
   const previousPresentationStatusRef = useRef<string | undefined>(undefined);
+  const teachingLayoutRef = useRef<string | undefined>(undefined);
   const prepareSpeechmaticsAudioContext = usePrepareSpeechmaticsAudioContext();
 
   const { start: startSpeechmatics, stop: stopSpeechmatics, pause: pauseSpeechmatics, resume: resumeSpeechmatics } = useSpeechmaticsSession({
-    onEvent: (runId, event) => dispatch({ type: "speech-event", runId, event, now: Date.now() }),
-    onReady: (runId) => dispatch({ type: "speech-ready", runId }),
+    onEvent: (runId, event) => dispatchSession({ type: "speech-event", runId, event, now: Date.now() }),
+    onReady: (runId) => dispatchSession({ type: "speech-ready", runId }),
     onTrace: trace.emit,
   });
 
-  useTeachingPlanner({
+  const liveTeaching = useLiveTeaching({
+    sessionId: trace.sessionId,
     sessionStatus: state.status,
     speechStatus: state.speech.status,
     speechRunId: state.speech.debug.runId,
     canonicalSpeech: state.speech.canonical,
-    planner: state.planner,
-    tracingEnabled: state.trace.enabled,
-    dispatch,
     onTrace: trace.emit,
+  });
+
+  useCanonicalSpeechSpanLifecycle({
+    canonicalSpeech: state.speech.canonical,
+    speechRunId: state.speech.debug.runId,
+    dispatch: dispatchSession,
   });
 
   useCanonicalTrace(trace.sessionId, state.speech.debug.runId, state.speech.canonical, trace.emit);
@@ -72,38 +81,17 @@ export function SessionPage() {
     }, { priority: "critical", correlation: { rootId: "presentation" } }));
   }, [state.presentation.error?.message, state.presentation.status, trace.emit]);
 
-  const onCaptionRendered = useCallback((episode: CaptionEpisode, now: number, presentationMode: PresentationMode) => {
-    const runId = speechRunIdRef.current;
-    const spanId = episode.sourceSegmentIds.at(-1);
-    trace.emit(traceDraft("renderer.activated", {
-      runId,
-      episodeId: episode.id,
-      captionText: episode.clip.captionText,
-      displayKind: episode.cue?.kind ?? "TEXT",
-      presentationMode,
-      sourceSegmentIds: episode.sourceSegmentIds,
-    }, {
-      occurredAt: now,
+  const onTeachingSurfaceRendered = useCallback(({ renderId, boardRevision, cueRevision, presentationMode, density, state: renderedState, origin }: { renderId: string; boardRevision: number; cueRevision: number; presentationMode: "presentationless" | "presentation-overlay"; density: BoardDensity; state: import("../lesson-stream/contracts").TeachingStateSnapshot; origin?: import("./use-live-teaching").TeachingRenderOrigin }) => {
+    trace.emit(traceDraft("teaching_surface.rendered", { renderId, boardRevision, cueRevision, presentationMode, density, state: renderedState, stateDigest: persistedAuditDigest(renderedState), ...(renderedState.board.active ? { activeBoardItemId: renderedState.board.active.id } : {}), ...(renderedState.cue.active ? { activeCueId: renderedState.cue.active.id } : {}), ...(origin ? { origin } : {}) }, {
       priority: "critical",
-      correlation: {
-        rootId: spanId ? `speech:${runId}:span:${spanId}` : `cue:${episode.id}`,
-        runId,
-        ...(spanId ? { spanId } : {}),
-        cueId: episode.id,
-      },
+      correlation: { rootId: `teaching-state:${boardRevision}:${cueRevision}`, renderId, boardRevision, cueRevision, ...(origin ? { plannerRequestId: origin.requestId, interpretationId: origin.interpretationId, lessonEventId: origin.lessonEventId, stepIndex: origin.stepIndex } : {}) },
     }));
-    dispatch({ type: "renderer-activated", episode, now, presentationMode });
+    const layoutKey = `${presentationMode}:${density}`;
+    if (teachingLayoutRef.current !== layoutKey) {
+      teachingLayoutRef.current = layoutKey;
+      trace.emit(traceDraft("teaching_surface.layout_changed", { presentationMode, density }, { correlation: { rootId: `teaching-state:${boardRevision}:${cueRevision}`, renderId, boardRevision, cueRevision } }));
+    }
   }, [trace.emit]);
-
-  const onCaptionExpire = useCallback((episodeId: string) => {
-    trace.emit(traceDraft("renderer.expired", { episodeId }, { priority: "critical", correlation: { rootId: `cue:${episodeId}`, cueId: episodeId } }));
-    dispatch({ type: "caption-expired", episodeId });
-  }, [trace.emit]);
-
-  const injectSemanticCue = useCallback((kind: SyntheticIntentKind) => {
-    const fixture = createSyntheticSemanticFixture(kind, ++syntheticSequenceRef.current);
-    dispatch({ type: "debug-inject-decision", ...fixture, now: Date.now() });
-  }, []);
 
   const releasePresentation = useCallback((stopTracks: boolean) => {
     const stream = streamRef.current;
@@ -115,27 +103,23 @@ export function SessionPage() {
   }, []);
 
   const stopSpeech = useCallback(async () => {
-    await stopSpeechmatics();
-  }, [stopSpeechmatics]);
+    await stopCurrentSpeechRun({ stateRef, stopSpeechmatics, dispatchSession });
+  }, [dispatchSession, stopSpeechmatics]);
+  const stopSpeechRef = useRef(stopSpeech);
+  stopSpeechRef.current = stopSpeech;
 
-  useEffect(() => () => { releasePresentation(true); void stopSpeech(); }, [releasePresentation, stopSpeech]);
+  // This is deliberately unmount-only. Speech callbacks may change identity as
+  // a new run starts; cleanup must never be interpreted as an explicit stop.
+  useEffect(() => () => {
+    releasePresentation(true);
+    void stopSpeechRef.current().catch(() => undefined);
+  }, [releasePresentation]);
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === stageRef.current);
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if ((state.status !== "active" && state.status !== "paused") || event.code !== "Space" || event.repeat || target?.closest("input, textarea, select, button")) return;
-      event.preventDefault();
-      dispatch({ type: "toggle-caption-lock" });
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [state.status]);
 
   const exitStageFullscreen = useCallback(async () => {
     if (document.fullscreenElement !== stageRef.current) return;
@@ -145,61 +129,70 @@ export function SessionPage() {
   const startPresentation = async () => {
     if (state.status === "ended") {
       trace.startNewSession();
-      speechRunIdRef.current = 0;
-      syntheticSequenceRef.current = 0;
       previousPresentationStatusRef.current = undefined;
-      dispatch({ type: "restart-session" });
+      teachingLayoutRef.current = undefined;
+      dispatchSession({ type: "restart-session" });
     }
-    dispatch({ type: "begin-capture" });
+    dispatchSession({ type: "begin-capture" });
     try {
       const stream = await requestPresentationStream();
       streamRef.current = stream;
       const videoTrack = stream.getVideoTracks()[0];
       const onCaptureEnded = () => {
         releasePresentation(false);
-        dispatch({ type: "capture-ended" });
+        dispatchSession({ type: "capture-ended" });
         void exitStageFullscreen();
       };
       endedListenerRef.current = onCaptureEnded;
       videoTrack?.addEventListener("ended", onCaptureEnded, { once: true });
-      dispatch({ type: "capture-ready", stream });
+      dispatchSession({ type: "capture-ready", stream });
     } catch (error) {
-      dispatch({ type: "capture-failed", error: error && typeof error === "object" && "kind" in error && "message" in error ? error as { kind: "unsupported" | "cancelled" | "permission-denied" | "unknown"; message: string } : { kind: "unknown", message: "CueLayer could not start presentation capture. Please try selecting your presentation again." } });
+      dispatchSession({ type: "capture-failed", error: error && typeof error === "object" && "kind" in error && "message" in error ? error as { kind: "unsupported" | "cancelled" | "permission-denied" | "unknown"; message: string } : { kind: "unknown", message: "CueLayer could not start presentation capture. Please try selecting your presentation again." } });
     }
   };
 
   const endSession = async () => {
-    await stopSpeech();
+    try {
+      await stopSpeech();
+    } catch {
+      // The hook has emitted a drain-incomplete diagnostic and preserved every
+      // final it saw. Ending the lesson would falsely claim lossless closure.
+      return;
+    }
+    const speechRunId = stateRef.current.speech.debug.runId;
+    const finalCanonicalSpeech = closeOpenCanonicalSpeechSpans(stateRef.current.speech.canonical, "explicit_stop", Date.now());
     releasePresentation(true);
     await exitStageFullscreen();
+    const finalized = await liveTeaching.endLesson({ canonicalSpeech: finalCanonicalSpeech, speechRunId });
+    if (!finalized) return;
     await trace.complete("user_ended_session");
-    dispatch({ type: "end" });
+    dispatchSession({ type: "end", now: Date.now() });
   };
 
   const startSpeech = async () => {
-    const runId = ++speechRunIdRef.current;
-    dispatch({ type: "begin-speech", runId });
+    const runId = await liveTeaching.allocateSpeechRunId();
+    dispatchSession({ type: "begin-speech", runId });
     try { await startSpeechmatics(runId); }
     catch (error) {
       const startFailure = speechStartFailureFrom(error);
-      dispatch({ type: "speech-event", runId, event: { kind: "error", code: startFailure.code, message: startFailure.message } });
+      dispatchSession({ type: "speech-event", runId, event: { kind: "error", code: startFailure.code, message: startFailure.message } });
     }
   };
 
   const toggleSpeech = async () => {
     if (state.speech.status === "ready") {
       pauseSpeechmatics();
-      dispatch({ type: "speech-paused", runId: state.speech.debug.runId });
+      dispatchSession({ type: "speech-paused", runId: state.speech.debug.runId });
     } else if (state.speech.status === "paused") {
       resumeSpeechmatics();
-      dispatch({ type: "speech-resumed", runId: state.speech.debug.runId });
+      dispatchSession({ type: "speech-resumed", runId: state.speech.debug.runId });
     } else await startSpeech();
   };
 
   const toggleSessionPause = () => {
     if (state.status === "active") pauseSpeechmatics();
     else if (state.speech.status === "paused") resumeSpeechmatics();
-    dispatch({ type: state.status === "paused" ? "resume" : "pause" });
+    dispatchSession({ type: state.status === "paused" ? "resume" : "pause" });
   };
 
   const toggleFullscreen = async () => {
@@ -227,17 +220,17 @@ export function SessionPage() {
       <a href="/" className="session-brand">CueLayer</a>
       <p>Live session</p>
     </header>
-    <PresentationStage ref={stageRef} stream={state.presentation.stream} presentationStatus={state.presentation.status} sessionStatus={state.status} speech={state.speech.canonical} speechStatus={state.speech.status} showSpeechDebug={showSpeechDebug} captionRuntime={state.planner.runtime} onCaptionRendered={onCaptionRendered} onCaptionExpire={onCaptionExpire} onLearnerCueExpire={(cueId) => dispatch({ type: "learner-cue-expired", cueId })}>
+    <PresentationStage ref={stageRef} stream={state.presentation.stream} presentationStatus={state.presentation.status} sessionStatus={state.status} speech={state.speech.canonical} speechStatus={state.speech.status} showSpeechDebug={showSpeechDebug} teachingState={liveTeaching.state} teachingRenderOrigin={liveTeaching.renderOrigin} onTeachingSurfaceRendered={onTeachingSurfaceRendered} onTeachingCueExpire={(cueId) => void liveTeaching.expireCue(cueId)}>
       <SessionControls sessionStatus={state.status} isFullscreen={isFullscreen} onPauseToggle={toggleSessionPause} onFullscreen={toggleFullscreen} onEnd={() => void endSession()} speechStatus={state.speech.status} onSpeechToggle={() => void toggleSpeech()} onSpeechPrepare={prepareSpeechmaticsAudioContext} />
     </PresentationStage>
     <section className="session-panel" aria-live="polite">
-      {hasPresentation ? <p>{state.status === "paused" ? "The shared presentation remains visible. Resume when you are ready to continue speech-aware captions." : "Your presentation is live in CueLayer. Press Space to keep or release the current semantic caption."}</p> : <>
+      {hasPresentation ? <p>{state.status === "paused" ? "The shared presentation remains visible. Resume when you are ready to continue live teaching interpretation." : "Your presentation is live in CueLayer. Teaching Board and Cue updates will use the learner-safe overlay regions."}</p> : <>
         <p>{panelMessage}</p>
         <div className="session-panel-actions"><button className="choose-presentation-button" type="button" disabled={state.presentation.status === "starting"} onClick={() => void startPresentation()}>{state.presentation.status === "starting" ? "Choosing presentation…" : state.status === "ended" ? "Start another session" : "Choose presentation"}</button>{sessionIsRunning && state.presentation.status !== "starting" ? <button className="end-session-link" type="button" onClick={() => void endSession()}>End session</button> : null}</div>
       </>}
       {state.speech.error ? <p className="session-error" role="alert">{state.speech.error.message}</p> : null}
       {showSpeechDebug && state.speech.status !== "off" ? <p className="session-debug">Speech debug · run {state.speech.debug.runId} · partials {state.speech.debug.provisionalEvents} · raw finals {state.speech.canonical.finals.length} · spans {state.speech.canonical.spans.length}{state.speech.debug.lastError ? ` · last error: ${state.speech.debug.lastError.code}` : ""}</p> : null}
-      {showSpeechDebug && state.speech.status !== "off" ? <p className="session-debug">Planner debug · {state.planner.status} · request {state.planner.requestId}{state.planner.inFlightRequestId ? ` · in flight ${state.planner.inFlightRequestId}` : ""}{state.planner.latestDecision ? ` · ${state.planner.latestDecision.display.kind}/${state.planner.latestDecision.learner.kind}` : ""}{state.planner.lastValidationError ? ` · validation: ${state.planner.lastValidationError}` : state.planner.lastError ? ` · error: ${state.planner.lastError}` : ""}</p> : null}
+      {showSpeechDebug && state.speech.status !== "off" ? <p className="session-debug">Teaching State · {liveTeaching.status} · pending {liveTeaching.pendingCount} · Board r{liveTeaching.state.board.revision} · Cue r{liveTeaching.state.cue.revision}{liveTeaching.error ? ` · ${liveTeaching.error}` : ""}</p> : null}
       {showSpeechDebug ? <TeachingTraceDrawer
         sessionId={trace.sessionId}
         events={traceViewer.events}
@@ -246,9 +239,12 @@ export function SessionPage() {
         droppedCount={trace.snapshot.droppedCount}
         error={traceViewer.error ?? trace.snapshot.error}
         loading={traceViewer.loading}
+        sessions={traceViewer.sessions}
+        selectedSessionId={traceViewer.selectedSessionId}
+        viewingArchive={traceViewer.viewingArchive}
         onReload={() => void traceViewer.reload()}
         onExport={() => void traceViewer.downloadJsonl()}
-        onInject={developmentDebug ? injectSemanticCue : undefined}
+        onSelectSession={traceViewer.selectSession}
       /> : null}
       {fullscreenError ? <p className="session-error" role="alert">{fullscreenError}</p> : null}
     </section>

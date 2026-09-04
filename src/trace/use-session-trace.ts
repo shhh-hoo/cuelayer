@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { defaultTracePriority, traceDraft, type SessionTraceDraft, type SessionTraceEvent, type TraceEmitter } from "./contracts";
 import { createTraceSessionId, replaceTraceSessionId, resolveTraceSessionIdentity } from "./session-identity";
 import { SessionTraceRuntime, type SessionTraceRuntimeSnapshot } from "./runtime";
+import type { TraceArchiveSession } from "./store";
 
 const INITIAL_PENDING_LIMIT = 256;
 
@@ -14,6 +15,9 @@ export type SessionTraceController = {
   startNewSession(): string;
   readRecent(limit?: number): Promise<SessionTraceEvent[]>;
   exportJsonlBlob(): Promise<Blob>;
+  listTraceSessions(): Promise<TraceArchiveSession[]>;
+  readTraceSession(sessionId: string, limit?: number): Promise<SessionTraceEvent[]>;
+  exportTraceSessionJsonl(sessionId: string): Promise<Blob>;
 };
 
 type PendingState = { drafts: SessionTraceDraft[]; dropped: Map<string, number> };
@@ -140,5 +144,13 @@ export function useSessionTrace({ observeStatus = false }: { observeStatus?: boo
     return runtime.exportJsonlBlob();
   }, []);
 
-  return { sessionId, snapshot, emit, flush, complete, startNewSession, readRecent, exportJsonlBlob };
+  const listTraceSessions = useCallback(async () => runtimeRef.current?.listTraceSessions() ?? [], []);
+  const readTraceSession = useCallback(async (sessionId: string, limit = 240) => runtimeRef.current?.readTraceSession(sessionId, limit) ?? [], []);
+  const exportTraceSessionJsonl = useCallback(async (sessionId: string) => {
+    const runtime = runtimeRef.current;
+    if (!runtime) throw new Error("trace-not-ready");
+    return runtime.exportTraceSessionJsonl(sessionId);
+  }, []);
+
+  return { sessionId, snapshot, emit, flush, complete, startNewSession, readRecent, exportJsonlBlob, listTraceSessions, readTraceSession, exportTraceSessionJsonl };
 }

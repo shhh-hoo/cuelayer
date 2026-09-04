@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { PresentationMode } from "../session/presentation-mode";
-import type { ActiveTeachingCue } from "./contracts";
+import type { ActiveLessonCue } from "../lesson-stream/contracts";
 import { TeachingCueLayer } from "./TeachingCueLayer";
 import "./board-layout.css";
 
@@ -21,14 +21,14 @@ export function BoardLayout({ active, support, retained = [], cue, presentationM
   active: ReactNode;
   support?: ReactNode;
   retained?: ReactNode[];
-  cue?: ActiveTeachingCue;
+  cue?: ActiveLessonCue;
   presentationMode: PresentationMode;
   onCueExpire?(cueId: string, now: number): void;
 }) {
   const density = boardDensityForContent({
     presentationMode,
     retainedCount: retained.length,
-    cueTextLength: cue?.text.length ?? 0,
+    cueTextLength: cue?.contribution.content.length ?? 0,
   });
 
   return <div

@@ -1,12 +1,30 @@
 import { useEffect, useRef } from "react";
-import type { CanonicalSpeechState } from "../session/speech-types";
+import type { CanonicalSpeechState, SpeechRunId } from "../session/speech-types";
 import { traceDraft, type TraceEmitter } from "./contracts";
 
-export function canonicalRootId(runId: number, spanId: string, revision?: number) {
+export function canonicalRootId(runId: SpeechRunId, spanId: string, revision?: number) {
   return `speech:${runId}:span:${spanId}${revision === undefined ? "" : `@${revision}`}`;
 }
 
-export function useCanonicalTrace(sessionId: string, runId: number, canonical: CanonicalSpeechState, emit: TraceEmitter) {
+export function canonicalFinalTraceDraft(runId: SpeechRunId, final: CanonicalSpeechState["finals"][number]) {
+  return traceDraft("canonical.final_committed", {
+    runId,
+    finalId: final.id,
+    ...(final.speechEventId ? { speechEventId: final.speechEventId } : {}),
+    transcript: final.text,
+    wordCount: final.words.length,
+  }, {
+    priority: "critical",
+    correlation: {
+      rootId: `speech:${runId}:final:${final.id}`,
+      runId,
+      finalId: final.id,
+      ...(final.speechEventId ? { speechEventId: final.speechEventId } : {}),
+    },
+  });
+}
+
+export function useCanonicalTrace(sessionId: string, runId: SpeechRunId, canonical: CanonicalSpeechState, emit: TraceEmitter) {
   const observedScope = useRef<string | undefined>(undefined);
   const finalIds = useRef(new Set<string>());
   const spanRevisions = useRef(new Map<string, number>());
@@ -22,19 +40,7 @@ export function useCanonicalTrace(sessionId: string, runId: number, canonical: C
     for (const final of canonical.finals) {
       if (finalIds.current.has(final.id)) continue;
       finalIds.current.add(final.id);
-      emit(traceDraft("canonical.final_committed", {
-        runId,
-        finalId: final.id,
-        transcript: final.text,
-        wordCount: final.words.length,
-      }, {
-        priority: "critical",
-        correlation: {
-          rootId: `speech:${runId}:final:${final.id}`,
-          runId,
-          finalId: final.id,
-        },
-      }));
+      emit(canonicalFinalTraceDraft(runId, final));
     }
 
     for (const span of canonical.spans) {

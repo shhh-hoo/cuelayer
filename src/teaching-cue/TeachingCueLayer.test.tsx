@@ -1,12 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { ActiveTeachingCue } from "./contracts";
+import type { ActiveLessonCue } from "../lesson-stream/contracts";
 import { TeachingCueLayer } from "./TeachingCueLayer";
 
-const cue: ActiveTeachingCue = {
+const cue: ActiveLessonCue = {
   id: "question-1",
   kind: "QUESTION",
-  text: "Why does the rate increase?",
+  contribution: { mode: "INITIATE", content: "Why does the rate increase?", provenance: { basis: "DOMAIN_KNOWLEDGE" } },
   sourceSegmentIds: ["speech-1"],
   activatedAt: 100,
 };
