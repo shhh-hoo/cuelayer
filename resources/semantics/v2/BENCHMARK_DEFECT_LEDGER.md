@@ -36,3 +36,21 @@ This ledger is the mandatory audit trail for benchmark changes after the first l
 The v2 locked split must contain multiple positive examples for RECONSTRUCT, REPRESENT, QUESTION, TASK, HINT, NOTE, ADD_SUPPORT, SET_ACTIVE, topic shift, teacher correction, Cue persistence, and Cue resolution. Candidate AUGMENT recall uses at least five materially distinct positive holdout cases plus negative traps. Development and holdout cover matched semantic categories with different wording.
 
 This ledger may gain entries only before the v2 corpus/evaluator freeze. Once v2 holdout begins, corrections require another version and a fresh untouched holdout.
+
+## V2 pre-holdout development audit
+
+The first provider-backed development pass was run only after commit `ee1e877`. It was not holdout evidence. The pass exposed the following benchmark/evaluator defects, which were corrected before a new v2 freeze. The original development artifacts remain in version history as the audit input for these corrections.
+
+| Area | Development observation | Classification | Correction before re-freeze |
+|---|---|---|---|
+| Current-trigger gate | Rejected proposals with no accepted steps were reported as `current_trigger_missing` because expected actions were substituted for accepted interventions | Evaluator defect | Inspect only accepted normalized non-KEEP steps; rejected/no-intervention outcomes are handled by acceptance and decision metrics |
+| History reactivation | A valid Cue-only HINT with Board KEEP was reported as Board history reactivation | Evaluator defect | Scope history reactivation to accepted non-KEEP Board actions |
+| Correction polarity | “Ionic rather than covalent” was treated as affirmative covalent; an output that removed the old claim and stated only “ionic” was required to repeat negation text | Evaluator/gold defect | Add local negation markers including “rather than”; allow a corrected claim to be absent or explicitly negated once the exact old item is invalidated |
+| Symbol normalization | Greek delta and equality notation were not normalized explicitly | Evaluator defect | Normalize `Δ`/`δ` to `delta` and `=` to `equals` before predicate matching |
+| Formula Active text | A correct formula-only Board item failed because the item also had to repeat the species name | Gold defect | Exact formula predicate requires the symbolic form; the teacher-spoken base entity remains a separate core-profile predicate |
+| RECONSTRUCT fixture | Fluent complete mechanism sentences were labeled RECONSTRUCT even when validly REPRESENTed | Fixture defect | Use clearly fragmented/disfluent mechanism surfaces while preserving matched development/holdout semantics |
+| Phrase-shaped predicates | Harmless articles or morphology broke “higher activation energy” and “catalyst/catalysed” matches | Gold defect | Express these as atomic entity/direction groups rather than sentence-fragment substrings |
+| Board/Cue composition | Topic + NOTE gold required the Note fact inside Active and disallowed its natural Support placement | Final-state gold defect | Active is exactly the new topic; Support and NOTE each carry the stated fact |
+| AUGMENT positives | Imperatives such as “give the formula” were reasonably interpreted as learner TASKs | Fixture defect | State a spoken base proposition and explicitly request Board enrichment while saying no learner task/action |
+
+These changes are based solely on development outputs. The v2 holdout remained unread by the provider and was not used for policy tuning.

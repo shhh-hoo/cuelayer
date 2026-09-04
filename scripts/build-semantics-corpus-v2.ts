@@ -47,7 +47,6 @@ const clause = (...values: Array<string | string[]>) => ({ allOf: values.map((va
 const entities = (...values: Array<string | string[]>) => ({ entities: values.map((value) => Array.isArray(value) ? value : [value]) });
 
 const formula = (value: string, ...entityValues: string[]): SemanticPredicate => ({
-  ...entities(...entityValues),
   requiredLexical: [[value]],
 });
 
@@ -66,11 +65,11 @@ const scenarios: Scenario[] = [
     key: "reconstruct-fragmented-mechanism",
     tags: ["reconstruct", "set-active", "transformation"],
     surface: {
-      holdout: ["The alkene, then the electrophile, makes the carbocation intermediate."],
-      development: [["Alkene attacks electrophile and we get a carbocation."], ["From the carbon double bond and the electrophile, form the carbocation intermediate."]],
+      holdout: ["The alkene... electrophile... then carbocation—put that broken explanation together."],
+      development: [["Alkene, er, electrophile, and then... carbocation. Reconstruct that."], ["Carbon double bond... electrophile... carbocation; join those fragments into one step."]],
     },
     board: ["SET_ACTIVE"], mode: "RECONSTRUCT",
-    predicate: { transformations: [{ from: clause(["alkene", "double bond"], "electrophile"), to: clause("carbocation", "intermediate") }] },
+    predicate: { transformations: [{ from: clause(["alkene", "double bond"], "electrophile"), to: clause("carbocation") }] },
     rationale: "Reconstruct fragmented teacher speech into one faithful transformation.",
   },
   {
@@ -94,9 +93,9 @@ const scenarios: Scenario[] = [
       development: [["A catalyst supplies an alternative reaction route.", "Its pathway lowers, rather than raises, activation energy."], ["The catalysed reaction follows another pathway.", "Activation energy is not higher on that route; it is lower."]],
     },
     board: ["SET_ACTIVE", "ADD_SUPPORT"], mode: "REPRESENT", initialActive: null,
-    activePredicate: { propositions: [clause("catalyst", ["alternative pathway", "another pathway", "another route", "alternative reaction route"])] },
+    activePredicate: { propositions: [clause(["catalyst", "catalysed"], ["alternative pathway", "another pathway", "another route", "alternative reaction route"])] },
     supportPredicates: [{ propositions: [clause(["activation energy", "energy barrier"], ["lowers", "lower"])], polarity: [{ claim: clause(["activation energy", "energy barrier"], ["raises", "higher", "increase"]), value: "negated" }] }],
-    predicate: { propositions: [clause("catalyst", ["alternative pathway", "another pathway", "another route", "alternative reaction route"]), clause(["activation energy", "energy barrier"], ["lowers", "lower"])], polarity: [{ claim: clause(["activation energy", "energy barrier"], ["raises", "higher", "increase"]), value: "negated" }] },
+    predicate: { propositions: [clause(["catalyst", "catalysed"], ["alternative pathway", "another pathway", "another route", "alternative reaction route"]), clause(["activation energy", "energy barrier"], ["lowers", "lower"])], polarity: [{ claim: clause(["activation energy", "energy barrier"], ["raises", "higher", "increase"]), value: "negated" }] },
     rationale: "Require an exact final Active plus Support state across two accepted checkpoints.",
   },
   {
@@ -120,7 +119,7 @@ const scenarios: Scenario[] = [
       development: [["The question stays open; just note that the barrier is lower.", "Answer it now: a catalyst gives a different pathway, so close the question."], ["Do not close the catalyst question while I add that activation energy decreases.", "The explanation is an alternative reaction route; we can resolve the question."]],
     },
     board: ["ADD_SUPPORT", "SET_ACTIVE"], cue: ["KEEP", "RESOLVE_CURRENT"], cueKinds: [null, null], mode: "REPRESENT",
-    initialActive: "Catalysts affect reaction pathways.", initialCue: { kind: "QUESTION", content: "What does the catalyst do?" },
+    initialActive: "Catalyst question awaiting its central answer.", initialCue: { kind: "QUESTION", content: "What does the catalyst do?" },
     activePredicate: { propositions: [clause("catalyst", ["alternative route", "different pathway", "alternative reaction route"])] },
     predicate: { propositions: [clause("catalyst", ["alternative route", "different pathway", "alternative reaction route"])] },
     rationale: "Preserve the QUESTION through context, then require its spoken answer on Board before resolution.",
@@ -134,9 +133,9 @@ const scenarios: Scenario[] = [
     },
     board: ["ADD_SUPPORT"], cue: ["SET"], cueKinds: ["HINT"], mode: "REPRESENT",
     initialActive: "Catalysed and uncatalysed reaction profiles.",
-    predicate: { propositions: [clause(["uncatalysed", "without catalyst"], ["higher activation energy", "taller barrier", "higher uncatalysed barrier"])], entities: [["compare", "contrast"], ["activation energies", "barriers"]] },
+    predicate: { entities: [["uncatalysed", "without catalyst"], ["activation energy", "barrier"], ["higher", "taller"], ["compare", "contrast"]] },
     cuePredicate: { entities: [["compare", "contrast"], ["activation energies", "barriers"]] },
-    supportPredicates: [{ propositions: [clause(["uncatalysed", "without catalyst"], ["higher activation energy", "taller barrier", "higher uncatalysed barrier"])] }],
+    supportPredicates: [{ entities: [["uncatalysed", "without catalyst"], ["activation energy", "barrier"], ["higher", "taller"]] }],
     rationale: "Represent a teacher-authored HINT independently from a concrete Board support fact.",
   },
   {
@@ -147,7 +146,8 @@ const scenarios: Scenario[] = [
       development: [["Write this note: at dynamic equilibrium, forward rate equals reverse rate."], ["Set dynamic equilibrium as the central point, and note that both reaction rates match."]],
     },
     board: ["SET_ACTIVE"], cue: ["SET"], cueKinds: ["NOTE"], mode: "REPRESENT",
-    predicate: { propositions: [clause("dynamic equilibrium", "forward", "reverse", ["rates are equal", "rate equals", "rates match"])] },
+    predicate: { entities: [["dynamic equilibrium"], ["forward"], ["reverse"], ["rate", "rates"], ["equal", "equals", "match", "matches"]] },
+    cuePredicate: { entities: [["forward", "both reaction"], ["reverse", "both reaction"], ["rate", "rates"], ["equal", "equals", "match", "matches"]] },
     rationale: "Create an explicit NOTE while establishing the same spoken central proposition.",
   },
   {
@@ -158,7 +158,7 @@ const scenarios: Scenario[] = [
       development: [["I need to fix that: sodium chloride has ionic bonding, not covalent bonding."], ["Replace my last claim; NaCl is ionic rather than covalent."]],
     },
     board: ["SET_ACTIVE"], mode: "REPRESENT", initialActive: "Sodium chloride is covalent.", continuity: "correction", invalidations: "INITIAL_ACTIVE",
-    predicate: { entities: [["sodium chloride", "nacl"]], polarity: [{ claim: clause("ionic"), value: "affirmed" }, { claim: clause("covalent"), value: "negated" }] },
+    predicate: { entities: [["sodium chloride", "nacl"], ["ionic"]], polarity: [{ claim: clause("covalent"), value: "absent_or_negated" }] },
     rationale: "Represent an explicit teacher correction and remove the corrected active error.",
   },
   {
@@ -169,7 +169,7 @@ const scenarios: Scenario[] = [
       development: [["The earlier retained MgO claim needs correction; its bonding is ionic, not covalent."], ["Fix the old magnesium oxide point: say ionic rather than covalent."]],
     },
     board: ["SET_ACTIVE"], mode: "REPRESENT", initialActive: "Current bonding summary.", initialRetained: "Magnesium oxide is covalent.", continuity: "correction", invalidations: "INITIAL_RETAINED",
-    predicate: { entities: [["magnesium oxide", "mgo"]], polarity: [{ claim: clause("ionic"), value: "affirmed" }, { claim: clause("covalent"), value: "negated" }] },
+    predicate: { entities: [["magnesium oxide", "mgo"], ["ionic"]], polarity: [{ claim: clause("covalent"), value: "absent_or_negated" }] },
     rationale: "Invalidate a specifically identified retained error rather than only replacing Active.",
   },
   {
@@ -192,6 +192,9 @@ const scenarios: Scenario[] = [
       development: [["Leave equilibrium and begin electrolysis; write down that the cathode is where reduction happens."], ["Our new topic is electrolysis, with this note: cathode means reduction."]],
     },
     board: ["SET_ACTIVE"], cue: ["SET"], cueKinds: ["NOTE"], mode: "REPRESENT", initialActive: "Chemical equilibrium.", continuity: "topic_shift",
+    activePredicate: entities("electrolysis"),
+    supportPredicates: [{ propositions: [clause("cathode", "reduction")] }],
+    cuePredicate: { propositions: [clause("cathode", "reduction")] },
     predicate: { propositions: [clause("electrolysis", "cathode", "reduction")] },
     rationale: "Exercise a topic shift paired with an explicitly teacher-authored NOTE.",
   },
@@ -199,8 +202,8 @@ const scenarios: Scenario[] = [
     key: "augment-aluminium-dimer",
     tags: ["augment", "must-augment", "set-active", "formula", "chemistry"],
     surface: {
-      holdout: ["Aluminium chloride forms a dimer; supply its compact molecular formula."],
-      development: [["Give the molecular formula for the aluminium chloride dimer."], ["Show the compact formula of dimeric aluminium chloride."]],
+      holdout: ["Aluminium chloride forms a dimer. Enrich the Board with its standard formula; this is not a learner task."],
+      development: [["Aluminium chloride dimerises. Add its molecular formula as Board enrichment, not as student work."], ["Dimeric aluminium chloride is the point; include the compact formula on Board without creating a task."]],
     },
     board: ["SET_ACTIVE"], mustAugment: true, corePredicate: entities("aluminium chloride", "dimer"), predicate: formula("al2cl6", "aluminium chloride", "dimer"),
     rationale: "Candidate AUGMENT must supply Al₂Cl₆ with explicit domain provenance; core is not scored for unavailable capability.",
@@ -209,8 +212,8 @@ const scenarios: Scenario[] = [
     key: "augment-ammonium-charge",
     tags: ["augment", "must-augment", "set-active", "formula", "chemistry"],
     surface: {
-      holdout: ["The species is the ammonium ion; add its formula and charge."],
-      development: [["Supply the charged formula for ammonium."], ["Augment ammonium ion with its symbolic formula."]],
+      holdout: ["The species is the ammonium ion. Enrich the Board with its charged formula; no learner task."],
+      development: [["Ammonium is the ion here; add its charged formula as Board enrichment only."], ["The teaching point is ammonium ion. Include its symbolic formula on Board, not as student work."]],
     },
     board: ["SET_ACTIVE"], mustAugment: true, corePredicate: entities("ammonium"), predicate: formula("nh4+", "ammonium"),
     rationale: "Candidate AUGMENT must add the unspoken NH₄⁺ formula with domain provenance.",
@@ -219,8 +222,8 @@ const scenarios: Scenario[] = [
     key: "augment-carbonate-charge",
     tags: ["augment", "must-augment", "set-active", "formula", "chemistry"],
     surface: {
-      holdout: ["We mean the carbonate ion; provide its formula including charge."],
-      development: [["Add the full charged formula for carbonate."], ["Show carbonate ion symbolically, charge included."]],
+      holdout: ["We mean the carbonate ion. Enrich the Board with its charged formula; do not set a task."],
+      development: [["Carbonate ion is the concept; add its full charged formula as Board enrichment."], ["The point is carbonate ion. Include the charge-bearing formula on Board, with no learner action."]],
     },
     board: ["SET_ACTIVE"], mustAugment: true, corePredicate: entities("carbonate"), predicate: formula("co32-", "carbonate"),
     rationale: "Candidate AUGMENT must add CO₃²⁻ without pretending it was spoken.",
@@ -229,8 +232,8 @@ const scenarios: Scenario[] = [
     key: "augment-activation-energy-symbol",
     tags: ["augment", "must-augment", "set-active", "symbol", "chemistry"],
     surface: {
-      holdout: ["Activation energy is our quantity; add its standard symbol."],
-      development: [["Put the conventional symbol beside activation energy."], ["Annotate activation energy using the usual symbol."]],
+      holdout: ["Activation energy is our quantity. Enrich the Board with its standard symbol; no learner task."],
+      development: [["Activation energy is the teaching point; include its conventional symbol as Board enrichment."], ["The quantity is activation energy. Add the usual symbol on Board without assigning work."]],
     },
     board: ["SET_ACTIVE"], mustAugment: true, corePredicate: entities("activation energy"), predicate: formula("ea", "activation energy"),
     rationale: "Candidate AUGMENT must add Eₐ with domain provenance.",
@@ -239,8 +242,8 @@ const scenarios: Scenario[] = [
     key: "augment-enthalpy-symbol",
     tags: ["augment", "must-augment", "set-active", "symbol", "chemistry"],
     surface: {
-      holdout: ["Enthalpy change is the quantity here; include its conventional symbol."],
-      development: [["Add the usual symbol for enthalpy change."], ["Label enthalpy change with standard notation."]],
+      holdout: ["Enthalpy change is the quantity here. Enrich the Board with its conventional symbol; no task."],
+      development: [["Enthalpy change is our teaching point; add its usual symbol as Board enrichment only."], ["The quantity is enthalpy change. Include standard notation on Board, not as learner work."]],
     },
     board: ["SET_ACTIVE"], mustAugment: true, corePredicate: entities(["enthalpy change", "enthalpy"]), predicate: { entities: [["enthalpy change", "enthalpy"]], requiredLexical: [["dh", "delta h", "δh"]] },
     rationale: "Candidate AUGMENT must add ΔH with domain provenance.",
@@ -254,7 +257,7 @@ const scenarios: Scenario[] = [
     },
     board: ["KEEP"], cue: ["SET"], cueKinds: ["HINT"], mode: "REPRESENT", initialActive: "Aluminium chloride dimer: Al₂Cl₆.", negativeAugment: true,
     predicate: { forbiddenPropositions: [clause(["friedel crafts", "friedel-crafts", "lewis acid", "catalyst for"])] },
-    cuePredicate: { entities: [["displayed formula", "read that formula", "use what is visible"]], forbiddenPropositions: [clause(["friedel crafts", "friedel-crafts", "lewis acid", "catalyst for"])] },
+    cuePredicate: { entities: [["displayed formula", "read that formula", "read the dimer formula", "use what is visible"]], forbiddenPropositions: [clause(["friedel crafts", "friedel-crafts", "lewis acid", "catalyst for"])] },
     rationale: "The current proposition is already visible, so unrelated or duplicate AUGMENT is a failure while the spoken HINT remains valid.",
   },
   {

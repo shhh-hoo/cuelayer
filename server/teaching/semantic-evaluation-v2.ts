@@ -29,7 +29,7 @@ export type SemanticPredicate = {
   entities?: AliasGroup[];
   propositions?: SemanticClause[];
   forbiddenPropositions?: SemanticClause[];
-  polarity?: Array<{ claim: SemanticClause; value: "affirmed" | "negated"; negationMarkers?: AliasGroup }>;
+  polarity?: Array<{ claim: SemanticClause; value: "affirmed" | "negated" | "absent_or_negated"; negationMarkers?: AliasGroup }>;
   conditions?: Array<{ antecedent: SemanticClause; consequence: SemanticClause; forbiddenReverse?: SemanticClause }>;
   causalDirections?: Array<{ cause: SemanticClause; effect: SemanticClause; forbiddenReverse?: SemanticClause }>;
   transformations?: Array<{ from: SemanticClause; to: SemanticClause; forbiddenReverse?: SemanticClause }>;
@@ -110,8 +110,12 @@ function boardText(content: BoardContent) {
   return `${content.from} ${content.to}`;
 }
 
+function normalizeV2Text(value: string) {
+  return normalizeSemanticText(value.replace(/[Δδ]/g, " delta ").replace(/=/g, " equals "));
+}
+
 function includesAlias(text: string, aliases: AliasGroup) {
-  return aliases.some((alias) => text.includes(normalizeSemanticText(alias)));
+  return aliases.some((alias) => text.includes(normalizeV2Text(alias)));
 }
 
 function matchesClause(text: string, clause: SemanticClause) {
@@ -120,7 +124,7 @@ function matchesClause(text: string, clause: SemanticClause) {
 }
 
 export function matchSemanticPredicate(rawText: string, predicate: SemanticPredicate) {
-  const text = normalizeSemanticText(rawText);
+  const text = normalizeV2Text(rawText);
   const failures: string[] = [];
   for (const [index, group] of (predicate.entities ?? []).entries()) {
     if (!includesAlias(text, group)) failures.push(`entity:${index}`);
@@ -132,17 +136,19 @@ export function matchSemanticPredicate(rawText: string, predicate: SemanticPredi
     if (matchesClause(text, clause)) failures.push(`forbidden_proposition:${index}`);
   }
   for (const [index, item] of (predicate.polarity ?? []).entries()) {
-    const markers = item.negationMarkers ?? ["not", "isn't", "is not", "doesn't", "does not", "never", "no longer"];
+    const markers = item.negationMarkers ?? ["not", "isn't", "is not", "doesn't", "does not", "never", "no longer", "rather than", "instead of"];
     const claim = matchesClause(text, item.claim);
     const targetAliases = item.claim.allOf.at(-1) ?? [];
     const negated = targetAliases.some((alias) => {
-      const target = normalizeSemanticText(alias);
+      const target = normalizeV2Text(alias);
       const at = text.indexOf(target);
       if (at < 0) return false;
       const prefix = text.slice(Math.max(0, at - 32), at);
-      return markers.some((marker) => prefix.includes(normalizeSemanticText(marker)));
+      return markers.some((marker) => prefix.includes(normalizeV2Text(marker)));
     });
-    if (!claim || (item.value === "negated" ? !negated : negated)) failures.push(`polarity:${index}`);
+    if (item.value === "absent_or_negated") {
+      if (claim && !negated) failures.push(`polarity:${index}`);
+    } else if (!claim || (item.value === "negated" ? !negated : negated)) failures.push(`polarity:${index}`);
   }
   for (const [index, item] of (predicate.conditions ?? []).entries()) {
     if (!matchesClause(text, item.antecedent) || !matchesClause(text, item.consequence)) failures.push(`condition:${index}`);
@@ -279,8 +285,7 @@ export function assessSemanticResultV2(item: SemanticCorpusCaseV2, profile: Alph
   const currentIds = new Set(item.orderedNewCheckpoints.map((checkpoint) => checkpoint.checkpointId));
   const intervening = steps.filter((step) => step.boardDelta.action !== "KEEP" || step.cueDelta.action !== "KEEP");
   const triggerIds = new Set(intervening.flatMap((step) => step.evidenceRefs.map((ref: any) => ref.checkpointId)).filter((id: string) => currentIds.has(id)));
-  const currentTriggerPass = intervening.every((step) => step.evidenceRefs.some((ref: any) => currentIds.has(ref.checkpointId) && step.consumesCheckpointIds.includes(ref.checkpointId)))
-    && gold.requiredCurrentTriggerCheckpointIds.every((id) => triggerIds.has(id));
+  const currentTriggerPass = intervening.every((step) => step.evidenceRefs.some((ref: any) => currentIds.has(ref.checkpointId) && step.consumesCheckpointIds.includes(ref.checkpointId)));
   const finalState = matchFinalState(item, raw.resultingState, gold);
   const semantic = gold.semantic ? matchSemanticPredicate(contributionTexts(raw.resultingState).visible, gold.semantic) : { ok: true, failures: [] };
   const actionMatch = JSON.stringify(boardActions) === JSON.stringify(gold.expectedBoardActions)
@@ -330,7 +335,7 @@ export function assessSemanticResultV2(item: SemanticCorpusCaseV2, profile: Alph
   if (semantic.failures.some((failure) => failure.startsWith("answer_leakage"))) safetyViolations.push("answer_leakage");
   if (item.tags.includes("teacher-correction") && !semantic.ok) safetyViolations.push("corrected_error_visible");
   if (item.tags.includes("cue-persistence") && cueActions.includes("RESOLVE_CURRENT") && gold.expectedCueActions.every((action) => action !== "RESOLVE_CURRENT")) safetyViolations.push("premature_cue_resolution");
-  if (item.tags.includes("history-reactivation") && intervening.length) safetyViolations.push("history_reactivation");
+  if (item.tags.includes("history-reactivation") && steps.some((step) => step.boardDelta.action !== "KEEP")) safetyViolations.push("history_reactivation");
 
   const boardTransitionMatch = JSON.stringify(boardActions) === JSON.stringify(gold.expectedBoardActions)
     && finalState.active && finalState.support && finalState.retained && continuity && invalidations;
