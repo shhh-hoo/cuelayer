@@ -4,7 +4,7 @@
   "caseCount": 60,
   "developmentCount": 40,
   "holdoutCount": 20,
-  "hash": "97cf71a190694c236ea3127be5e12b8edb3a87addfd598bdda6fa2aedae6abe2",
+  "hash": "49eea74075c7e144321c0103c899bb823a7b7e25c73ecf9af7ec763740133b72",
   "corpusVersion": "alpha-semantics-corpus-v2",
   "evaluatorVersion": "alpha-semantics-evaluator-v2",
   "core": {

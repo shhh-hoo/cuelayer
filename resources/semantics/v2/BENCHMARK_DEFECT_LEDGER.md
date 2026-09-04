@@ -54,3 +54,5 @@ The first provider-backed development pass was run only after commit `ee1e877`. 
 | AUGMENT positives | Imperatives such as “give the formula” were reasonably interpreted as learner TASKs | Fixture defect | State a spoken base proposition and explicitly request Board enrichment while saying no learner task/action |
 
 These changes are based solely on development outputs. The v2 holdout remained unread by the provider and was not used for policy tuning.
+
+The second unchanged-policy development pass exposed four further surface/predicate defects before policy work: “increasing temperature” was absent from a temperature-rise alias group; “raising” was absent from the local negation target; “both reaction rates” was not accepted as the paired forward/reverse rates in the same explicit dynamic-equilibrium statement; and “formula on the board” was absent from a HINT alias group. Two RECONSTRUCT fixtures also still contained imperative wording that could reasonably create a TASK, so their matched development/holdout surfaces were changed to declarative fragmented speech. These corrections are development-derived and precede any v2 holdout run.

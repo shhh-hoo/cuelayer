@@ -65,8 +65,8 @@ const scenarios: Scenario[] = [
     key: "reconstruct-fragmented-mechanism",
     tags: ["reconstruct", "set-active", "transformation"],
     surface: {
-      holdout: ["The alkene... electrophile... then carbocation—put that broken explanation together."],
-      development: [["Alkene, er, electrophile, and then... carbocation. Reconstruct that."], ["Carbon double bond... electrophile... carbocation; join those fragments into one step."]],
+      holdout: ["The alkene... electrophile... then carbocation. Those fragments are the mechanism step."],
+      development: [["Alkene, er, electrophile, and then... carbocation. That is the mechanism step."], ["Carbon double bond... electrophile... carbocation; those pieces describe one step."]],
     },
     board: ["SET_ACTIVE"], mode: "RECONSTRUCT",
     predicate: { transformations: [{ from: clause(["alkene", "double bond"], "electrophile"), to: clause("carbocation") }] },
@@ -81,7 +81,7 @@ const scenarios: Scenario[] = [
     },
     board: ["SET_ACTIVE"], mode: "REPRESENT",
     predicate: {
-      conditions: [{ antecedent: clause("forward", ["exothermic", "releases heat"]), consequence: clause(["raising temperature", "temperature increase", "temperature going up"], ["reverse", "backwards"]), forbiddenReverse: clause(["raising temperature", "temperature increase"], ["forward direction", "favours forward"]) }],
+      conditions: [{ antecedent: clause("forward", ["exothermic", "releases heat"]), consequence: clause(["raising temperature", "increasing temperature", "temperature increase", "temperature going up"], ["reverse", "backwards"]), forbiddenReverse: clause(["raising temperature", "increasing temperature", "temperature increase"], ["forward direction", "favours forward"]) }],
     },
     rationale: "Judge the conditional proposition and direction, not the literal conjunction used.",
   },
@@ -94,8 +94,8 @@ const scenarios: Scenario[] = [
     },
     board: ["SET_ACTIVE", "ADD_SUPPORT"], mode: "REPRESENT", initialActive: null,
     activePredicate: { propositions: [clause(["catalyst", "catalysed"], ["alternative pathway", "another pathway", "another route", "alternative reaction route"])] },
-    supportPredicates: [{ propositions: [clause(["activation energy", "energy barrier"], ["lowers", "lower"])], polarity: [{ claim: clause(["activation energy", "energy barrier"], ["raises", "higher", "increase"]), value: "negated" }] }],
-    predicate: { propositions: [clause(["catalyst", "catalysed"], ["alternative pathway", "another pathway", "another route", "alternative reaction route"]), clause(["activation energy", "energy barrier"], ["lowers", "lower"])], polarity: [{ claim: clause(["activation energy", "energy barrier"], ["raises", "higher", "increase"]), value: "negated" }] },
+    supportPredicates: [{ propositions: [clause(["activation energy", "energy barrier"], ["lowers", "lower"])], polarity: [{ claim: clause(["activation energy", "energy barrier"], ["raises", "raising", "higher", "increase"]), value: "negated" }] }],
+    predicate: { propositions: [clause(["catalyst", "catalysed"], ["alternative pathway", "another pathway", "another route", "alternative reaction route"]), clause(["activation energy", "energy barrier"], ["lowers", "lower"])], polarity: [{ claim: clause(["activation energy", "energy barrier"], ["raises", "raising", "higher", "increase"]), value: "negated" }] },
     rationale: "Require an exact final Active plus Support state across two accepted checkpoints.",
   },
   {
@@ -146,7 +146,7 @@ const scenarios: Scenario[] = [
       development: [["Write this note: at dynamic equilibrium, forward rate equals reverse rate."], ["Set dynamic equilibrium as the central point, and note that both reaction rates match."]],
     },
     board: ["SET_ACTIVE"], cue: ["SET"], cueKinds: ["NOTE"], mode: "REPRESENT",
-    predicate: { entities: [["dynamic equilibrium"], ["forward"], ["reverse"], ["rate", "rates"], ["equal", "equals", "match", "matches"]] },
+    predicate: { entities: [["dynamic equilibrium"], ["forward", "both reaction"], ["reverse", "both reaction"], ["rate", "rates"], ["equal", "equals", "match", "matches"]] },
     cuePredicate: { entities: [["forward", "both reaction"], ["reverse", "both reaction"], ["rate", "rates"], ["equal", "equals", "match", "matches"]] },
     rationale: "Create an explicit NOTE while establishing the same spoken central proposition.",
   },
@@ -257,7 +257,7 @@ const scenarios: Scenario[] = [
     },
     board: ["KEEP"], cue: ["SET"], cueKinds: ["HINT"], mode: "REPRESENT", initialActive: "Aluminium chloride dimer: Al₂Cl₆.", negativeAugment: true,
     predicate: { forbiddenPropositions: [clause(["friedel crafts", "friedel-crafts", "lewis acid", "catalyst for"])] },
-    cuePredicate: { entities: [["displayed formula", "read that formula", "read the dimer formula", "use what is visible"]], forbiddenPropositions: [clause(["friedel crafts", "friedel-crafts", "lewis acid", "catalyst for"])] },
+    cuePredicate: { entities: [["displayed formula", "formula on the board", "read that formula", "read the dimer formula", "use what is visible"]], forbiddenPropositions: [clause(["friedel crafts", "friedel-crafts", "lewis acid", "catalyst for"])] },
     rationale: "The current proposition is already visible, so unrelated or duplicate AUGMENT is a failure while the spoken HINT remains valid.",
   },
   {
