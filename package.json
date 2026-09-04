@@ -11,6 +11,9 @@
     "eval:semantics:freeze": "node --experimental-strip-types scripts/build-semantics-corpus.ts",
     "eval:semantics:validate": "node --experimental-strip-types scripts/evaluate-semantics.ts --validate",
     "eval:semantics:live": "node --experimental-strip-types scripts/evaluate-semantics.ts --live",
+    "eval:semantics:v2:freeze": "node --experimental-strip-types scripts/build-semantics-corpus-v2.ts",
+    "eval:semantics:v2:validate": "node --experimental-strip-types scripts/evaluate-semantics-v2.ts --validate",
+    "eval:semantics:v2:live": "node --experimental-strip-types scripts/evaluate-semantics-v2.ts --live",
     "preview": "vite preview"
   },
   "dependencies": {
