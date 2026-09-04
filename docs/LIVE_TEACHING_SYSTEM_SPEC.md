@@ -475,7 +475,7 @@ S = current Teaching State snapshot
 W = current unprocessed evidence batch
 ```
 
-Only `SEMANTICS` may choose a smaller normal policy after controlled ablation.
+Only the future `CONTEXT-POLICY` work package may choose a smaller normal policy after controlled ablation. `SEMANTICS` keeps P4 fixed.
 
 ---
 
@@ -1084,6 +1084,8 @@ At minimum include:
 20. correction history remains auditable but not learner-visible.
 
 The frozen corpus contains at least 60 multi-turn cases with approximately 40 development and 20 locked-holdout cases. It covers selectivity, current-trigger discipline, reconstruction, representation equivalence, Board continuity, teacher-originated Cue lifecycle, teacher correction, augmentation, Chemistry correctness, and answer-leakage risks. Provider evaluation uses the exact production P4 assembler, capability-aware schema, normalizer, validator, reducer, event append, and replay path. A second evaluator model is prohibited.
+
+The September 4, 2026 locked evaluation is recorded in `docs/SEMANTICS_EVALUATION.md`. It concluded `REVISE` and `AUGMENT_DISABLED`; the active profile therefore remains `alpha-core-p4-v1`.
 
 Critical gates include:
 
