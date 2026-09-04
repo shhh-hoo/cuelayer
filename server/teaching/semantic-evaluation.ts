@@ -66,6 +66,8 @@ const requiredHoldoutRisks = [
 export function normalizeSemanticText(value: string) {
   return value.toLowerCase()
     .replace(/[₀-₉]/g, (digit) => String("₀₁₂₃₄₅₆₇₈₉".indexOf(digit)))
+    .replace(/[⁰-⁹]/g, (digit) => String("⁰¹²³⁴⁵⁶⁷⁸⁹".indexOf(digit)))
+    .replace(/[ₐₑₕᵢⱼₖₗₘₙₒₚᵣₛₜᵤᵥₓ]/g, (letter) => ({ "ₐ": "a", "ₑ": "e", "ₕ": "h", "ᵢ": "i", "ⱼ": "j", "ₖ": "k", "ₗ": "l", "ₘ": "m", "ₙ": "n", "ₒ": "o", "ₚ": "p", "ᵣ": "r", "ₛ": "s", "ₜ": "t", "ᵤ": "u", "ᵥ": "v", "ₓ": "x" }[letter] ?? letter))
     .replace(/[⁺+]/g, "+").replace(/[⁻−-]/g, "-")
     .replace(/[⇌↔]/g, " equilibrium-arrow ").replace(/[→⟶]/g, " forward-arrow ")
     .replace(/[^a-z0-9+\-≥≤]+/g, " ").replace(/\s+/g, " ").trim();

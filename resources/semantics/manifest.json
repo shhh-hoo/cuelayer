@@ -1,5 +1,5 @@
 {
-  "corpusVersion": "alpha-semantics-corpus-v1",
+  "corpusVersion": "alpha-semantics-corpus-v2",
   "caseCount": 60,
   "splitMembership": {
     "development": [
@@ -73,7 +73,7 @@
     "ambiguous-reference": 1,
     "ambiguous-target": 1,
     "answer-leakage": 1,
-    "augment": 4,
+    "augment": 5,
     "autonomous-correct": 1,
     "autonomous-initiate": 2,
     "backlog": 1,
@@ -90,7 +90,7 @@
     "contrast": 1,
     "correction": 3,
     "create-resolve": 1,
-    "cue": 12,
+    "cue": 13,
     "cue-augment": 1,
     "definition": 1,
     "direction": 2,
@@ -112,7 +112,7 @@
     "invented-task": 1,
     "irrelevant-knowledge": 1,
     "later-speech-valid": 1,
-    "must-augment": 1,
+    "must-augment": 2,
     "negation": 1,
     "new-active": 1,
     "no-transcript": 1,
@@ -143,12 +143,12 @@
     "state-context": 1,
     "surface": 1,
     "symbolic": 1,
-    "task": 1,
+    "task": 2,
     "task-persistence": 1,
     "task-question": 1,
     "teacher-correction": 2,
     "teacher-error": 1,
-    "teacher-originated": 3,
+    "teacher-originated": 4,
     "term": 1,
     "topic-shift": 1,
     "transform": 1,
@@ -157,10 +157,10 @@
     "unfinished": 1,
     "unsupported-proposition": 1
   },
-  "fileSha256": "e84948966fd54c100968c8ff80c71befae9ce01c44412a1fe764a46562031bcb",
+  "fileSha256": "25c15122058b2910a29048d3b3400cfd1d8de8be15e21e78b7c5ed7f0f9d5597",
   "policyVersion": "bounded-agent-p4-semantics-v1",
   "profileVersion": "alpha-core-p4-v1",
-  "policyDigest": "500a340280615ef4811ffa1f90c1932712ca28b8cb7f6db5edae650d2d15d4af",
+  "policyDigest": "259c25a8dbcddfd180a7d4fac2239d0084895dd2351820432e5970d9fd25ed59",
   "schemaDigest": "0f28469be469b9bdbcd60094e6215725c1f22cfecbe8a01f2364dcd6a9d622ed",
   "creationTimestamp": "2026-09-04T00:00:00.000Z"
 }

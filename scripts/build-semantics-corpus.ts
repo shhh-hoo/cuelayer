@@ -28,9 +28,9 @@ const dev: Seed[] = [
   { id: "SEM-D008", split: "development", tags: ["reconstruct", "charge", "chemistry"], text: "Write sulfate as S O four two minus.", board: "SET_ACTIVE", mode: "RECONSTRUCT", required: ["so42-"], risk: "critical" },
   { id: "SEM-D009", split: "development", tags: ["reconstruct", "notation", "chemistry"], text: "The activation energy is E A.", board: "SET_ACTIVE", mode: "RECONSTRUCT", required: ["ea"] },
   { id: "SEM-D010", split: "development", tags: ["reconstruct", "term", "chemistry"], text: "This is electro fill it addition.", board: "SET_ACTIVE", mode: "RECONSTRUCT", required: ["electrophilic addition"] },
-  { id: "SEM-D011", split: "development", tags: ["reconstruct", "state-context"], text: "The damaged phrase refers to that activation barrier.", board: "SET_ACTIVE", mode: "RECONSTRUCT", required: ["activation"] },
+  { id: "SEM-D011", split: "development", tags: ["reconstruct", "state-context"], text: "That ASR fragment, action barrier, refers to the activation barrier on our reaction profile.", board: "SET_ACTIVE", mode: "RECONSTRUCT", required: ["activation barrier"], initialBoard: "Reaction profile" },
   { id: "SEM-D012", split: "development", tags: ["reconstruct", "ambiguity"], text: "It could be C two H four or C two H six; I cannot tell.", board: "KEEP", forbidden: ["c2h4", "c2h6"], risk: "critical" },
-  { id: "SEM-D013", split: "development", tags: ["boundary", "reconstruct-vs-augment"], text: "Aluminium chloride forms a dimer, but I have not said its formula.", board: "KEEP", forbidden: ["al2cl6"] },
+  { id: "SEM-D013", split: "development", tags: ["augment", "must-augment", "boundary", "reconstruct-vs-augment"], text: "Aluminium chloride forms a dimer; add its compact molecular formula even though I have not said it.", board: "SET_ACTIVE", mode: "AUGMENT", required: ["al2cl6"], mustAugment: true, risk: "critical", rationale: "Development-only positive control for a concise Board augmentation whose object and representational gap are explicit." },
   { id: "SEM-D014", split: "development", tags: ["represent", "cause"], text: "Increasing temperature causes more particles to exceed activation energy.", board: "SET_ACTIVE", mode: "REPRESENT", required: ["temperature", "activation energy"], relation: "cause" },
   { id: "SEM-D015", split: "development", tags: ["represent", "sequence"], text: "First add the acid, then warm the mixture.", board: "SET_ACTIVE", mode: "REPRESENT", required: ["add", "warm"], relation: "sequence" },
   { id: "SEM-D016", split: "development", tags: ["represent", "contrast"], text: "The catalyst changes the rate, whereas equilibrium position stays the same.", board: "SET_ACTIVE", mode: "REPRESENT", required: ["rate", "equilibrium"], relation: "contrast" },
@@ -40,18 +40,18 @@ const dev: Seed[] = [
   { id: "SEM-D020", split: "development", tags: ["represent", "condition"], text: "Only when oxygen is limited does carbon monoxide form.", board: "SET_ACTIVE", mode: "REPRESENT", required: ["oxygen", "limited", "carbon monoxide"], risk: "critical" },
   { id: "SEM-D021", split: "development", tags: ["represent", "direction"], text: "Energy transfer from the surroundings to the system is endothermic.", board: "SET_ACTIVE", mode: "REPRESENT", required: ["surroundings", "system", "endothermic"], forbidden: ["system to surroundings"], risk: "critical" },
   { id: "SEM-D022", split: "development", tags: ["represent", "uncertainty"], text: "This may be the rate-determining step.", board: "SET_ACTIVE", mode: "REPRESENT", required: ["may", "rate-determining"] },
-  { id: "SEM-D023", split: "development", tags: ["represent", "quantity"], text: "Record the result to two decimal places.", board: "SET_ACTIVE", mode: "REPRESENT", required: ["two decimal places"] },
-  { id: "SEM-D024", split: "development", tags: ["board", "add-support", "definition"], text: "This means particles need enough energy for a successful collision.", board: "ADD_SUPPORT", mode: "REPRESENT", required: ["enough energy"] },
+  { id: "SEM-D023", split: "development", tags: ["represent", "quantity", "cue", "task", "teacher-originated"], text: "Record the result to two decimal places.", board: "KEEP", cue: "SET", mode: "REPRESENT", required: ["two decimal places"] },
+  { id: "SEM-D024", split: "development", tags: ["board", "add-support", "definition"], text: "This means particles need enough energy for a successful collision.", board: "ADD_SUPPORT", mode: "REPRESENT", required: ["enough energy"], initialBoard: "Collision theory" },
   { id: "SEM-D025", split: "development", tags: ["board", "same-thread"], text: "Now add the condition that pressure is constant.", board: "ADD_SUPPORT", mode: "REPRESENT", required: ["pressure", "constant"] },
   { id: "SEM-D026", split: "development", tags: ["board", "new-active"], text: "Our new central idea is dynamic equilibrium.", board: "SET_ACTIVE", mode: "REPRESENT", required: ["dynamic equilibrium"], continuity: "topic_shift" },
-  { id: "SEM-D027", split: "development", tags: ["board", "false-topic-shift"], text: "Anyway, this same activation-energy explanation continues.", board: "ADD_SUPPORT", mode: "REPRESENT", required: ["activation"] },
+  { id: "SEM-D027", split: "development", tags: ["board", "false-topic-shift"], text: "Anyway, this same activation-energy explanation continues: fewer particles exceed the barrier at lower temperature.", board: "ADD_SUPPORT", mode: "REPRESENT", required: ["lower temperature", "fewer particles"], initialBoard: "Activation energy" },
   { id: "SEM-D028", split: "development", tags: ["board", "topic-shift"], text: "We are finished with kinetics; now the central topic is organic nomenclature.", board: "SET_ACTIVE", mode: "REPRESENT", required: ["organic nomenclature"], continuity: "topic_shift" },
   { id: "SEM-D029", split: "development", tags: ["board", "duplicate-support"], text: "The same unchanged supporting point applies again.", board: "KEEP" },
   { id: "SEM-D030", split: "development", tags: ["correction", "teacher-correction"], text: "Correction: I said covalent, but sodium chloride is ionic.", board: "SET_ACTIVE", mode: "REPRESENT", required: ["ionic"], forbidden: ["covalent"], continuity: "correction", initialBoard: "Sodium chloride is covalent.", risk: "critical" },
   { id: "SEM-D031", split: "development", tags: ["correction", "ambiguous-target"], text: "One of those earlier statements was wrong, but I will clarify later.", board: "KEEP" },
   { id: "SEM-D032", split: "development", tags: ["cue", "question", "teacher-originated"], text: "Which factor increases the reaction rate? Think before I answer.", board: "KEEP", cue: "SET", mode: "REPRESENT", required: ["which factor"] },
   { id: "SEM-D033", split: "development", tags: ["cue", "rhetorical"], text: "Why does it speed up? Because collisions are more frequent.", board: "SET_ACTIVE", cue: "KEEP", mode: "REPRESENT", required: ["collisions"] },
-  { id: "SEM-D034", split: "development", tags: ["cue", "task", "persistence"], text: "The activation barrier is unchanged while you continue the task.", board: "ADD_SUPPORT", cue: "KEEP", mode: "REPRESENT", initialCue: "TASK" },
+  { id: "SEM-D034", split: "development", tags: ["cue", "task", "persistence"], text: "The activation barrier is unchanged while you continue the task.", board: "ADD_SUPPORT", cue: "KEEP", mode: "REPRESENT", initialBoard: "Reaction profile", initialCue: "TASK" },
   { id: "SEM-D035", split: "development", tags: ["cue", "task-question"], text: "In pairs, decide which route is faster and write one reason.", board: "KEEP", cue: "SET", mode: "REPRESENT", required: ["decide", "reason"] },
   { id: "SEM-D036", split: "development", tags: ["cue", "hint", "teacher-originated"], text: "Here is a hint: compare the activation energies.", board: "KEEP", cue: "SET", mode: "REPRESENT", required: ["compare", "activation energies"] },
   { id: "SEM-D037", split: "development", tags: ["cue", "invented-hint"], text: "Students are still solving the prediction task silently.", board: "KEEP", cue: "KEEP", initialCue: "TASK", forbidden: ["hint", "answer"], risk: "critical" },
@@ -89,7 +89,7 @@ mkdirSync(outDir, { recursive: true });
 
 const defaultSafety = ["no_correct", "no_initiate", "current_trigger_required", "exact_quotes", "no_answer_leakage", "no_checkpoint_loss", "no_duplicate_consumption", "replay_equal", "no_normal_transcript"];
 const array = <T>(value: T | T[] | undefined, fallback: T): T[] => value === undefined ? [fallback] : Array.isArray(value) ? value : [value];
-const normalize = (value: string) => value.toLowerCase().replace(/[₀-₉]/g, (digit) => String("₀₁₂₃₄₅₆₇₈₉".indexOf(digit))).replace(/[⁺+]/g, "+").replace(/[⁻−-]/g, "-").replace(/[^a-z0-9+\-≥≤]+/g, " ").trim();
+const normalize = (value: string) => value.toLowerCase().replace(/[₀-₉]/g, (digit) => String("₀₁₂₃₄₅₆₇₈₉".indexOf(digit))).replace(/[⁰-⁹]/g, (digit) => String("⁰¹²³⁴⁵⁶⁷⁸⁹".indexOf(digit))).replace(/[ₐₑₕᵢⱼₖₗₘₙₒₚᵣₛₜᵤᵥₓ]/g, (letter) => ({ "ₐ": "a", "ₑ": "e", "ₕ": "h", "ᵢ": "i", "ⱼ": "j", "ₖ": "k", "ₗ": "l", "ₘ": "m", "ₙ": "n", "ₒ": "o", "ₚ": "p", "ᵣ": "r", "ₛ": "s", "ₜ": "t", "ᵤ": "u", "ᵥ": "v", "ₓ": "x" }[letter] ?? letter)).replace(/[⁺+]/g, "+").replace(/[⁻−-]/g, "-").replace(/[^a-z0-9+\-≥≤]+/g, " ").trim();
 
 function buildCase(seed: Seed) {
   const historyId = `${seed.id}-history`;
@@ -147,7 +147,7 @@ const hash = createHash("sha256").update(jsonl).digest("hex");
 const categoryCounts = Object.fromEntries([...new Set(cases.flatMap((item) => item.tags))].sort().map((tag) => [tag, cases.filter((item) => item.tags.includes(tag)).length]));
 const contract = teachingProviderContract(ALPHA_CORE_P4);
 const manifest = {
-  corpusVersion: "alpha-semantics-corpus-v1",
+  corpusVersion: "alpha-semantics-corpus-v2",
   caseCount: cases.length,
   splitMembership: { development: cases.filter((item) => item.split === "development").map((item) => item.id), holdout: cases.filter((item) => item.split === "holdout").map((item) => item.id) },
   categoryCounts,
