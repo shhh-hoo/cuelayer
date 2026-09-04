@@ -16,7 +16,7 @@ type PresentationStageProps = {
   speechStatus: SpeechStatus;
   showSpeechDebug: boolean;
   teachingState: TeachingStateSnapshot;
-  onTeachingSurfaceRendered?(details: { renderId: string; boardRevision: number; cueRevision: number; presentationMode: PresentationMode; density: BoardDensity }): void;
+  onTeachingSurfaceRendered?(details: { renderId: string; boardRevision: number; cueRevision: number; presentationMode: PresentationMode; density: BoardDensity; state: TeachingStateSnapshot }): void;
   onTeachingCueExpire(cueId: string, now: number): void;
 };
 

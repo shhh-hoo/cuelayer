@@ -11,6 +11,7 @@ import { useCanonicalSpeechSpanLifecycle } from "./use-canonical-speech-span-lif
 import { closeOpenCanonicalSpeechSpans } from "./canonical-speech";
 import { TeachingTraceDrawer } from "./TeachingTraceDrawer";
 import { traceDraft } from "../trace/contracts";
+import { auditDigest } from "../trace/audit";
 import { useCanonicalTrace } from "../trace/use-canonical-trace";
 import { useSessionTrace } from "../trace/use-session-trace";
 import { useTraceViewer } from "../trace/use-trace-viewer";
@@ -80,8 +81,8 @@ export function SessionPage() {
     }, { priority: "critical", correlation: { rootId: "presentation" } }));
   }, [state.presentation.error?.message, state.presentation.status, trace.emit]);
 
-  const onTeachingSurfaceRendered = useCallback(({ renderId, boardRevision, cueRevision, presentationMode, density }: { renderId: string; boardRevision: number; cueRevision: number; presentationMode: "presentationless" | "presentation-overlay"; density: BoardDensity }) => {
-    trace.emit(traceDraft("teaching_surface.rendered", { renderId, boardRevision, cueRevision, presentationMode }, {
+  const onTeachingSurfaceRendered = useCallback(({ renderId, boardRevision, cueRevision, presentationMode, density, state: renderedState }: { renderId: string; boardRevision: number; cueRevision: number; presentationMode: "presentationless" | "presentation-overlay"; density: BoardDensity; state: import("../lesson-stream/contracts").TeachingStateSnapshot }) => {
+    trace.emit(traceDraft("teaching_surface.rendered", { renderId, boardRevision, cueRevision, presentationMode, density, state: renderedState, stateDigest: auditDigest(renderedState), ...(renderedState.board.active ? { activeBoardItemId: renderedState.board.active.id } : {}), ...(renderedState.cue.active ? { activeCueId: renderedState.cue.active.id } : {}) }, {
       priority: "critical",
       correlation: { rootId: `teaching-state:${boardRevision}:${cueRevision}`, renderId, boardRevision, cueRevision },
     }));

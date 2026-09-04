@@ -7,6 +7,7 @@ import { createInitialTeachingState } from "../lesson-stream/teaching-state";
 import type { TeachingStateSnapshot } from "../lesson-stream/contracts";
 import type { AcceptedInterpretationStep } from "../lesson-stream/contracts";
 import { traceDraft, type AcceptedContributionAudit, type TraceEmitter } from "../trace/contracts";
+import { auditDigest } from "../trace/audit";
 import type { CanonicalSpeechState, SpeechRunId, SpeechStatus } from "./speech-types";
 import type { SessionStatus } from "./session-types";
 import { RetryBackoff } from "./retry-backoff";
@@ -19,7 +20,6 @@ export function checkpointTraceIdentity(speechRunId: SpeechRunId, spanId: string
   return `${speechRunId}:${spanId}`;
 }
 
-const bounded = (value: string, limit = 600) => value.length <= limit ? value : `${value.slice(0, limit - 1)}…`;
 const boardContentText = (content: import("../lesson-stream/contracts").BoardContent) => content.kind === "TEXT"
   ? content.text
   : content.kind === "FOCUS"
@@ -30,26 +30,26 @@ const boardContentText = (content: import("../lesson-stream/contracts").BoardCon
 function auditContribution(contribution: import("../lesson-stream/contracts").TeachingContribution<string | import("../lesson-stream/contracts").BoardContent>) {
   return {
     mode: contribution.mode,
-    content: bounded(typeof contribution.content === "string" ? contribution.content : boardContentText(contribution.content)),
+    content: typeof contribution.content === "string" ? contribution.content : boardContentText(contribution.content),
     provenance: {
       basis: contribution.provenance.basis,
-      speechRefs: (contribution.provenance.speechRefs ?? []).slice(0, 12).map((reference) => ({ checkpointId: reference.checkpointId, quote: bounded(reference.quote) })),
-      stateRefs: (contribution.provenance.stateRefs ?? []).slice(0, 6).map((reference) => ({ kind: reference.kind, id: reference.id })),
+      speechRefs: (contribution.provenance.speechRefs ?? []).map((reference) => ({ checkpointId: reference.checkpointId, quote: reference.quote })),
+      stateRefs: (contribution.provenance.stateRefs ?? []).map((reference) => ({ kind: reference.kind, id: reference.id })),
     },
   };
 }
 function acceptedContributionAudit(step: AcceptedInterpretationStep): AcceptedContributionAudit {
   const board = step.boardDelta.action === "SET_ACTIVE"
-    ? { action: step.boardDelta.action, contribution: auditContribution(step.boardDelta.contribution), support: (step.boardDelta.support ?? []).slice(0, 2).map(auditContribution), invalidatesBoardItemIds: (step.boardDelta.invalidatesBoardItemIds ?? []).slice(0, 4) }
+    ? { action: step.boardDelta.action, contribution: auditContribution(step.boardDelta.contribution), support: (step.boardDelta.support ?? []).map(auditContribution), invalidatesBoardItemIds: step.boardDelta.invalidatesBoardItemIds ?? [] }
     : step.boardDelta.action === "ADD_SUPPORT"
       ? { action: step.boardDelta.action, support: [auditContribution(step.boardDelta.support)], invalidatesBoardItemIds: [] }
-      : { action: step.boardDelta.action, support: [], invalidatesBoardItemIds: [] };
+    : { action: step.boardDelta.action, support: [], invalidatesBoardItemIds: [] };
   const cue = step.cueDelta.action === "SET"
     ? { action: step.cueDelta.action, kind: step.cueDelta.cueKind, contribution: auditContribution(step.cueDelta.contribution) }
     : step.cueDelta.action === "RESOLVE_CURRENT"
-      ? { action: step.cueDelta.action, resolutionEvidence: { checkpointId: step.cueDelta.evidence.checkpointId, quote: bounded(step.cueDelta.evidence.quote) } }
+    ? { action: step.cueDelta.action, resolutionEvidence: { checkpointId: step.cueDelta.evidence.checkpointId, quote: step.cueDelta.evidence.quote } }
       : { action: step.cueDelta.action };
-  return { board, cue, warnings: step.warnings.slice(0, 6).map((warning) => warning.detail ? { code: warning.code, detail: bounded(warning.detail, 240) } : { code: warning.code }) };
+  return { board, cue, warnings: step.warnings.map((warning) => warning.detail ? { code: warning.code, detail: warning.detail } : { code: warning.code }) };
 }
 
 export function emitAcceptedStepTrace({
@@ -58,16 +58,18 @@ export function emitAcceptedStepTrace({
   plannerRequestId,
   emit,
 }: {
-  transition: { step: AcceptedInterpretationStep; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot };
+  transition: { step: AcceptedInterpretationStep; lessonEventId?: string; lessonEventSequence?: number; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot };
   speechRunId: SpeechRunId;
   plannerRequestId: string;
   emit: TraceEmitter;
 }) {
-  const { step, stateBefore, stateAfter } = transition;
+  const { step, stateBefore, stateAfter, lessonEventId, lessonEventSequence } = transition;
   const correlation = { rootId: `interpretation:${plannerRequestId}`, runId: speechRunId, plannerRequestId, interpretationId: step.interpretationId, stepIndex: step.stepIndex, boardRevision: stateAfter.board.revision, cueRevision: stateAfter.cue.revision };
   emit(traceDraft("interpretation.step_accepted", {
     requestId: plannerRequestId,
     interpretationId: step.interpretationId,
+    ...(lessonEventId ? { lessonEventId } : {}),
+    ...(lessonEventSequence !== undefined ? { lessonEventSequence } : {}),
     stepIndex: step.stepIndex,
     checkpointIds: step.consumesCheckpointIds,
     boardAction: step.boardDelta.action,
@@ -75,6 +77,10 @@ export function emitAcceptedStepTrace({
     ...(step.boardDelta.action === "SET_ACTIVE" ? { boardMode: step.boardDelta.contribution.mode, boardSpeechRefCount: step.boardDelta.contribution.provenance.speechRefs?.length ?? 0 } : {}),
     ...(step.cueDelta.action === "SET" ? { cueMode: step.cueDelta.contribution.mode, cueSpeechRefCount: step.cueDelta.contribution.provenance.speechRefs?.length ?? 0 } : {}),
     acceptedContribution: acceptedContributionAudit(step),
+    stateBefore,
+    stateBeforeDigest: auditDigest(stateBefore),
+    stateAfter,
+    stateAfterDigest: auditDigest(stateAfter),
   }, { correlation }));
   if (step.boardDelta.action === "KEEP") emit(traceDraft("board.keep", { reason: step.boardDelta.reason }, { correlation }));
   if (step.boardDelta.action === "SET_ACTIVE") {
@@ -200,6 +206,17 @@ export function useLiveTeaching({
       return event?.type === "evidence.checkpoint_committed" ? [Date.parse(event.timestamp)] : [];
     });
     const oldestPendingAgeMs = committedTimes.length ? Math.max(0, Date.now() - Math.min(...committedTimes)) : 0;
+    const traceCorrelation = { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId };
+    onTrace?.(traceDraft("interpretation.request_snapshot", {
+      requestId: work.requestId,
+      sessionId,
+      policyVersion: request.policyVersion,
+      request,
+      requestDigest: auditDigest(request),
+      checkpointIds: request.newEvidence.map((item) => item.checkpointId),
+      baseBoardRevision: request.currentState.board.revision,
+      baseCueRevision: request.currentState.cue.revision,
+    }, { correlation: traceCorrelation }));
     onTrace?.(traceDraft("context_projection.created", { requestId: work.requestId, ...diagnostics, pendingCount: schedulerRef.current.pendingCount, oldestPendingAgeMs }, { correlation: { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId } }));
     onTrace?.(traceDraft("interpretation.request_started", { requestId: work.requestId, checkpointIds: work.checkpointIds, pendingCount: schedulerRef.current.pendingCount, projectedInputTokens: diagnostics.projectedInputTokens }, { correlation: { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId } }));
     setStatus("interpreting");
@@ -209,6 +226,26 @@ export function useLiveTeaching({
     const timeout = window.setTimeout(() => { timedOut = true; controller.abort("hard_deadline"); }, HARD_DEADLINE_MS);
 
     void interpreter.interpret(request, { signal: controller.signal }).then(async (response) => {
+      if (response.audit) {
+        const audit = response.audit;
+        onTrace?.(traceDraft("provider.contract_snapshot", {
+          contractDigest: audit.providerContract.providerContractDigest,
+          requestedModel: audit.providerContract.requestedModel,
+          ...(audit.providerContract.serviceTier ? { serviceTier: audit.providerContract.serviceTier } : {}),
+          temperature: audit.providerContract.temperature,
+          reasoningEffort: audit.providerContract.reasoningEffort,
+          maxOutputTokens: audit.providerContract.maxOutputTokens,
+          policyVersion: audit.providerContract.policyVersion,
+          systemPolicy: audit.providerContract.systemPolicy,
+          systemPolicyDigest: audit.providerContract.systemPolicyDigest,
+          structuredOutputSchema: audit.providerContract.structuredOutputSchema,
+          structuredOutputSchemaDigest: audit.providerContract.structuredOutputSchemaDigest,
+          providerContract: audit.providerContract,
+        }, { correlation: traceCorrelation }));
+        onTrace?.(traceDraft("provider.request_snapshot", { requestId: work.requestId, providerRequest: audit.providerRequest, providerContractDigest: audit.providerContract.providerContractDigest, domainRequestDigest: audit.domainRequestDigest }, { correlation: traceCorrelation }));
+        onTrace?.(traceDraft("provider.response_snapshot", { requestId: work.requestId, ...audit.providerResponse }, { correlation: traceCorrelation }));
+        onTrace?.(traceDraft("interpretation.proposal_normalized", { requestId: work.requestId, rawStructuredOutputDigest: audit.providerResponse.rawStructuredOutputDigest, normalizedProposal: response.proposal, normalizedProposalDigest: audit.normalizedProposalDigest }, { correlation: traceCorrelation }));
+      }
       const acceptance = await runtime.acceptProposal({
         proposal: response.proposal,
         request,
@@ -216,9 +253,29 @@ export function useLiveTeaching({
         isCurrent: () => activeRunRef.current === work.speechRunId && runtimeRef.current === runtime,
       });
       if (!acceptance.ok) {
+        onTrace?.(traceDraft("interpretation.validation_result", {
+          requestId: work.requestId,
+          status: "rejected",
+          reason: acceptance.error,
+          normalizedProposal: response.proposal,
+          normalizedProposalDigest: response.audit?.normalizedProposalDigest ?? auditDigest(response.proposal),
+          currentBoardRevision: request.currentState.board.revision,
+          currentCueRevision: request.currentState.cue.revision,
+        }, { correlation: traceCorrelation }));
         onTrace?.(traceDraft("interpretation.output_rejected", { requestId: work.requestId, reason: acceptance.error, pendingCount: schedulerRef.current.pendingCount }, { correlation: { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId } }));
         throw new Error(acceptance.error);
       }
+      onTrace?.(traceDraft("interpretation.validation_result", {
+        requestId: work.requestId,
+        status: "accepted",
+        normalizedProposal: response.proposal,
+        normalizedProposalDigest: response.audit?.normalizedProposalDigest ?? auditDigest(response.proposal),
+        boardConflict: acceptance.boardConflict,
+        cueConflict: acceptance.cueConflict,
+        acceptedStepCount: acceptance.steps.length,
+        currentBoardRevision: request.currentState.board.revision,
+        currentCueRevision: request.currentState.cue.revision,
+      }, { correlation: traceCorrelation }));
       if (acceptance.boardConflict) onTrace?.(traceDraft("interpretation.channel_conflict", { requestId: work.requestId, channel: "board" }, { correlation: { rootId: `interpretation:${work.requestId}`, plannerRequestId: work.requestId } }));
       if (acceptance.cueConflict) onTrace?.(traceDraft("interpretation.channel_conflict", { requestId: work.requestId, channel: "cue" }, { correlation: { rootId: `interpretation:${work.requestId}`, plannerRequestId: work.requestId } }));
       schedulerRef.current.settleAccepted(work.requestId, acceptance.steps.flatMap((step) => step.consumesCheckpointIds));
@@ -230,6 +287,21 @@ export function useLiveTeaching({
       acceptance.transitions.forEach((transition) => emitAcceptedStepTrace({ transition, speechRunId, plannerRequestId: work.requestId, emit: onTrace }));
       queueMicrotask(() => pumpRef.current());
     }).catch((reason: unknown) => {
+      const failureAudit = reason && typeof reason === "object" ? (reason as { audit?: { providerContract?: import("../lesson-stream/planner").TeachingInterpretationAudit["providerContract"]; providerRequest?: unknown; domainRequestDigest?: string; failureStage?: "provider_error" | "structured_parse_error" | "normalization_error" } }).audit : undefined;
+      if (failureAudit?.providerContract && failureAudit.domainRequestDigest) {
+        const contract = failureAudit.providerContract;
+        onTrace?.(traceDraft("provider.contract_snapshot", {
+          contractDigest: contract.providerContractDigest, requestedModel: contract.requestedModel, ...(contract.serviceTier ? { serviceTier: contract.serviceTier } : {}), temperature: contract.temperature, reasoningEffort: contract.reasoningEffort, maxOutputTokens: contract.maxOutputTokens, policyVersion: contract.policyVersion, systemPolicy: contract.systemPolicy, systemPolicyDigest: contract.systemPolicyDigest, structuredOutputSchema: contract.structuredOutputSchema, structuredOutputSchemaDigest: contract.structuredOutputSchemaDigest, providerContract: contract,
+        }, { correlation: traceCorrelation }));
+        onTrace?.(traceDraft("provider.request_snapshot", { requestId: work.requestId, providerRequest: failureAudit.providerRequest ?? {}, providerContractDigest: contract.providerContractDigest, domainRequestDigest: failureAudit.domainRequestDigest, providerSnapshotUnavailable: controller.signal.aborted ? "client_abort" : "provider_error" }, { correlation: traceCorrelation }));
+      }
+      onTrace?.(traceDraft("interpretation.validation_result", {
+        requestId: work.requestId,
+        status: failureAudit?.failureStage ?? "provider_error",
+        reason: reason instanceof Error ? reason.message : "teaching-provider-unavailable",
+        currentBoardRevision: request.currentState.board.revision,
+        currentCueRevision: request.currentState.cue.revision,
+      }, { correlation: traceCorrelation }));
       schedulerRef.current.settleFailed(work.requestId);
       const message = reason instanceof Error ? reason.message : "teaching-provider-unavailable";
       setError(message);

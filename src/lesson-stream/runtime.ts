@@ -15,7 +15,7 @@ export type LessonEventStore = {
 };
 
 export type ProposalAcceptance =
-  | { ok: true; steps: AcceptedInterpretationStep[]; transitions: Array<{ step: AcceptedInterpretationStep; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot }>; boardConflict: boolean; cueConflict: boolean; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot }
+  | { ok: true; steps: AcceptedInterpretationStep[]; transitions: Array<{ step: AcceptedInterpretationStep; lessonEventId: string; lessonEventSequence: number; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot }>; boardConflict: boolean; cueConflict: boolean; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot }
   | { ok: false; error: string };
 
 export class LessonStreamRuntime {
@@ -126,7 +126,7 @@ export class LessonStreamRuntime {
       if (!validation.ok) return validation;
       const checkpointSequences = new Map(this.replayValue.checkpoints.map((checkpoint) => [checkpoint.checkpointId, checkpoint.lessonSequence]));
       let rollingState = stateBefore;
-      const transitions = validation.steps.map((step) => {
+      const stateTransitions = validation.steps.map((step) => {
         const before = rollingState;
         rollingState = reduceAcceptedStep(rollingState, step, checkpointSequences);
         return { step, stateBefore: before, stateAfter: rollingState };
@@ -137,7 +137,7 @@ export class LessonStreamRuntime {
       return {
         ok: true,
         steps: validation.steps,
-        transitions,
+        transitions: stateTransitions.map((transition, index) => ({ ...transition, lessonEventId: events[index]!.eventId, lessonEventSequence: events[index]!.sequence })),
         boardConflict: validation.boardConflict,
         cueConflict: validation.cueConflict,
         stateBefore,

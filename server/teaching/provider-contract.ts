@@ -81,16 +81,30 @@ Within one ordered proposal only, a SET_ACTIVE in step N creates the determinist
 
 Cue supports KEEP, SET(NOTE|QUESTION|TASK|HINT), and RESOLVE_CURRENT. NOTE may use RECONSTRUCT, REPRESENT, or AUGMENT. QUESTION, TASK, and HINT may use RECONSTRUCT, REPRESENT, or INITIATE; INITIATE is appropriate only for a bounded learner action. CORRECT is not a Cue mode. High-risk CORRECT and INITIATE interventions need strong contextual justification and must protect active learning: do not reveal a complete answer while a genuine QUESTION or TASK remains unresolved, and explicitly resolve an active QUESTION or TASK before replacing it. Cue SET targetBoardItemId is optional: include it only for a current active or retained Board item, an earlier step's deterministic SET_ACTIVE ID, or this step's own deterministic SET_ACTIVE ID. If no target is confidently valid, omit targetBoardItemId. Board changes never resolve Cue; Cue resolution never clears Board.`;
 
-export function teachingResponseRequest(input: TeachingInterpretationRequest) {
+const teachingStructuredOutputFormat = zodTextFormat(teachingInterpretationSchema, "teaching_interpretation");
+
+/** The exact safe, credential-free provider contract shared by call and audit paths. */
+export function teachingProviderContract() {
   return {
     reasoning: { effort: "none" as const },
     temperature: 0,
     max_output_tokens: 2_048,
+    systemPolicy: teachingInterpretationPolicy,
+    text: { format: teachingStructuredOutputFormat },
+  };
+}
+
+export function teachingResponseRequest(input: TeachingInterpretationRequest) {
+  const contract = teachingProviderContract();
+  return {
+    reasoning: contract.reasoning,
+    temperature: contract.temperature,
+    max_output_tokens: contract.max_output_tokens,
     input: [
-      { role: "system" as const, content: teachingInterpretationPolicy },
+      { role: "system" as const, content: contract.systemPolicy },
       { role: "user" as const, content: JSON.stringify(input) },
     ],
-    text: { format: zodTextFormat(teachingInterpretationSchema, "teaching_interpretation") },
+    text: contract.text,
   };
 }
 

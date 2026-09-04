@@ -26,13 +26,13 @@ export function TeachingSurfaceLayer({ state, presentationMode, onCueExpire, onR
   state: TeachingStateSnapshot;
   presentationMode: PresentationMode;
   onCueExpire?(cueId: string, now: number): void;
-  onRendered?(details: { renderId: string; boardRevision: number; cueRevision: number; presentationMode: PresentationMode; density: BoardDensity }): void;
+  onRendered?(details: { renderId: string; boardRevision: number; cueRevision: number; presentationMode: PresentationMode; density: BoardDensity; state: TeachingStateSnapshot }): void;
 }) {
   const renderId = `render-${state.board.revision}-${state.cue.revision}-${presentationMode}`;
   const density = boardDensityForContent({ presentationMode, retainedCount: state.board.retained.length, cueTextLength: state.cue.active?.contribution.content.length ?? 0 });
   useEffect(() => {
     if (!state.board.active && !state.cue.active) return;
-    onRendered?.({ renderId, boardRevision: state.board.revision, cueRevision: state.cue.revision, presentationMode, density });
+    onRendered?.({ renderId, boardRevision: state.board.revision, cueRevision: state.cue.revision, presentationMode, density, state });
   }, [density, onRendered, presentationMode, renderId, state.board.active, state.board.revision, state.cue.active, state.cue.revision]);
 
   if (!state.board.active && !state.cue.active) return null;

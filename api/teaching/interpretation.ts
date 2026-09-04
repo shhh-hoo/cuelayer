@@ -40,7 +40,8 @@ export default async function handler(request: Request, response: Response): Pro
     });
     response.status(200).json({ ...result, ...(estimatedCostUsd === undefined ? {} : { estimatedCostUsd }) });
   } catch (error) {
-    response.status(502).json({ error: failureReason(error, timedOut) });
+    const audit = error && typeof error === "object" ? (error as { audit?: unknown }).audit : undefined;
+    response.status(502).json({ error: failureReason(error, timedOut), ...(audit ? { audit } : {}) });
   } finally {
     clearTimeout(timeout);
     request.signal?.removeEventListener("abort", forwardAbort);
