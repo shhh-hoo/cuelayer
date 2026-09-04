@@ -117,3 +117,74 @@ A real semantic microphone dogfood was not executed, so `LIVE_SEMANTICS_PASS` is
 8. measured live trace volume.
 
 Teacher approval/override UI, intervention-level controls, personality, avatar, voice, proactive timers, student-response triggers, and slide-understanding triggers remain future work. `teacher_override.applied` remains contract-only.
+
+---
+
+## V2 benchmark and evaluation — September 5, 2026
+
+This section is a separate evaluation record. The v1 narrative above remains historical evidence, but v1 is invalid as a final release gate because its locked gold/evaluator defects are documented in the [v1 → v2 benchmark defect ledger](../resources/semantics/v2/BENCHMARK_DEFECT_LEDGER.md). No v1 corpus, manifest, hash, provider-result, or failure-replay artifact was rewritten.
+
+### Frozen v2 authority
+
+- Corpus: `alpha-semantics-corpus-v2`, 60 cases (40 development / 20 locked holdout).
+- Final corpus SHA-256: `22d1456f1195dec9bf86023ab1d503ab0be025176bcf9d716ab940e028f52565`.
+- Evaluator: `alpha-semantics-evaluator-v2`.
+- Benchmark/runtime freeze commit: `3dad179`.
+- Final policy/config freeze commit: `fcc284f`.
+- Active profile: `alpha-core-p4-v4`, policy `bounded-agent-p4-semantics-v4`.
+- Candidate profile: `alpha-augment-p4-v4`; it adds Board-only AUGMENT and remains inactive.
+- Core policy digest: `ccc6f27785a8d8347c825dc7699407663c448b0ffaf736f0ac38b43d932ccb05`.
+- Core schema digest: `0f28469be469b9bdbcd60094e6215725c1f22cfecbe8a01f2364dcd6a9d622ed`.
+- Candidate policy digest: `1aa261b295c0f7035d2c58bec88559217b57ce02c25e04baa8b634207f16213c`.
+- Candidate schema digest: `018a8a9d613ddb5eaf03b14b0d04333d6892e7575cf862674c4eea5e7df88af7`.
+- Provider/model: OpenAI / `gpt-5.6-luna`, low reasoning, no temperature parameter.
+- No retry, repair model, fallback model, or second LLM verifier was used.
+
+V2 uses profile-specific gold, exact final Active/Support/retained/Cue expectations, and structured semantic predicates for entities, polarity, conditions, causal/transformation direction, uncertainty, quantities, propositions, and answer leakage. A checkpoint is lost only when it is neither consumed nor pending. Current-trigger judging examines accepted non-KEEP steps only. Deterministic integration tests own replay, duplicate-consumption, schema-compatibility, later-speech, and checkpoint-preservation invariants.
+
+The final holdout has multiple positive RECONSTRUCT, REPRESENT, QUESTION, TASK, HINT, NOTE, ADD_SUPPORT, SET_ACTIVE, topic-shift, correction, Cue-persistence, and Cue-resolution cases. Candidate AUGMENT has five materially distinct positive holdout cases and three negative traps. Every holdout scenario is paired with two development cases using different wording.
+
+### V2 development record
+
+Provider-backed development results before each benchmark/policy correction are retained under `resources/semantics/v2/results/`. The durable ledger records all development-derived corpus/evaluator corrections. No holdout result informed any correction.
+
+The final frozen-policy development passes were:
+
+| Profile/pass | Parse | Accepted | Decision | Board | Cue | Mode | Semantic | RECONSTRUCT | REPRESENT | AUGMENT precision | Must-augment recall | Critical failures | Tokens in/cache/out | Latency |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|
+| CORE 6 | 40/40 | 35/40 | 33/40 | 32/40 | 33/40 | 34/40 | 35/40 | 2/4 | 20/22 | n/a | n/a | fabricated quote: 2 | 201,428 / 170,751 / 19,528 | 250,115 ms |
+| AUGMENT 6 | 40/40 | 38/40 | 35/40 | 34/40 | 35/40 | 34/40 | 37/40 | 2/4 | 20/22 | 9/9 | 9/10 | zero | 197,579 / 167,992 / 18,666 | 248,573 ms |
+
+Low reasoning materially improved exactness and candidate AUGMENT behavior, at the cost of higher latency/output tokens. Core development still remained below the 95% release gates, so the locked holdout was expected to be diagnostic rather than promotable.
+
+### V2 locked holdout results
+
+The final corpus/evaluator and policy/config were unchanged across all four locked runs. Each pass is reported separately.
+
+| Profile/pass | Parse | Accepted | Decision | Board | Cue | Mode | Semantic | RECONSTRUCT | REPRESENT | AUGMENT precision | Must-augment recall | Critical failures | Tokens in/cache/out | Latency |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|
+| CORE 1 | 20/20 | 18/20 | 15/20 | 17/20 | 15/20 | 16/20 | 18/20 | 0/2 | 10/11 | n/a | n/a | fabricated quote: 1; invented task: 2 | 100,157 / 87,192 / 9,882 | 123,674 ms |
+| CORE 2 | 20/20 | 18/20 | 16/20 | 16/20 | 16/20 | 17/20 | 18/20 | 1/2 | 10/11 | n/a | n/a | corrected error visible: 1; invented task: 1 | 100,155 / 87,192 / 9,182 | 121,237 ms |
+| AUGMENT 1 | 20/20 | 20/20 | 18/20 | 17/20 | 18/20 | 19/20 | 20/20 | 1/2 | 11/11 | 5/5 | 5/5 | invented task: 1 | 100,635 / 87,648 / 8,888 | 96,276 ms |
+| AUGMENT 2 | 20/20 | 19/20 | 16/20 | 17/20 | 16/20 | 17/20 | 19/20 | 0/2 | 11/11 | 5/5 | 5/5 | invented task: 2 | 96,831 / 83,996 / 8,823 | 127,601 ms |
+
+All four passes had zero accepted autonomous CORRECT/INITIATE, checkpoint loss, duplicate consumption, replay mismatch, Cue AUGMENT, domain-only Cue, answer leakage, premature Cue resolution, history reactivation, unsupported REPRESENT, and normal-transcript/schema failures. Candidate passes also had zero unsupported or irrelevant accepted AUGMENT.
+
+Remaining real failures are concentrated in:
+
+- RECONSTRUCT mode selection (`SEM2-H-01`, `SEM2-H-02`), including formula speech treated as a learner task and fragmented speech represented rather than reconstructed;
+- QUESTION answer placement/lifecycle (`SEM2-H-06`);
+- topic/Cue action selection (`SEM2-H-11`, `SEM2-H-12`);
+- symbol mode/provenance (`SEM2-H-16`, `SEM2-H-17`);
+- negative-trap Cue handling (`SEM2-H-19`, `SEM2-H-20`);
+- retained correction on core pass 2 (`SEM2-H-10`).
+
+Complete JSON, failure JSONL, Markdown, and replay artifacts are stored under `resources/semantics/v2/results/`.
+
+### V2 decision and live gates
+
+`CORE_ALPHA_PASS = false`. Although structured parse was 100% and deterministic integrity gates were clean, both core holdout passes missed the ≥95% intervention, Board, Cue, contribution-mode, RECONSTRUCT, and REPRESENT requirements and contained genuine critical safety failures.
+
+`AUGMENT_ENABLED = false`. Candidate AUGMENT precision and must-augment recall were 100% in both locked passes with five positive cases, but the candidate regressed/fell below the required core gates and produced invented learner tasks. `ACTIVE_ALPHA_SEMANTIC_PROFILE` therefore remains `ALPHA_CORE_P4`; the candidate is not promoted.
+
+Status remains `REVISE` and `AUGMENT_DISABLED`. Because the valid offline v2 evaluation did not pass, real microphone/Speechmatics dogfood and Chrome/Firefox live regression were intentionally not run as compensating evidence. `LIVE_SEMANTICS_PASS` is not claimed. The live gates listed in the v1 record remain outstanding.
