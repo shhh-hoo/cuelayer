@@ -1,4 +1,4 @@
-import type { SpeechWord } from "../session/speech-types";
+import type { SpeechRunId, SpeechWord } from "../session/speech-types";
 
 export const LESSON_POLICY_VERSION = "bounded-agent-p4-alpha-v2";
 export const LESSON_EVENT_SCHEMA_VERSION = "lesson-event-v3-learner-agency";
@@ -12,7 +12,7 @@ export type SpeechEvidenceWarning = {
 export type CompactEvidenceCheckpoint = {
   checkpointId: string;
   lessonSequence: number;
-  speechRunId: number;
+  speechRunId: SpeechRunId;
   startMs: number;
   endMs: number;
   text: string;
@@ -143,6 +143,7 @@ export type TeachingStateSnapshot = {
 type EventIdentity = { schemaVersion: typeof LESSON_EVENT_SCHEMA_VERSION; eventId: string; sessionId: string; sequence: number };
 export type LessonEvent =
   | (EventIdentity & { type: "lesson.started"; timestamp: string })
+  | (EventIdentity & { type: "speech.run_allocated"; timestamp: string; runId: SpeechRunId })
   | (EventIdentity & { type: "evidence.checkpoint_committed"; timestamp: string; checkpoint: CompactEvidenceCheckpoint; grounding: GroundingRecord })
   | (EventIdentity & { type: "interpretation.step_accepted"; step: AcceptedInterpretationStep })
   | (EventIdentity & { type: "teaching_cue.expired"; cueId: string; baseCueRevision: number; timestamp: string })

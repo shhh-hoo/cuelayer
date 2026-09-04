@@ -1,3 +1,5 @@
+import type { SpeechRunId } from "../session/speech-types";
+
 export const TRACE_SCHEMA_VERSION = 2 as const;
 
 export type TracePriority = "critical" | "raw" | "aggregate";
@@ -6,7 +8,7 @@ export type TraceSource = "browser" | "synthetic";
 export type TraceCorrelation = {
   rootId?: string;
   lessonSequence?: number;
-  runId?: number;
+  runId?: SpeechRunId;
   speechEventId?: string;
   finalId?: string;
   spanId?: string;
@@ -20,6 +22,22 @@ export type TraceCorrelation = {
   boardItemId?: string;
   cueId?: string;
   renderId?: string;
+};
+
+export type AcceptedContributionAudit = {
+  board: {
+    action: string;
+    contribution?: { mode: string; content: string; provenance: { basis: string; speechRefs: Array<{ checkpointId: string; quote: string }>; stateRefs: Array<{ kind: string; id: string }> } };
+    support: Array<{ mode: string; content: string; provenance: { basis: string; speechRefs: Array<{ checkpointId: string; quote: string }>; stateRefs: Array<{ kind: string; id: string }> } }>;
+    invalidatesBoardItemIds: string[];
+  };
+  cue: {
+    action: string;
+    kind?: string;
+    contribution?: { mode: string; content: string; provenance: { basis: string; speechRefs: Array<{ checkpointId: string; quote: string }>; stateRefs: Array<{ kind: string; id: string }> } };
+    resolutionEvidence?: { checkpointId: string; quote: string };
+  };
+  warnings: Array<{ code: string; detail?: string }>;
 };
 
 export type SessionTracePayloads = {
@@ -38,7 +56,7 @@ export type SessionTracePayloads = {
   "session.ended": { reason: string };
   "presentation.state_changed": { previousStatus?: string; status: string; message?: string };
   "speech.lifecycle": {
-    runId: number;
+    runId: SpeechRunId;
     state:
       | "starting"
       | "browser_audio_ready"
@@ -56,22 +74,22 @@ export type SessionTracePayloads = {
     message?: string;
   };
   "speech.partial": {
-    runId: number;
+    runId: SpeechRunId;
     transcript: string;
     wordCount: number;
     coalescedRevisions?: number;
   };
   "speech.final_received": {
-    runId: number;
+    runId: SpeechRunId;
     transcript: string;
     wordCount: number;
     startMs?: number;
     endMs?: number;
   };
-  "speech.drain_completed": { runId: number };
-  "speech.drain_incomplete": { runId: number; code: string; message: string };
+  "speech.drain_completed": { runId: SpeechRunId };
+  "speech.drain_incomplete": { runId: SpeechRunId; code: string; message: string };
   "speech.transport_window": {
-    runId: number;
+    runId: SpeechRunId;
     scope: "window" | "run";
     windowStartedAt: string;
     windowEndedAt: string;
@@ -83,14 +101,14 @@ export type SessionTracePayloads = {
     final: boolean;
   };
   "canonical.final_committed": {
-    runId: number;
+    runId: SpeechRunId;
     finalId: string;
     speechEventId?: string;
     transcript: string;
     wordCount: number;
   };
   "canonical.span_changed": {
-    runId: number;
+    runId: SpeechRunId;
     spanId: string;
     revision: number;
     status: "open" | "closed";
@@ -98,15 +116,15 @@ export type SessionTracePayloads = {
     transcript: string;
     sourceFinalIds: string[];
   };
-  "evidence.checkpoint_opened": { runId: number; spanId: string; spanRevision: number };
-  "evidence.checkpoint_committed": { runId: number; checkpointId: string; lessonSequence: number; sourceFinalIds: string[]; warningCodes: string[] };
+  "evidence.checkpoint_opened": { runId: SpeechRunId; spanId: string; spanRevision: number };
+  "evidence.checkpoint_committed": { runId: SpeechRunId; checkpointId: string; lessonSequence: number; sourceFinalIds: string[]; warningCodes: string[] };
   "evidence.checkpoint_pending": { checkpointId: string; pendingCount: number; oldestPendingAgeMs: number; estimatedTokens: number };
   "interpretation.request_started": { requestId: string; checkpointIds: string[]; pendingCount: number; projectedInputTokens: number };
   "interpretation.request_completed": { requestId: string; latencyMs: number; inputTokens?: number; cachedInputTokens?: number; outputTokens?: number; estimatedCostUsd?: number; costStatus: "estimated" | "rates_unconfigured" };
   "interpretation.request_timeout": { requestId: string; latencyMs: number; pendingCount: number };
   "interpretation.output_rejected": { requestId: string; reason: string; pendingCount: number };
   "interpretation.channel_conflict": { requestId: string; channel: "board" | "cue" };
-  "interpretation.step_accepted": { requestId: string; interpretationId: string; stepIndex: number; checkpointIds: string[]; boardAction: string; cueAction: string; boardMode?: string; boardSpeechRefCount?: number; cueMode?: string; cueSpeechRefCount?: number };
+  "interpretation.step_accepted": { requestId: string; interpretationId: string; stepIndex: number; checkpointIds: string[]; boardAction: string; cueAction: string; boardMode?: string; boardSpeechRefCount?: number; cueMode?: string; cueSpeechRefCount?: number; acceptedContribution: AcceptedContributionAudit };
   "board.keep": { reason: string };
   "board.active_set": { boardItemId: string; continuity: string };
   "board.support_added": { boardItemId: string; supportId: string };

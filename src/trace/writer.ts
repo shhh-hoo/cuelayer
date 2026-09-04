@@ -5,6 +5,7 @@ import {
   type SessionTraceEvent,
   type TracePriority,
 } from "./contracts";
+import type { SpeechRunId } from "../session/speech-types";
 
 export type TraceWriterStatus = "healthy" | "recovering" | "degraded" | "closed";
 
@@ -81,7 +82,7 @@ export class TraceWriter {
     if (this.closed) return;
     const event = prepareTraceEvent(this.sessionId, this.sourceInstanceId, ++this.sourceSeq, draft);
     if (event.type === "speech.partial") {
-      const runId = (event.payload as { runId: number }).runId;
+      const runId = (event.payload as { runId: SpeechRunId }).runId;
       const key = `speech.partial:${runId}`;
       const previous = this.pendingPartials.get(key);
       this.pendingPartials.set(key, {

@@ -46,4 +46,19 @@ describe("completed trace archives", () => {
       second.close();
     }
   });
+
+  it("seals session.ended as the final durable event and rejects later emissions", async () => {
+    const runtime = await SessionTraceRuntime.open({ requestedSessionId: "session-sealed", path: "/session", environment: "test", sourceInstanceId: "browser-sealed" });
+    try {
+      runtime.emit(traceDraft("teaching_cue.keep", {}));
+      await runtime.complete("test-complete");
+      runtime.emit(traceDraft("teaching_surface.rendered", { renderId: "late", boardRevision: 1, cueRevision: 1, presentationMode: "presentationless" }));
+      const exported = await runtime.exportJsonlBlob();
+      const events = (await exported.text()).trim().split("\n").map((line) => JSON.parse(line));
+      expect(events.map((event) => event.type)).toEqual(["session.started", "teaching_cue.keep", "session.ended"]);
+      expect(events.at(-1)?.type).toBe("session.ended");
+    } finally {
+      runtime.close();
+    }
+  });
 });

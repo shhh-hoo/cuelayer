@@ -1,4 +1,5 @@
 import { LESSON_EVENT_SCHEMA_VERSION, type AcceptedInterpretationStep, type GroundingRecord, type LessonEvent, type CompactEvidenceCheckpoint } from "./contracts";
+import type { SpeechRunId } from "../session/speech-types";
 
 function randomId(prefix: string) {
   const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -7,6 +8,10 @@ function randomId(prefix: string) {
 
 export function lessonStartedEvent(sessionId: string, sequence: number, timestamp = new Date().toISOString()): LessonEvent {
   return { schemaVersion: LESSON_EVENT_SCHEMA_VERSION, type: "lesson.started", eventId: randomId("lesson-started"), sessionId, sequence, timestamp };
+}
+
+export function speechRunAllocatedEvent(sessionId: string, sequence: number, runId: SpeechRunId, timestamp = new Date().toISOString()): LessonEvent {
+  return { schemaVersion: LESSON_EVENT_SCHEMA_VERSION, type: "speech.run_allocated", eventId: randomId("speech-run"), sessionId, sequence, timestamp, runId };
 }
 
 export function checkpointCommittedEvent(sessionId: string, sequence: number, checkpoint: CompactEvidenceCheckpoint, grounding: GroundingRecord, timestamp = new Date().toISOString()): LessonEvent {

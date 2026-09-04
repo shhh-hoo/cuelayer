@@ -8,7 +8,7 @@ import { LosslessInterpretationScheduler } from "./pending-evidence";
 import { pendingEvidence, replayLessonEvents } from "./replay";
 import { LessonStreamRuntime, type LessonEventStore } from "./runtime";
 import { createInitialTeachingState } from "./teaching-state";
-import type { AcceptedInterpretationStep, BoardDelta, CompactEvidenceCheckpoint, TeachingCueDelta } from "./contracts";
+import type { AcceptedInterpretationStep, BoardDelta, CompactEvidenceCheckpoint, LessonEvent, TeachingCueDelta } from "./contracts";
 
 const span = (overrides: Partial<CanonicalSpeechSpan> = {}): CanonicalSpeechSpan => ({
   id: "speech-span-0",
@@ -74,6 +74,33 @@ describe("lesson evidence and replay", () => {
     expect(committed.text).toBe("Activation energy is the minimum energy required.");
     expect(checkpointFromClosedSpan(span({ status: "open" }), 1, 1)).toBeUndefined();
     expect(checkpointFromClosedSpan(span({ text: "...?!" }), 1, 1)).toBeUndefined();
+  });
+
+  it("keeps accepted work and new local span revisions distinct across a lesson reload", async () => {
+    const events: LessonEvent[] = [];
+    const store: LessonEventStore = { append: async (batch) => { events.push(...batch); }, readSession: async () => events };
+    const first = await LessonStreamRuntime.open("durable-identity", store);
+    const runA = await first.allocateSpeechRunId(() => "run-a");
+    const evidenceA = await first.commitClosedSpan(span({ id: `speech-span-run-${runA}-0`, sourceFinalIds: [`provider-final-run-${runA}-0`] }), runA);
+    await first.acceptSteps([acceptedStep(`interpretation-${runA}-1`, [evidenceA!.checkpointId], {
+      action: "SET_ACTIVE", contribution: boardText(evidenceA!.checkpointId, "Activation energy"), continuity: "topic_shift", retainPrevious: false,
+    }, { action: "SET", cueKind: "NOTE", contribution: visibleText(evidenceA!.checkpointId, "Notice activation energy") })]);
+    first.close();
+
+    const reloaded = await LessonStreamRuntime.open("durable-identity", store);
+    const runB = await reloaded.allocateSpeechRunId(() => "run-b");
+    const evidenceB = await reloaded.commitClosedSpan(span({ id: `speech-span-run-${runB}-0`, sourceFinalIds: [`provider-final-run-${runB}-0`] }), runB);
+    await reloaded.acceptSteps([acceptedStep(`interpretation-${runB}-1`, [evidenceB!.checkpointId], {
+      action: "SET_ACTIVE", contribution: boardText(evidenceB!.checkpointId, "Activation energy"), continuity: "topic_shift", retainPrevious: false,
+    }, { action: "SET", cueKind: "NOTE", contribution: visibleText(evidenceB!.checkpointId, "Notice activation energy") })]);
+
+    expect(runA).not.toBe(runB);
+    expect(evidenceA!.checkpointId).not.toBe(evidenceB!.checkpointId);
+    expect(reloaded.checkpoints.map((item) => item.checkpointId)).toEqual([evidenceA!.checkpointId, evidenceB!.checkpointId]);
+    expect(reloaded.replay.acceptedStepKeys.size).toBe(2);
+    expect(reloaded.state.board.active?.id).toBe(`board-interpretation-${runB}-1-accepted-0`);
+    expect(reloaded.state.cue.active?.id).toBe(`cue-interpretation-${runB}-1-accepted-0`);
+    reloaded.close();
   });
 
   it("persists accepted KEEP, consumes once, and replays identically", () => {

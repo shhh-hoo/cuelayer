@@ -1,4 +1,5 @@
 import { applySpeechEvent, closeCanonicalSpeechSpan, createInitialCanonicalSpeechState } from "./canonical-speech";
+import type { SpeechRunId } from "./speech-types";
 import type { SessionAction, SessionState } from "./session-types";
 
 export function createInitialSessionState(): SessionState {
@@ -24,7 +25,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       return {
         ...state,
         status: "active",
-        speech: { status: "starting", canonical: createInitialCanonicalSpeechState(), debug: { runId: action.runId, provisionalEvents: 0, committedEvents: 0 } },
+        speech: { status: "starting", canonical: createInitialCanonicalSpeechState(`run-${action.runId}`), debug: { runId: action.runId, provisionalEvents: 0, committedEvents: 0 } },
       };
     case "speech-ready":
       if (state.speech.debug.runId !== action.runId || state.speech.status !== "starting" || state.status !== "active") return state;
@@ -67,7 +68,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
   }
 }
 
-function closeOpenSpeechSpans(state: SessionState, runId: number, now: number) {
+function closeOpenSpeechSpans(state: SessionState, runId: SpeechRunId, now: number) {
   let next = state;
   for (const span of state.speech.canonical.spans.filter((item) => item.status === "open")) {
     next = sessionReducer(next, { type: "close-speech-span", runId, spanId: span.id, spanRevision: span.revision, reason: "explicit_stop", now });

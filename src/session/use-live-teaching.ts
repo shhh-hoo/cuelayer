@@ -6,16 +6,50 @@ import { LessonStreamRuntime } from "../lesson-stream/runtime";
 import { createInitialTeachingState } from "../lesson-stream/teaching-state";
 import type { TeachingStateSnapshot } from "../lesson-stream/contracts";
 import type { AcceptedInterpretationStep } from "../lesson-stream/contracts";
-import { traceDraft, type TraceEmitter } from "../trace/contracts";
-import type { CanonicalSpeechState, SpeechStatus } from "./speech-types";
+import { traceDraft, type AcceptedContributionAudit, type TraceEmitter } from "../trace/contracts";
+import type { CanonicalSpeechState, SpeechRunId, SpeechStatus } from "./speech-types";
 import type { SessionStatus } from "./session-types";
 import { RetryBackoff } from "./retry-backoff";
 
 const HARD_DEADLINE_MS = 6_000;
+const FINALIZATION_DRAIN_TIMEOUT_MS = 12_000;
 const MODEL_NAME = "gpt-5.6-luna";
 
-export function checkpointTraceIdentity(speechRunId: number, spanId: string) {
+export function checkpointTraceIdentity(speechRunId: SpeechRunId, spanId: string) {
   return `${speechRunId}:${spanId}`;
+}
+
+const bounded = (value: string, limit = 600) => value.length <= limit ? value : `${value.slice(0, limit - 1)}…`;
+const boardContentText = (content: import("../lesson-stream/contracts").BoardContent) => content.kind === "TEXT"
+  ? content.text
+  : content.kind === "FOCUS"
+    ? content.target
+    : content.kind === "RELATION"
+      ? `${content.relation}: ${content.targets.join("; ")}`
+      : `${content.from} → ${content.to}`;
+function auditContribution(contribution: import("../lesson-stream/contracts").TeachingContribution<string | import("../lesson-stream/contracts").BoardContent>) {
+  return {
+    mode: contribution.mode,
+    content: bounded(typeof contribution.content === "string" ? contribution.content : boardContentText(contribution.content)),
+    provenance: {
+      basis: contribution.provenance.basis,
+      speechRefs: (contribution.provenance.speechRefs ?? []).slice(0, 12).map((reference) => ({ checkpointId: reference.checkpointId, quote: bounded(reference.quote) })),
+      stateRefs: (contribution.provenance.stateRefs ?? []).slice(0, 6).map((reference) => ({ kind: reference.kind, id: reference.id })),
+    },
+  };
+}
+function acceptedContributionAudit(step: AcceptedInterpretationStep): AcceptedContributionAudit {
+  const board = step.boardDelta.action === "SET_ACTIVE"
+    ? { action: step.boardDelta.action, contribution: auditContribution(step.boardDelta.contribution), support: (step.boardDelta.support ?? []).slice(0, 2).map(auditContribution), invalidatesBoardItemIds: (step.boardDelta.invalidatesBoardItemIds ?? []).slice(0, 4) }
+    : step.boardDelta.action === "ADD_SUPPORT"
+      ? { action: step.boardDelta.action, support: [auditContribution(step.boardDelta.support)], invalidatesBoardItemIds: [] }
+      : { action: step.boardDelta.action, support: [], invalidatesBoardItemIds: [] };
+  const cue = step.cueDelta.action === "SET"
+    ? { action: step.cueDelta.action, kind: step.cueDelta.cueKind, contribution: auditContribution(step.cueDelta.contribution) }
+    : step.cueDelta.action === "RESOLVE_CURRENT"
+      ? { action: step.cueDelta.action, resolutionEvidence: { checkpointId: step.cueDelta.evidence.checkpointId, quote: bounded(step.cueDelta.evidence.quote) } }
+      : { action: step.cueDelta.action };
+  return { board, cue, warnings: step.warnings.slice(0, 6).map((warning) => warning.detail ? { code: warning.code, detail: bounded(warning.detail, 240) } : { code: warning.code }) };
 }
 
 export function emitAcceptedStepTrace({
@@ -25,7 +59,7 @@ export function emitAcceptedStepTrace({
   emit,
 }: {
   transition: { step: AcceptedInterpretationStep; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot };
-  speechRunId: number;
+  speechRunId: SpeechRunId;
   plannerRequestId: string;
   emit: TraceEmitter;
 }) {
@@ -40,6 +74,7 @@ export function emitAcceptedStepTrace({
     cueAction: step.cueDelta.action,
     ...(step.boardDelta.action === "SET_ACTIVE" ? { boardMode: step.boardDelta.contribution.mode, boardSpeechRefCount: step.boardDelta.contribution.provenance.speechRefs?.length ?? 0 } : {}),
     ...(step.cueDelta.action === "SET" ? { cueMode: step.cueDelta.contribution.mode, cueSpeechRefCount: step.cueDelta.contribution.provenance.speechRefs?.length ?? 0 } : {}),
+    acceptedContribution: acceptedContributionAudit(step),
   }, { correlation }));
   if (step.boardDelta.action === "KEEP") emit(traceDraft("board.keep", { reason: step.boardDelta.reason }, { correlation }));
   if (step.boardDelta.action === "SET_ACTIVE") {
@@ -72,7 +107,7 @@ export function useLiveTeaching({
   sessionId: string;
   sessionStatus: SessionStatus;
   speechStatus: SpeechStatus;
-  speechRunId: number;
+  speechRunId: SpeechRunId;
   canonicalSpeech: CanonicalSpeechState;
   onTrace?: TraceEmitter;
   interpreter?: TeachingInterpreter;
@@ -85,6 +120,7 @@ export function useLiveTeaching({
   const schedulerRef = useRef(new LosslessInterpretationScheduler());
   const pumpRef = useRef<() => void>(() => undefined);
   const activeControllerRef = useRef<AbortController | undefined>(undefined);
+  const finalizingRef = useRef(false);
   const retryBackoffRef = useRef(new RetryBackoff());
   const activeRunRef = useRef(speechRunId);
   const openedCheckpointTraceRef = useRef(new Set<string>());
@@ -153,7 +189,7 @@ export function useLiveTeaching({
 
   const pump = useCallback(() => {
     const runtime = runtimeRef.current;
-    if (!runtime || sessionStatus !== "active" || speechStatus !== "ready") return;
+    if (!runtime || sessionStatus !== "active" || (speechStatus !== "ready" && !finalizingRef.current)) return;
     if (retryBackoffRef.current.active) return;
     const scheduled = schedulerRef.current.next(speechRunId);
     if (!scheduled) return;
@@ -248,20 +284,48 @@ export function useLiveTeaching({
     }
   }, [onTrace]);
 
-  const endLesson = useCallback(async ({ canonicalSpeech, speechRunId }: { canonicalSpeech?: CanonicalSpeechState; speechRunId?: number } = {}) => {
-    activeControllerRef.current?.abort("lesson_ended");
+  const allocateSpeechRunId = useCallback(async () => {
     const runtime = runtimeRef.current;
-    if (!runtime) return;
-    await runtime.start();
-    if (canonicalSpeech && speechRunId !== undefined) {
-      for (const span of canonicalSpeech.spans.filter((item) => item.status === "closed")) {
-        const committed = await runtime.commitClosedSpan(span, speechRunId);
-        if (!committed) continue;
-        onTrace?.(traceDraft("evidence.checkpoint_committed", { runId: speechRunId, checkpointId: committed.checkpointId, lessonSequence: committed.lessonSequence, sourceFinalIds: committed.sourceFinalIds, warningCodes: committed.warnings.map((warning) => warning.code) }, { correlation: { rootId: `checkpoint:${committed.checkpointId}`, runId: speechRunId, lessonSequence: committed.lessonSequence, checkpointId: committed.checkpointId } }));
-      }
-    }
-    await runtime.end();
+    if (!runtime) throw new Error("lesson-runtime-not-ready");
+    return runtime.allocateSpeechRunId();
   }, []);
 
-  return { state, status, pendingCount, error, expireCue, endLesson };
+  const endLesson = useCallback(async ({ canonicalSpeech, speechRunId }: { canonicalSpeech?: CanonicalSpeechState; speechRunId?: SpeechRunId } = {}) => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return false;
+    finalizingRef.current = true;
+    await runtime.start();
+    try {
+      if (canonicalSpeech && speechRunId !== undefined) {
+        for (const span of canonicalSpeech.spans.filter((item) => item.status === "closed")) {
+          const committed = await runtime.commitClosedSpan(span, speechRunId);
+          if (!committed) continue;
+          schedulerRef.current.enqueue([committed]);
+          setPendingCount(schedulerRef.current.pendingCount);
+          onTrace?.(traceDraft("evidence.checkpoint_committed", { runId: speechRunId, checkpointId: committed.checkpointId, lessonSequence: committed.lessonSequence, sourceFinalIds: committed.sourceFinalIds, warningCodes: committed.warnings.map((warning) => warning.code) }, { correlation: { rootId: `checkpoint:${committed.checkpointId}`, runId: speechRunId, lessonSequence: committed.lessonSequence, checkpointId: committed.checkpointId } }));
+          onTrace?.(traceDraft("evidence.checkpoint_pending", { checkpointId: committed.checkpointId, pendingCount: schedulerRef.current.pendingCount, oldestPendingAgeMs: 0, estimatedTokens: Math.ceil(committed.text.length / 4) + 16 }, { correlation: { rootId: `checkpoint:${committed.checkpointId}`, runId: speechRunId, lessonSequence: committed.lessonSequence, checkpointId: committed.checkpointId } }));
+        }
+      }
+      pumpRef.current();
+      const deadline = Date.now() + FINALIZATION_DRAIN_TIMEOUT_MS;
+      while (schedulerRef.current.currentWork || schedulerRef.current.pendingCount) {
+        if (Date.now() >= deadline) {
+          const message = "lesson-finalization-incomplete";
+          setStatus("degraded");
+          setError(message);
+          setPendingCount(schedulerRef.current.pendingCount);
+          return false;
+        }
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 25));
+        pumpRef.current();
+      }
+      await runtime.end();
+      setPendingCount(0);
+      return true;
+    } finally {
+      finalizingRef.current = false;
+    }
+  }, [onTrace]);
+
+  return { state, status, pendingCount, error, expireCue, allocateSpeechRunId, endLesson };
 }

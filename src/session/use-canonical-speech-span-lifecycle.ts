@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import { SPEECH_SPAN_ASSEMBLY } from "./canonical-speech";
-import type { CanonicalSpeechState } from "./speech-types";
+import type { CanonicalSpeechState, SpeechRunId } from "./speech-types";
 import type { SessionAction } from "./session-types";
 
 type LifecycleInput = {
   canonicalSpeech: CanonicalSpeechState;
-  speechRunId: number;
+  speechRunId: SpeechRunId;
   dispatch(action: SessionAction): void;
 };
 

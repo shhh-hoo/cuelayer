@@ -1,12 +1,12 @@
 import { useEffect, useRef } from "react";
-import type { CanonicalSpeechState } from "../session/speech-types";
+import type { CanonicalSpeechState, SpeechRunId } from "../session/speech-types";
 import { traceDraft, type TraceEmitter } from "./contracts";
 
-export function canonicalRootId(runId: number, spanId: string, revision?: number) {
+export function canonicalRootId(runId: SpeechRunId, spanId: string, revision?: number) {
   return `speech:${runId}:span:${spanId}${revision === undefined ? "" : `@${revision}`}`;
 }
 
-export function canonicalFinalTraceDraft(runId: number, final: CanonicalSpeechState["finals"][number]) {
+export function canonicalFinalTraceDraft(runId: SpeechRunId, final: CanonicalSpeechState["finals"][number]) {
   return traceDraft("canonical.final_committed", {
     runId,
     finalId: final.id,
@@ -24,7 +24,7 @@ export function canonicalFinalTraceDraft(runId: number, final: CanonicalSpeechSt
   });
 }
 
-export function useCanonicalTrace(sessionId: string, runId: number, canonical: CanonicalSpeechState, emit: TraceEmitter) {
+export function useCanonicalTrace(sessionId: string, runId: SpeechRunId, canonical: CanonicalSpeechState, emit: TraceEmitter) {
   const observedScope = useRef<string | undefined>(undefined);
   const finalIds = useRef(new Set<string>());
   const spanRevisions = useRef(new Map<string, number>());

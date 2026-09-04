@@ -1,4 +1,4 @@
-import type { CanonicalSpeechSpan } from "../session/speech-types";
+import type { CanonicalSpeechSpan, SpeechRunId } from "../session/speech-types";
 import type { CompactEvidenceCheckpoint, GroundingRecord, SpeechEvidenceWarning } from "./contracts";
 
 const LEXICAL = /[\p{L}\p{N}]/u;
@@ -14,7 +14,7 @@ export function evidenceWarningsFor(span: CanonicalSpeechSpan): SpeechEvidenceWa
 
 export function checkpointFromClosedSpan(
   span: CanonicalSpeechSpan,
-  speechRunId: number,
+  speechRunId: SpeechRunId,
   lessonSequence: number,
 ): { checkpoint: CompactEvidenceCheckpoint; grounding: GroundingRecord } | undefined {
   const text = normalizedText(span.text);

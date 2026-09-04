@@ -5,6 +5,9 @@ export type SpeechWord = {
   confidence?: number;
 };
 
+/** Durable lesson-scoped opaque capture identity. */
+export type SpeechRunId = string | number;
+
 export type SpeechEvent =
   | { kind: "provisional"; text: string; words: SpeechWord[] }
   | { kind: "committed"; text: string; words: SpeechWord[]; speechEventId?: string }
@@ -35,6 +38,7 @@ export type CanonicalSpeechSpan = {
 };
 
 export type CanonicalSpeechState = {
+  identityScope?: string;
   finals: ProviderFinal[];
   spans: CanonicalSpeechSpan[];
   provisional?: { id: string; text: string; words: SpeechWord[] };
@@ -48,7 +52,7 @@ export type SpeechError = {
 };
 
 export type SpeechDebugState = {
-  runId: number;
+  runId: SpeechRunId;
   provisionalEvents: number;
   committedEvents: number;
   lastError?: SpeechError;

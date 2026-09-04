@@ -27,4 +27,26 @@ describe("live teaching trace correlation", () => {
     expect(set).toMatchObject({ payload: { cueId: "cue-batch-accepted-0", kind: "NOTE" }, correlation: { cueId: "cue-batch-accepted-0", cueRevision: 1 } });
     expect(resolved).toMatchObject({ payload: { cueId: "cue-batch-accepted-0", reason: "completed" }, correlation: { cueId: "cue-batch-accepted-0", cueRevision: 2 } });
   });
+
+  it("projects bounded accepted learner content and provenance into exportable trace facts", () => {
+    const accepted: AcceptedInterpretationStep = {
+      ...step(0, { action: "SET", cueKind: "QUESTION", contribution: { mode: "INITIATE", content: "Which particle crosses the threshold?", provenance: { basis: "DOMAIN_KNOWLEDGE" } } }),
+      interpretationId: "audit", requestId: "audit-request", consumesCheckpointIds: ["A"], warnings: [{ code: "checked" }],
+      boardDelta: { action: "SET_ACTIVE", continuity: "same_thread", retainPrevious: false, contribution: { mode: "AUGMENT", content: { kind: "TEXT", text: "Al₂Cl₆" }, provenance: { basis: "DOMAIN_KNOWLEDGE" } }, support: [{ mode: "REPRESENT", content: "Teacher said aluminium chloride", provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "A", quote: "aluminium chloride" }] } }] },
+    };
+    const before = createInitialTeachingState();
+    const after = reduceAcceptedStep(before, accepted, new Map([["A", 1]]));
+    const drafts: SessionTraceDraft[] = [];
+    emitAcceptedStepTrace({ transition: { step: accepted, stateBefore: before, stateAfter: after }, speechRunId: "speech-run-audit", plannerRequestId: accepted.requestId, emit: (draft) => drafts.push(draft) });
+    const event = drafts.find((draft) => draft.type === "interpretation.step_accepted");
+    expect(JSON.parse(JSON.stringify(event))).toMatchObject({
+      payload: {
+        acceptedContribution: {
+          board: { action: "SET_ACTIVE", contribution: { mode: "AUGMENT", content: "Al₂Cl₆", provenance: { basis: "DOMAIN_KNOWLEDGE", speechRefs: [] } }, support: [{ mode: "REPRESENT", provenance: { speechRefs: [{ checkpointId: "A", quote: "aluminium chloride" }] } }] },
+          cue: { action: "SET", kind: "QUESTION", contribution: { mode: "INITIATE", content: "Which particle crosses the threshold?" } },
+          warnings: [{ code: "checked" }],
+        },
+      },
+    });
+  });
 });

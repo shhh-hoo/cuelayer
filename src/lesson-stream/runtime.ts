@@ -1,11 +1,12 @@
 import type { CanonicalSpeechSpan } from "../session/speech-types";
 import { checkpointFromClosedSpan } from "./evidence-checkpoints";
 import { validateAndNormalizeProposal } from "./accepted-interpretations";
-import { checkpointCommittedEvent, cueExpiredEvent, interpretationAcceptedEvent, lessonEndedEvent, lessonStartedEvent } from "./events";
+import { checkpointCommittedEvent, cueExpiredEvent, interpretationAcceptedEvent, lessonEndedEvent, lessonStartedEvent, speechRunAllocatedEvent } from "./events";
 import { pendingEvidence, replayLessonEvents, type LessonReplay } from "./replay";
 import { LocalLessonEventStore } from "./store";
 import { reduceAcceptedStep } from "./teaching-state";
 import type { AcceptedInterpretationStep, LessonEvent, TeachingInterpretationRequest, TeachingStateSnapshot } from "./contracts";
+import type { SpeechRunId } from "../session/speech-types";
 
 export type LessonEventStore = {
   append(events: readonly LessonEvent[]): Promise<void>;
@@ -58,6 +59,19 @@ export class LessonStreamRuntime {
     });
   }
 
+  /** Persisted before capture begins; IDs are never derived from component-local state. */
+  async allocateSpeechRunId(randomUUID: () => string = () => globalThis.crypto.randomUUID()): Promise<SpeechRunId> {
+    return this.serialize(async () => {
+      if (this.replayValue.ended) throw new Error("lesson-already-ended");
+      if (!this.replayValue.events.some((event) => event.type === "lesson.started")) {
+        await this.appendNow([lessonStartedEvent(this.sessionId, this.nextEventSequence())]);
+      }
+      const runId = `speech-run-${randomUUID()}`;
+      await this.appendNow([speechRunAllocatedEvent(this.sessionId, this.nextEventSequence(), runId)]);
+      return runId;
+    });
+  }
+
   private nextEventSequence() {
     return Math.max(0, ...this.replayValue.events.map((event) => event.sequence)) + 1;
   }
@@ -73,7 +87,7 @@ export class LessonStreamRuntime {
     this.listeners.forEach((listener) => listener());
   }
 
-  async commitClosedSpan(span: CanonicalSpeechSpan, speechRunId: number) {
+  async commitClosedSpan(span: CanonicalSpeechSpan, speechRunId: SpeechRunId) {
     return this.serialize(async () => {
       if (!this.replayValue.events.some((event) => event.type === "lesson.started")) throw new Error("lesson-not-started");
       const result = checkpointFromClosedSpan(span, speechRunId, this.nextLessonSequence());

@@ -1,7 +1,7 @@
 export type MutableRef<T> = { current: T };
 
 export class SpeechDrainIncompleteError extends Error {
-  constructor(readonly runId: number, readonly cause: unknown) {
+  constructor(readonly runId: SpeechRunId, readonly cause: unknown) {
     super("Speechmatics drain completed without CueLayer observing EndOfTranscript.");
     this.name = "SpeechDrainIncompleteError";
   }
@@ -12,7 +12,7 @@ export class SpeechDrainIncompleteError extends Error {
  * messages are ordered, so every preceding AddTranscript has already passed
  * through CueLayer's receiveMessage handler when this settles.
  */
-export function createSpeechmaticsDrainBarrier(runId: number) {
+export function createSpeechmaticsDrainBarrier(runId: SpeechRunId) {
   let observed = false;
   let resolve: (() => void) | undefined;
   const completed = new Promise<void>((next) => { resolve = next; });
@@ -40,13 +40,13 @@ export async function drainSpeechmaticsStop({
   finish,
   fail,
 }: {
-  activeRunId: MutableRef<number | null>;
+  activeRunId: MutableRef<SpeechRunId | null>;
   stopping: MutableRef<boolean>;
   stopRecording(): void;
   stopTranscription(): Promise<unknown>;
   barrier: SpeechmaticsDrainBarrier;
-  finish(runId: number): void;
-  fail(runId: number, error: SpeechDrainIncompleteError): void;
+  finish(runId: SpeechRunId): void;
+  fail(runId: SpeechRunId, error: SpeechDrainIncompleteError): void;
 }) {
   const runId = activeRunId.current;
   if (runId === null) return;
@@ -75,3 +75,4 @@ export async function drainSpeechmaticsStop({
     stopping.current = false;
   }
 }
+import type { SpeechRunId } from "./speech-types";

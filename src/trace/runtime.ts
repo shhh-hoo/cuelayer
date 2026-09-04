@@ -27,6 +27,7 @@ export class SessionTraceRuntime {
   readonly sourceInstanceId: string;
   readonly replacedSessionId?: string;
   private completed = false;
+  private completing = false;
   private closed = false;
 
   private constructor(
@@ -93,7 +94,7 @@ export class SessionTraceRuntime {
   }
 
   emit(draft: SessionTraceDraft) {
-    if (this.closed || this.completed) return;
+    if (this.closed || this.completed || this.completing) return;
     this.writer.emit(draft);
   }
 
@@ -127,6 +128,10 @@ export class SessionTraceRuntime {
 
   async complete(reason: string) {
     if (this.closed || this.completed) return;
+    this.completing = true;
+    // Drain every earlier event before sealing the trace, then make session.ended
+    // the sole final durable event.
+    await this.writer.flush();
     this.writer.emit(traceDraft("session.ended", { reason }, { priority: "critical" }));
     await this.writer.flush();
     await this.store.completeSession(this.sessionId);

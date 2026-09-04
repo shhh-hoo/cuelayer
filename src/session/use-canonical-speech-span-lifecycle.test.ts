@@ -29,7 +29,7 @@ describe("canonical meaningful-pause closure", () => {
     expect(state.speech.canonical.spans[0]!.status).toBe("open");
     vi.advanceTimersByTime(1);
     expect(state.speech.canonical.spans[0]).toMatchObject({ status: "closed", closeReason: "meaningful_pause" });
-    expect(checkpointFromClosedSpan(state.speech.canonical.spans[0]!, 1, 1)?.checkpoint.checkpointId).toBe("checkpoint-1-speech-span-0-2");
+    expect(checkpointFromClosedSpan(state.speech.canonical.spans[0]!, 1, 1)?.checkpoint.checkpointId).toBe("checkpoint-1-speech-span-run-1-0-2");
     vi.advanceTimersByTime(1_000);
     expect(state.speech.canonical.spans.filter((span) => span.status === "closed")).toHaveLength(1);
     cleanup();

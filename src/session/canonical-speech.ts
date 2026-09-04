@@ -17,8 +17,8 @@ export type SpeechAssemblyChange = {
 
 export type CanonicalSpeechUpdate = { state: CanonicalSpeechState; changes: SpeechAssemblyChange[] };
 
-export function createInitialCanonicalSpeechState(): CanonicalSpeechState {
-  return { finals: [], spans: [] };
+export function createInitialCanonicalSpeechState(identityScope?: string): CanonicalSpeechState {
+  return { finals: [], spans: [], ...(identityScope ? { identityScope } : {}) };
 }
 
 function provisionalFrom(event: Extract<SpeechEvent, { kind: "provisional" }>, index: number) {
@@ -52,10 +52,10 @@ function closeSpan(span: CanonicalSpeechSpan, reason: CanonicalSpeechSpanCloseRe
   return { ...span, revision: span.revision + 1, status: "closed", closeReason: reason, updatedAtMs: now };
 }
 
-function openedSpan(final: ProviderFinal, index: number): CanonicalSpeechSpan {
+function openedSpan(final: ProviderFinal, index: number, identityScope?: string): CanonicalSpeechSpan {
   const bounds = finalBounds(final.words, final.committedAtMs);
   return {
-    id: `speech-span-${index}`,
+    id: identityScope ? `speech-span-${identityScope}-${index}` : `speech-span-${index}`,
     revision: 1,
     sourceFinalIds: [final.id],
     text: final.text,
@@ -91,7 +91,7 @@ export function applySpeechEvent(state: CanonicalSpeechState, event: SpeechEvent
   if (event.kind === "provisional") return { state: { ...state, provisional: provisionalFrom(event, state.finals.length) }, changes: [] };
 
   const final: ProviderFinal = {
-    id: `provider-final-${state.finals.length}`,
+    id: state.identityScope ? `provider-final-${state.identityScope}-${state.finals.length}` : `provider-final-${state.finals.length}`,
     ...(event.speechEventId ? { speechEventId: event.speechEventId } : {}),
     text: event.text,
     words: event.words,
@@ -125,7 +125,7 @@ export function applySpeechEvent(state: CanonicalSpeechState, event: SpeechEvent
 
   let current: CanonicalSpeechSpan;
   if (!open) {
-    current = openedSpan(final, spans.length);
+    current = openedSpan(final, spans.length, state.identityScope);
     spans.push(current);
     changes.push({ decision: "opened", spanId: current.id, spanRevision: current.revision, finalId: final.id });
   } else {

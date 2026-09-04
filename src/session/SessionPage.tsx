@@ -41,7 +41,6 @@ export function SessionPage() {
   const stageRef = useRef<HTMLElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const endedListenerRef = useRef<(() => void) | null>(null);
-  const speechRunIdRef = useRef(0);
   const previousPresentationStatusRef = useRef<string | undefined>(undefined);
   const teachingLayoutRef = useRef<string | undefined>(undefined);
   const prepareSpeechmaticsAudioContext = usePrepareSpeechmaticsAudioContext();
@@ -129,7 +128,6 @@ export function SessionPage() {
   const startPresentation = async () => {
     if (state.status === "ended") {
       trace.startNewSession();
-      speechRunIdRef.current = 0;
       previousPresentationStatusRef.current = undefined;
       teachingLayoutRef.current = undefined;
       dispatchSession({ type: "restart-session" });
@@ -164,13 +162,14 @@ export function SessionPage() {
     const finalCanonicalSpeech = closeOpenCanonicalSpeechSpans(stateRef.current.speech.canonical, "explicit_stop", Date.now());
     releasePresentation(true);
     await exitStageFullscreen();
-    await liveTeaching.endLesson({ canonicalSpeech: finalCanonicalSpeech, speechRunId });
+    const finalized = await liveTeaching.endLesson({ canonicalSpeech: finalCanonicalSpeech, speechRunId });
+    if (!finalized) return;
     await trace.complete("user_ended_session");
     dispatchSession({ type: "end", now: Date.now() });
   };
 
   const startSpeech = async () => {
-    const runId = ++speechRunIdRef.current;
+    const runId = await liveTeaching.allocateSpeechRunId();
     dispatchSession({ type: "begin-speech", runId });
     try { await startSpeechmatics(runId); }
     catch (error) {

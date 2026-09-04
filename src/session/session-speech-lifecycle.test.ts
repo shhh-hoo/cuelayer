@@ -4,7 +4,7 @@ import { stopCurrentSpeechRun } from "./session-speech-lifecycle";
 describe("session speech lifecycle", () => {
   it("stops the current run without a run-specific callback identity", async () => {
     const stateRef = { current: { speech: { debug: { runId: 1 } } } };
-    const stopped: number[] = [];
+    const stopped: Array<string | number> = [];
     const stop = () => stopCurrentSpeechRun({
       stateRef,
       stopSpeechmatics: async () => undefined,

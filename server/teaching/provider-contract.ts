@@ -11,8 +11,8 @@ const provenance = z.object({
   stateRefs: z.array(stateReference).max(6).nullable(),
   basis: z.enum(["SPEECH", "SPEECH_AND_STATE", "DOMAIN_KNOWLEDGE", "STATE_AND_DOMAIN_KNOWLEDGE"]),
 }).strict();
-const contribution = <T extends z.ZodType>(content: T) => z.object({
-  mode: z.enum(["RECONSTRUCT", "REPRESENT", "AUGMENT", "CORRECT", "INITIATE"]), content, provenance,
+const contribution = <T extends z.ZodType, const TMode extends readonly [string, ...string[]]>(content: T, modes: TMode) => z.object({
+  mode: z.enum(modes), content, provenance,
 }).strict();
 const keepReason = z.enum(["filler", "transition", "repetition", "unfinished", "insufficient_evidence", "ambiguous_reference", "classroom_management", "no_board_value"]);
 const boardContent = z.discriminatedUnion("kind", [
@@ -21,21 +21,26 @@ const boardContent = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("RELATION"), relation: z.enum(["cause", "sequence", "contrast"]), targets: z.array(text).min(2).max(6) }).strict(),
   z.object({ kind: z.literal("TRANSFORM"), from: text, to: text }).strict(),
 ]);
+const boardActiveContribution = contribution(boardContent, ["RECONSTRUCT", "REPRESENT", "AUGMENT", "CORRECT"]);
+const boardSupportContribution = contribution(text, ["RECONSTRUCT", "REPRESENT", "AUGMENT"]);
+const cueNoteContribution = contribution(text, ["RECONSTRUCT", "REPRESENT", "AUGMENT"]);
+const cueActionContribution = contribution(text, ["RECONSTRUCT", "REPRESENT", "INITIATE"]);
 const boardDelta = z.discriminatedUnion("action", [
   z.object({ action: z.literal("KEEP"), reason: keepReason }).strict(),
   z.object({
     action: z.literal("SET_ACTIVE"),
-    contribution: contribution(boardContent),
+    contribution: boardActiveContribution,
     continuity: z.enum(["same_thread", "topic_shift", "correction"]),
     retainPrevious: z.boolean(),
-    support: z.array(contribution(text)).max(2).nullable(),
+    support: z.array(boardSupportContribution).max(2).nullable(),
     invalidatesBoardItemIds: z.array(id).max(4).nullable(),
   }).strict(),
-  z.object({ action: z.literal("ADD_SUPPORT"), support: contribution(text), targetBoardItemId: id }).strict(),
+  z.object({ action: z.literal("ADD_SUPPORT"), support: boardSupportContribution, targetBoardItemId: id }).strict(),
 ]);
-const cueDelta = z.discriminatedUnion("action", [
+const cueDelta = z.union([
   z.object({ action: z.literal("KEEP") }).strict(),
-  z.object({ action: z.literal("SET"), cueKind: z.enum(["NOTE", "QUESTION", "TASK", "HINT"]), contribution: contribution(text), targetBoardItemId: id.nullable() }).strict(),
+  z.object({ action: z.literal("SET"), cueKind: z.literal("NOTE"), contribution: cueNoteContribution, targetBoardItemId: id.nullable() }).strict(),
+  z.object({ action: z.literal("SET"), cueKind: z.enum(["QUESTION", "TASK", "HINT"]), contribution: cueActionContribution, targetBoardItemId: id.nullable() }).strict(),
   z.object({ action: z.literal("RESOLVE_CURRENT"), reason: z.enum(["answered", "completed", "teacher_moved_on", "replaced"]), evidence: speechReference }).strict(),
 ]);
 const warning = z.object({ code: z.string().min(1).max(80), detail: z.string().min(1).max(240).nullable() }).strict();

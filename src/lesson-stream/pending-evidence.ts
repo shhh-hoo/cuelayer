@@ -1,8 +1,9 @@
 import type { CompactEvidenceCheckpoint } from "./contracts";
+import type { SpeechRunId } from "../session/speech-types";
 
 export type InterpretationWork = {
   requestId: string;
-  speechRunId: number;
+  speechRunId: SpeechRunId;
   checkpointIds: string[];
   startedAtMs: number;
 };
@@ -35,7 +36,7 @@ export class LosslessInterpretationScheduler {
     this.pending.sort((left, right) => left.lessonSequence - right.lessonSequence);
   }
 
-  next(speechRunId: number, tokenCap = 3_500, startedAtMs = Date.now()) {
+  next(speechRunId: SpeechRunId, tokenCap = 3_500, startedAtMs = Date.now()) {
     if (this.inFlight || !this.pending.length) return undefined;
     const batch: CompactEvidenceCheckpoint[] = [];
     let tokens = 0;
