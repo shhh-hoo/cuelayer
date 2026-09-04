@@ -1,6 +1,6 @@
 # CueLayer Live Teaching System Specification
 
-**Version:** v0.3 / `bounded-agent-p4-alpha-v2`
+**Version:** v0.4 / `alpha-core-p4-v1`
 **Status:** `LIVE-STATE` / `SEMANTICS` execution baseline  
 **Date:** 2026-09-02  
 **Scope:** single-session live teaching: speech evidence, stream processing, LLM interpretation, Teaching State, Teaching Board, Teaching Cue, and learner rendering.
@@ -19,9 +19,13 @@ If code and this document disagree, update this document intentionally before ch
 
 ### Alpha learner-surface authority
 
-Alpha is an AI-native learner-surface agent. The learner surface optimizes for the learner's current learning state, not fidelity to the teacher transcript. New evidence remains the sole deliberation trigger: it controls when Luna deliberates. Once triggered, Luna may reason from current evidence, processed lesson history, current Teaching State, and domain knowledge.
+Alpha is a bounded learner-surface agent, not a transcript formatter. The learner surface optimizes for the learner's current learning state and autonomously decides whether Board or Cue should change. Visual quiet is a successful outcome. New evidence remains the sole deliberation trigger. Once triggered, interpretation may reason from current evidence, processed lesson history, accepted interpretations, current Teaching State, and domain knowledge through the fixed P4 projection.
 
-Teacher speech is primary classroom evidence and context, not a permission boundary. Board contributions may `RECONSTRUCT`, `REPRESENT`, `AUGMENT`, or `CORRECT`; Teaching Cue may represent teacher activity or `INITIATE` a bounded `QUESTION`, `TASK`, or `HINT`. Provenance is accountability rather than authorization: claimed speech quotes exact-match immutable evidence, while domain- and state-based contributions must never manufacture speech provenance. Higher-risk interventions require stronger confidence and contextual justification in model policy; schema validation preserves boundedness and replayability without pretending to certify subject-matter truth.
+The broad persisted contribution vocabulary remains `RECONSTRUCT`, `REPRESENT`, `AUGMENT`, `CORRECT`, and `INITIATE` for schema compatibility. The live Alpha capability profile is narrower: Board permits `RECONSTRUCT` and `REPRESENT`; bounded Board `AUGMENT` remains disabled until its promotion gate passes. Teaching Cue permits only `RECONSTRUCT` and `REPRESENT`, and the represented `NOTE`, `QUESTION`, `TASK`, or `HINT` must originate in current classroom evidence. Autonomous `CORRECT` and `INITIATE` are not enabled.
+
+An explicit teacher self-correction remains supported as continuity=`correction` using a `RECONSTRUCT` or `REPRESENT` contribution, current correction evidence, and explicit invalidation of the superseded Board item. This is not autonomous AI `CORRECT`. Suspected teacher error without explicit correction must not establish a false visible claim or a contradictory AI correction; use KEEP and an optional diagnostic warning.
+
+Provenance is accountability rather than literal display equality. Every non-KEEP step requires an exact current trigger quote from a checkpoint consumed by that step. Claimed speech quotes exact-match immutable evidence; learner-visible content need not be a speech substring. Domain- and state-based contributions must never manufacture speech provenance, and deterministic validation does not claim to certify subject-matter truth.
 
 The lesson domain/event schema is versioned as `lesson-event-v3-learner-agency`. A persisted prior shape is an explicitly incompatible session boundary: it must be rejected or migrated deliberately, never silently replayed as this schema.
 
@@ -41,7 +45,7 @@ The system preserves four categories of information without collapsing them into
 | Previously accepted LLM work | `AcceptedInterpretationLog` | persistent | yes |
 | Current authoritative product state | `TeachingStateSnapshot` | materialized from events | yes |
 | Current unprocessed speech window | `PendingInterpretationBatch` | until accepted | yes |
-| Which of the above the model should receive | `ContextProjectionPolicy` | evaluated | P4 baseline in `LIVE-STATE`; ablation in `SEMANTICS` |
+| Which of the above the model should receive | `ContextProjectionPolicy` | evaluated | fixed P4 baseline; future ablation in `CONTEXT-POLICY` |
 
 Core rules:
 
@@ -595,7 +599,7 @@ type TeachingInterpretationStepProposal = {
 
 ### BoardDelta
 
-Teaching Board is the current shared knowledge workspace that the AI judges should be available to learners now. It is not limited to what the teacher most recently established. Its bounded contributions may reconstruct, represent, augment, or correct while retaining evidence history and reversible invalidation.
+Teaching Board is the current shared knowledge workspace that the AI judges should be available to learners now. It is not limited to what the teacher most recently established. Alpha may reconstruct, represent, and—only after promotion—narrowly augment while retaining evidence history and reversible invalidation. Teacher-evidenced corrections use correction continuity and explicit invalidation without an autonomous `CORRECT` contribution.
 
 ```ts
 type BoardDelta =
@@ -659,9 +663,8 @@ type TeachingContribution<TContent> = {
 };
 
 type InterventionRisk = "LOW" | "MEDIUM" | "HIGH";
-// LOW: RECONSTRUCT, REPRESENT
-// MEDIUM: AUGMENT, NOTE
-// HIGH: CORRECT, INITIATE QUESTION/TASK/HINT
+// Alpha live profiles allow LOW modes and may promote Board AUGMENT.
+// CORRECT and INITIATE remain readable vocabulary but are not accepted from new Alpha proposals.
 
 type BoardContent =
   | { kind: "TEXT"; text: string }
@@ -682,7 +685,7 @@ No arbitrary React, HTML, CSS, layout, timing, animation, or TeX enters `LIVE-ST
 
 ### TeachingCueDelta
 
-Teaching Cue is the learner cognitive action that should remain active now, whether represented from teacher activity or initiated by the AI. It is a sibling of Board with its own revision and lifecycle.
+Teaching Cue is the teacher-originated learner action that should remain active now. Alpha may reconstruct or represent that classroom action but may not originate it. Cue is a sibling of Board with its own revision and lifecycle.
 
 ```ts
 type TeachingCueDelta =
@@ -703,6 +706,8 @@ type TeachingCueDelta =
 Alpha defaults:
 
 - NOTE expires deterministically; QUESTION, TASK, and HINT persist until resolved or replaced;
+- Cue SET requires current teacher-speech evidence establishing the learner action;
+- HINT must be teacher-provided; an important Board item alone does not justify NOTE;
 - Board changes never resolve a cue by themselves;
 - cue resolution never clears Board;
 - an unresolved TASK or QUESTION must be explicitly resolved before another cue replaces it;
@@ -750,7 +755,9 @@ reduce Teaching State
 - exact substring validation applies only to `SpeechReference.quote` through local grounding records;
 - learner-visible contribution content is not required to be a speech substring; exact claimed speech references and all claimed state references must validate;
 - relation/transform may use historical evidence plus the current batch;
-- non-KEEP steps remain bounded by the current request's ordered checkpoint consumption; domain knowledge is not required to manufacture a speech reference;
+- every non-KEEP step includes at least one exact `evidenceRefs` quote from a checkpoint consumed by that step; this trigger reference explains why the contribution is considered now;
+- domain knowledge does not waive current-trigger evidence and is not required to manufacture contribution speech provenance;
+- Cue SET uses speech-bearing contribution provenance and classroom evidence establishing the learner action;
 - historical evidence and current state may inform a new Board object only after current evidence has triggered deliberation;
 - critical ASR warning defaults to KEEP unless clear evidence resolves the ambiguity.
 
@@ -1022,9 +1029,9 @@ Audit snapshots are complete, typed, and credential-free: the domain request (in
 
 ---
 
-## 14. Context policy evaluation — `SEMANTICS`
+## 14. Future context policy evaluation — `CONTEXT-POLICY`
 
-`LIVE-STATE` uses P4 as the lossless baseline. `SEMANTICS` runs the same stateful sequence corpus under:
+`LIVE-STATE` and `SEMANTICS` use P4 as the fixed lossless baseline:
 
 | Policy | Input | Purpose |
 |---|---|---|
@@ -1041,15 +1048,17 @@ Where:
 - `S` = current Teaching State;
 - `W` = new evidence batch.
 
-A smaller policy may become normal only if it passes every critical safety gate and remains within a predefined tolerance of P4 on state-transition and cue-lifecycle accuracy.
+`SEMANTICS` does not run this ablation. The future unnumbered `CONTEXT-POLICY` work package owns controlled P0-P4 comparison, context-size and long-context-position experiments, and any evidence-based selection of a smaller normal projection.
+
+A smaller policy may become normal only after `CONTEXT-POLICY` passes every critical safety gate and remains within a predefined tolerance of P4 on state-transition and cue-lifecycle accuracy.
 
 If P4 clearly beats P3, first inspect whether Teaching State is missing necessary semantic fields such as correction lineage, source IDs, teaching thread, or cue origin. Improve the state schema before permanently depending on raw model-response history.
 
-Before `SEMANTICS` evaluation, do not add adaptive retrieval, rolling summary, heuristic full-context escalation, state-only fast paths, or provider conversation memory as the source of truth.
+Before `CONTEXT-POLICY` evaluation, do not add adaptive retrieval, rolling summary, heuristic full-context escalation, state-only fast paths, or provider conversation memory as the source of truth.
 
 ---
 
-## 15. Stateful evaluation corpus
+## 15. Stateful semantic evaluation corpus — `SEMANTICS`
 
 At minimum include:
 
@@ -1074,12 +1083,19 @@ At minimum include:
 19. presentation mode change without teaching-state revision;
 20. correction history remains auditable but not learner-visible.
 
-Critical gates:
+The frozen corpus contains at least 60 multi-turn cases with approximately 40 development and 20 locked-holdout cases. It covers selectivity, current-trigger discipline, reconstruction, representation equivalence, Board continuity, teacher-originated Cue lifecycle, teacher correction, augmentation, Chemistry correctness, and answer-leakage risks. Provider evaluation uses the exact production P4 assembler, capability-aware schema, normalizer, validator, reducer, event append, and replay path. A second evaluator model is prohibited.
+
+Critical gates include:
 
 | Metric | Gate |
 |---|---:|
-| Invalid claimed provenance | 0 |
-| Gratuitous learner-action replacement / answer leakage | 0 |
+| Accepted CORRECT or INITIATE | 0 |
+| Cue AUGMENT or domain-only Cue provenance | 0 |
+| Non-KEEP without a current consumed trigger quote | 0 |
+| Invalid claimed provenance or fabricated quote | 0 |
+| Invented NOTE / QUESTION / TASK / HINT | 0 |
+| Incorrect learner-visible Chemistry or unsupported REPRESENT proposition | 0 |
+| Unsupported/irrelevant accepted AUGMENT or answer leakage | 0 |
 | Corrected error remains Active/Retained | 0 |
 | Persistent TASK/QUESTION resolves early | 0 |
 | Unconsumed checkpoint loss | 0 |
@@ -1087,10 +1103,9 @@ Critical gates:
 | Later speech alone causes stale | 0 |
 | Replay mismatch | 0 |
 | Structured parse | 100% |
-| State transition accuracy | `SEMANTICS` target ≥95% |
-| Cue lifecycle accuracy | `SEMANTICS` target ≥95% |
-| Subject-matter correctness / ASR recovery | `SEMANTICS` target ≥95% |
-| Augmentation precision / false-correction rate / answer leakage | locked `SEMANTICS` gates |
+| Intervention, Board transition, Cue lifecycle, contribution-mode accuracy | each ≥95% |
+| RECONSTRUCT and REPRESENT equivalence accuracy | each ≥95% |
+| Useful AUGMENT precision / must-augment recall before promotion | ≥95% / ≥80% |
 | Successful provider response accepted or explicitly channel-conflicted | near 100% |
 | Trace volume | <1 MB/min |
 | Normal raw transcript mounts | 0 |
@@ -1208,22 +1223,22 @@ And must include:
 
 Fixtures, synthetic injection, unit tests, or CI green alone cannot give `LIVE-STATE` PASS.
 
-### `SEMANTICS` — Stateful Semantics + Context Ablation
+### `SEMANTICS` — Constrained Alpha Teaching Semantics
 
 `SEMANTICS` does not rebuild stream infrastructure. It focuses on:
 
-1. multi-turn teaching sequence corpus;
-2. board-worthiness;
-3. Support vs new Active;
-4. same-thread / topic-shift / correction;
-5. cue persistence / resolution;
-6. older-reference recovery;
-7. ambiguity → KEEP;
-8. P0–P4 context ablation;
-9. selecting the smallest safe normal context policy;
-10. updating this document with the resulting policy decision.
+1. explicit Alpha capability profiles with autonomous `CORRECT` and `INITIATE` disabled;
+2. selective intervention and current-trigger discipline;
+3. `RECONSTRUCT` correctness and `REPRESENT` semantic equivalence;
+4. narrow Board `AUGMENT` evaluation and promotion gating;
+5. Support vs new Active and same-thread / topic-shift / teacher-correction continuity;
+6. teacher-originated Cue persistence and resolution;
+7. ambiguity, suspected teacher error, and answer leakage → KEEP;
+8. frozen multi-turn development and locked-holdout evaluation;
+9. production-path replay and safety verification;
+10. live semantic dogfood under fixed P4.
 
-`SEMANTICS` explicitly does not include ASR provider/config optimisation, live equation/reaction generation, slide understanding, RAG, arbitrary paraphrase, or broad visual redesign.
+`SEMANTICS` explicitly does not include P0-P4 ablation, ASR provider/config optimisation, live equation/reaction generation, slide understanding, RAG, arbitrary paraphrase, autonomous teacher correction, autonomous learner-action initiation, or broad visual redesign.
 
 ### `SPEECH-QUALITY` — Speech Evidence Quality
 
@@ -1309,6 +1324,19 @@ Future PR descriptions must cite affected acceptance IDs.
 - `E2E-04` Reload restores state without re-invoking the model.
 - `E2E-05` Trace stays below 1 MB/min.
 
+### Alpha semantics
+
+- `SEM-01` New Alpha proposals are constrained by the selected capability profile; autonomous `CORRECT` and `INITIATE` are rejected while persisted v3 events remain replayable.
+- `SEM-02` Every non-KEEP step has an exact current trigger quote from a checkpoint consumed by that step.
+- `SEM-03` `RECONSTRUCT` restores an intended teaching object without adding a proposition.
+- `SEM-04` `REPRESENT` preserves proposition set, negation, conditions, direction, uncertainty, scope, and quantities.
+- `SEM-05` Board `AUGMENT` remains disabled until frozen evaluation proves its precision, recall, provenance, and safety gates.
+- `SEM-06` Board Support, Active, Retained, topic-shift, and teacher-correction transitions remain coherent and bounded.
+- `SEM-07` Cue represents only teacher-originated learner actions and persists or resolves only from current classroom evidence.
+- `SEM-08` Semantic safety gates have zero critical violations on every locked pass.
+- `SEM-09` Provider evaluation freezes policy, profile, schema, corpus, evaluator, and hashes before locked holdout.
+- `SEM-10` Real `/session` dogfood demonstrates the selected frozen policy/profile through evidence, accepted state, replay, and render.
+
 ---
 
 ## 18. Explicitly rejected alternatives
@@ -1346,7 +1374,10 @@ Current phase rejects:
 | Visible active cue | 1 |
 | HINT expiry | none |
 | NOTE expiry | deterministic 4s |
-| RECONSTRUCT / REPRESENT / AUGMENT / CORRECT / INITIATE | enabled within bounded schema |
+| Persisted contribution vocabulary | RECONSTRUCT / REPRESENT / AUGMENT / CORRECT / INITIATE remain replayable in `lesson-event-v3-learner-agency` |
+| Active Alpha profile | `alpha-core-p4-v1`: Board and Cue RECONSTRUCT / REPRESENT only |
+| Board AUGMENT | disabled until frozen `alpha-augment-p4-v1` promotion gates pass |
+| Autonomous CORRECT / INITIATE | disabled |
 | Planner failure fallback | last state or visual quiet |
 | Single-lesson retrieval/summary | disabled |
 
