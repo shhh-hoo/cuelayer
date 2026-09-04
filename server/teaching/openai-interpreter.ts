@@ -3,7 +3,8 @@ import type { TeachingInterpretationProposal, TeachingInterpretationRequest } fr
 import type { JsonValue } from "../../src/trace/audit.ts";
 import { persistedAuditDigest } from "../../src/trace/audit.ts";
 import type { TeachingProviderAudit, TeachingProviderFailureAudit, TeachingProviderUsage, ProviderRequestEnvelope, ProviderResponseSnapshot } from "../../src/lesson-stream/audit-contracts.ts";
-import { normalizeTeachingProposal, teachingInterpretationSchema, teachingProviderContract, teachingResponseRequest } from "./provider-contract.ts";
+import { ACTIVE_ALPHA_SEMANTIC_PROFILE, type AlphaSemanticProfile } from "../../src/lesson-stream/semantic-profile.ts";
+import { createTeachingInterpretationSchema, normalizeTeachingProposal, teachingProviderContract, teachingResponseRequest } from "./provider-contract.ts";
 
 export type { TeachingProviderAudit, TeachingProviderFailureAudit, TeachingProviderUsage } from "../../src/lesson-stream/audit-contracts.ts";
 export type TeachingProviderResult = { proposal: TeachingInterpretationProposal; usage?: TeachingProviderUsage; serviceTier?: string; audit: TeachingProviderAudit };
@@ -51,10 +52,11 @@ export async function requestOpenAITeachingInterpretation(
   input: TeachingInterpretationRequest,
   apiKey: string,
   model: string,
-  options?: { signal?: AbortSignal; serviceTier?: "default" | "priority" },
+  options?: { signal?: AbortSignal; serviceTier?: "default" | "priority"; profile?: AlphaSemanticProfile },
 ): Promise<TeachingProviderResult> {
+  const profile = options?.profile ?? ACTIVE_ALPHA_SEMANTIC_PROFILE;
   const client = new OpenAI({ apiKey });
-  const request = { model, ...teachingResponseRequest(input), ...(options?.serviceTier ? { service_tier: options.serviceTier } : {}) };
+  const request = { model, ...teachingResponseRequest(input, profile), ...(options?.serviceTier ? { service_tier: options.serviceTier } : {}) };
   const providerRequest: ProviderRequestEnvelope = {
     model: request.model,
     ...(request.service_tier ? { service_tier: request.service_tier } : {}),
@@ -64,9 +66,9 @@ export async function requestOpenAITeachingInterpretation(
     input: request.input.map((item) => ({ role: item.role, content: item.content })),
     text: { format: jsonValue(request.text.format) },
   };
-  const contract = teachingProviderContract();
+  const contract = teachingProviderContract(profile);
   const structuredOutputSchema = providerRequest.text.format;
-  const contractFact = { model, ...(options?.serviceTier ? { serviceTier: options.serviceTier } : {}), reasoning: contract.reasoning, temperature: contract.temperature, maxOutputTokens: contract.max_output_tokens, systemPolicy: contract.systemPolicy, structuredOutputSchema };
+  const contractFact = { model, ...(options?.serviceTier ? { serviceTier: options.serviceTier } : {}), semanticProfileId: profile.id, policyVersion: profile.policyVersion, reasoning: contract.reasoning, temperature: contract.temperature, maxOutputTokens: contract.max_output_tokens, systemPolicy: contract.systemPolicy, structuredOutputSchema };
   const providerContract = {
     requestedModel: model,
     ...(options?.serviceTier ? { serviceTier: options.serviceTier } : {}),
@@ -74,6 +76,7 @@ export async function requestOpenAITeachingInterpretation(
     reasoningEffort: contract.reasoning.effort,
     maxOutputTokens: contract.max_output_tokens,
     policyVersion: input.policyVersion,
+    semanticProfileId: profile.id,
     systemPolicy: contract.systemPolicy,
     systemPolicyDigest: persistedAuditDigest(contract.systemPolicy),
     structuredOutputSchema,
@@ -95,7 +98,7 @@ export async function requestOpenAITeachingInterpretation(
   } catch (error) {
     throw Object.assign(error instanceof Error ? error : new Error("teaching-interpretation-structured-parse-failed"), { audit: { ...knownAudit, providerResponse: responseAudit, failureStage: "structured_parse_error" } satisfies TeachingProviderFailureAudit });
   }
-  const parsed = teachingInterpretationSchema.safeParse(rawStructuredOutput);
+  const parsed = createTeachingInterpretationSchema(profile).safeParse(rawStructuredOutput);
   if (!parsed.success) {
     const rawStructuredOutputDigest = persistedAuditDigest(rawStructuredOutput);
     throw Object.assign(new Error("teaching-interpretation-structured-parse-failed"), { audit: { ...knownAudit, providerResponse: providerResponseSnapshot({ ...responseFact, rawStructuredOutput, rawStructuredOutputDigest }), failureStage: "structured_parse_error" } satisfies TeachingProviderFailureAudit });

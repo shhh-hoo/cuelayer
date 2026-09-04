@@ -214,6 +214,7 @@ export function useLiveTeaching({
       requestId: work.requestId,
       sessionId,
       policyVersion: request.policyVersion,
+      semanticProfileId: request.semanticProfileId,
       request,
       requestDigest: persistedAuditDigest(request),
       requestBaseState: request.currentState,
@@ -241,6 +242,7 @@ export function useLiveTeaching({
           reasoningEffort: audit.providerContract.reasoningEffort,
           maxOutputTokens: audit.providerContract.maxOutputTokens,
           policyVersion: audit.providerContract.policyVersion,
+          semanticProfileId: audit.providerContract.semanticProfileId,
           systemPolicy: audit.providerContract.systemPolicy,
           systemPolicyDigest: audit.providerContract.systemPolicyDigest,
           structuredOutputSchema: audit.providerContract.structuredOutputSchema,
@@ -305,7 +307,7 @@ export function useLiveTeaching({
       if (failureAudit) {
         const contract = failureAudit.providerContract;
         onTrace?.(traceDraft("provider.contract_snapshot", {
-          contractDigest: contract.providerContractDigest, requestedModel: contract.requestedModel, ...(contract.serviceTier ? { serviceTier: contract.serviceTier } : {}), temperature: contract.temperature, reasoningEffort: contract.reasoningEffort, maxOutputTokens: contract.maxOutputTokens, policyVersion: contract.policyVersion, systemPolicy: contract.systemPolicy, systemPolicyDigest: contract.systemPolicyDigest, structuredOutputSchema: contract.structuredOutputSchema, structuredOutputSchemaDigest: contract.structuredOutputSchemaDigest, providerContract: contract,
+          contractDigest: contract.providerContractDigest, requestedModel: contract.requestedModel, ...(contract.serviceTier ? { serviceTier: contract.serviceTier } : {}), temperature: contract.temperature, reasoningEffort: contract.reasoningEffort, maxOutputTokens: contract.maxOutputTokens, policyVersion: contract.policyVersion, semanticProfileId: contract.semanticProfileId, systemPolicy: contract.systemPolicy, systemPolicyDigest: contract.systemPolicyDigest, structuredOutputSchema: contract.structuredOutputSchema, structuredOutputSchemaDigest: contract.structuredOutputSchemaDigest, providerContract: contract,
         }, { correlation: traceCorrelation }));
         onTrace?.(traceDraft("provider.request_snapshot", { requestId: work.requestId, providerRequest: failureAudit.providerRequest, providerRequestDigest: failureAudit.providerRequestDigest, providerContractDigest: contract.providerContractDigest, domainRequestDigest: failureAudit.domainRequestDigest, providerSnapshotUnavailable: controller.signal.aborted ? "client_abort" : "provider_error" }, { correlation: traceCorrelation }));
         if (failureAudit.providerResponse) onTrace?.(traceDraft("provider.response_snapshot", { requestId: work.requestId, providerResponse: failureAudit.providerResponse, providerResponseDigest: failureAudit.providerResponse.providerResponseDigest }, { correlation: traceCorrelation }));

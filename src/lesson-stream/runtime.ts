@@ -7,6 +7,7 @@ import { LocalLessonEventStore } from "./store";
 import { reduceAcceptedStep } from "./teaching-state";
 import type { AcceptedInterpretationStep, LessonEvent, TeachingInterpretationRequest, TeachingStateSnapshot } from "./contracts";
 import type { SpeechRunId } from "../session/speech-types";
+import type { AlphaSemanticProfile } from "./semantic-profile";
 
 export type LessonEventStore = {
   append(events: readonly LessonEvent[]): Promise<void>;
@@ -113,16 +114,18 @@ export class LessonStreamRuntime {
     request,
     model,
     isCurrent = () => true,
+    profile,
   }: {
     proposal: unknown;
     request: TeachingInterpretationRequest;
     model: string;
     isCurrent?: () => boolean;
+    profile?: AlphaSemanticProfile;
   }): Promise<ProposalAcceptance> {
     return this.serialize(async () => {
       if (!isCurrent()) return { ok: false, error: "interpretation-stale-speech-run", validationState: this.replayValue.state };
       const stateBefore = this.replayValue.state;
-      const validation = validateAndNormalizeProposal({ proposal, request, allCheckpoints: this.replayValue.checkpoints, state: stateBefore, model });
+      const validation = validateAndNormalizeProposal({ proposal, request, allCheckpoints: this.replayValue.checkpoints, state: stateBefore, model, profile });
       if (!validation.ok) return { ...validation, validationState: stateBefore };
       const checkpointSequences = new Map(this.replayValue.checkpoints.map((checkpoint) => [checkpoint.checkpointId, checkpoint.lessonSequence]));
       let rollingState = stateBefore;

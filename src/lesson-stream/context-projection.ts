@@ -1,5 +1,6 @@
 import type { ContextProjectionDiagnostics, LessonEvent, ProcessedTimelineEntry, TeachingInterpretationRequest, TeachingStateSnapshot, CompactEvidenceCheckpoint } from "./contracts";
 import { LESSON_POLICY_VERSION } from "./contracts";
+import { ACTIVE_ALPHA_SEMANTIC_PROFILE, type AlphaSemanticProfile } from "./semantic-profile";
 import { createInitialTeachingState, reduceLessonEvent } from "./teaching-state";
 
 const estimatedTokens = (value: unknown) => Math.ceil(JSON.stringify(value).length / 4);
@@ -42,19 +43,22 @@ export function buildTeachingInterpretationRequest({
   events,
   currentState,
   newEvidence,
+  profile = ACTIVE_ALPHA_SEMANTIC_PROFILE,
 }: {
   requestId: string;
   sessionId: string;
   events: readonly LessonEvent[];
   currentState: TeachingStateSnapshot;
   newEvidence: CompactEvidenceCheckpoint[];
+  profile?: AlphaSemanticProfile;
 }): { request: TeachingInterpretationRequest; diagnostics: ContextProjectionDiagnostics } {
   if (!newEvidence.length) throw new Error("interpretation-request-needs-evidence");
   const processedTimeline = projectProcessedTimeline(events);
   const request: TeachingInterpretationRequest = {
     requestId,
     sessionId,
-    policyVersion: LESSON_POLICY_VERSION,
+    policyVersion: profile.policyVersion ?? LESSON_POLICY_VERSION,
+    semanticProfileId: profile.id,
     processedTimeline,
     currentState,
     newEvidence,

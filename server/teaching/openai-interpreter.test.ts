@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LESSON_POLICY_VERSION, type TeachingInterpretationRequest } from "../../src/lesson-stream/contracts";
 import { createInitialTeachingState } from "../../src/lesson-stream/teaching-state";
+import { ACTIVE_ALPHA_SEMANTIC_PROFILE, ALPHA_AUGMENT_CANDIDATE_P4 } from "../../src/lesson-stream/semantic-profile";
 
 const mocks = vi.hoisted(() => ({ constructor: vi.fn(), create: vi.fn() }));
 vi.mock("openai", () => ({
@@ -11,7 +12,7 @@ vi.mock("openai", () => ({
 }));
 
 import { estimateTeachingCost, requestOpenAITeachingInterpretation } from "./openai-interpreter";
-import { normalizeTeachingProposal, teachingInterpretationSchema } from "./provider-contract";
+import { createTeachingInterpretationSchema, normalizeTeachingProposal, teachingInterpretationSchema } from "./provider-contract";
 import { validateAndNormalizeProposal } from "../../src/lesson-stream/accepted-interpretations";
 import { persistedAuditDigest } from "../../src/trace/audit";
 
@@ -19,6 +20,7 @@ const input: TeachingInterpretationRequest = {
   requestId: "request-1",
   sessionId: "session-1",
   policyVersion: LESSON_POLICY_VERSION,
+  semanticProfileId: ACTIVE_ALPHA_SEMANTIC_PROFILE.id,
   processedTimeline: [{ type: "evidence", checkpointId: "checkpoint-0", sequence: 1, text: "Activation energy is required.", warnings: [] }],
   currentState: createInitialTeachingState(),
   newEvidence: [{ checkpointId: "checkpoint-1", lessonSequence: 2, speechRunId: 1, startMs: 100, endMs: 200, text: "Temperature increases.", sourceFinalIds: ["provider-final-1"], warnings: [] }],
@@ -57,19 +59,18 @@ describe("OpenAI Teaching State interpreter", () => {
     expect(request.reasoning).toEqual({ effort: "none" });
     expect(request.temperature).toBe(0);
     expect(request.input[0].content).toContain("currentState is current authority");
-    expect(request.input[0].content).toContain("newEvidence is the only allowed trigger");
-    expect(request.input[0].content).toContain("not a content-permission boundary");
+    expect(request.input[0].content).toContain("newEvidence is the sole deliberation trigger");
+    expect(request.input[0].content).toContain("Every non-KEEP step must include evidenceRefs");
     expect(request.input[0].content).toContain("STATE_AND_DOMAIN_KNOWLEDGE");
-    expect(request.input[0].content).toContain("SET(NOTE|QUESTION|TASK|HINT)");
+    expect(request.input[0].content).toContain("Cue represents only teacher-originated classroom action");
     expect(request.input[0].content).toContain("board-${requestId}-accepted-N");
-    expect(request.input[0].content).toContain("zero-based earlier step index");
-    expect(request.input[0].content).toContain("Cue SET targetBoardItemId is optional");
-    expect(request.input[0].content).toContain("this step's own deterministic SET_ACTIVE ID");
+    expect(request.input[0].content).toContain("Autonomous CORRECT and INITIATE are disabled");
     expect(request.input[1].content).toBe(JSON.stringify(input));
     expect(request.input[1].content).not.toContain('"words"');
     expect(request.input[1].content).not.toContain("providerEvidence");
     expect(mocks.create.mock.calls[0]![1]).toEqual({ signal: controller.signal });
     expect(result.audit).toMatchObject({ providerRequestDigest: expect.any(String), providerResponse: { providerResponseId: "response-1", providerModel: "gpt-5.6-luna-actual", outputText: expect.any(String), rawStructuredOutput: { requestId: "request-1" }, providerResponseDigest: expect.any(String) } });
+    expect(result.audit.providerContract).toMatchObject({ semanticProfileId: "alpha-core-p4-v1", policyVersion: LESSON_POLICY_VERSION, systemPolicyDigest: expect.any(String), structuredOutputSchemaDigest: expect.any(String) });
     const { providerResponseDigest, ...providerResponseFact } = result.audit.providerResponse;
     expect(providerResponseDigest).toBe(persistedAuditDigest(providerResponseFact));
   });
@@ -147,37 +148,30 @@ describe("OpenAI Teaching State interpreter", () => {
     expect(proposal.warnings).toEqual([{ code: "proposal-note", detail: "kept" }]);
   });
 
-  it("keeps provider action schemas aligned with normalization and runtime permissions", () => {
-    const provenance = { basis: "DOMAIN_KNOWLEDGE", speechRefs: null, stateRefs: null };
-    const board = (mode: string) => ({ mode, content: { kind: "TEXT", text: "Bounded board content" }, provenance });
-    const text = (mode: string) => ({ mode, content: "Bounded cue content", provenance });
-    const raw = (boardDelta: unknown, cueDelta: unknown, baseBoardRevision = 0) => ({ requestId: "request-1", baseBoardRevision, baseCueRevision: 0, steps: [{ consumesCheckpointIds: ["checkpoint-1"], boardDelta, cueDelta, evidenceRefs: [], warnings: null }], warnings: null });
-    const validate = (candidate: unknown, state = createInitialTeachingState()) => {
-      const parsed = teachingInterpretationSchema.parse(candidate);
+  it("derives provider and validator mode permissions from the same profile", () => {
+    const speechProvenance = { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], stateRefs: null };
+    const domainProvenance = { basis: "DOMAIN_KNOWLEDGE", speechRefs: null, stateRefs: null };
+    const board = (mode: string, provenance = speechProvenance) => ({ mode, content: { kind: "TEXT", text: "Bounded board content" }, provenance });
+    const text = (mode: string, provenance = speechProvenance) => ({ mode, content: "Bounded cue content", provenance });
+    const raw = (boardDelta: unknown, cueDelta: unknown) => ({ requestId: "request-1", baseBoardRevision: 0, baseCueRevision: 0, steps: [{ consumesCheckpointIds: ["checkpoint-1"], boardDelta, cueDelta, evidenceRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], warnings: null }], warnings: null });
+    const validate = (candidate: unknown, profile = ACTIVE_ALPHA_SEMANTIC_PROFILE) => {
+      const parsed = createTeachingInterpretationSchema(profile).parse(candidate);
       const proposal = normalizeTeachingProposal(parsed);
-      return validateAndNormalizeProposal({ proposal, request: { ...input, currentState: state }, allCheckpoints: input.newEvidence, state, model: "test" });
+      const request = { ...input, policyVersion: profile.policyVersion, semanticProfileId: profile.id };
+      return validateAndNormalizeProposal({ proposal, request, allCheckpoints: input.newEvidence, state: createInitialTeachingState(), model: "test", profile });
     };
 
-    for (const mode of ["RECONSTRUCT", "REPRESENT", "AUGMENT", "CORRECT"]) {
-      const delta = { action: "SET_ACTIVE", contribution: board(mode), continuity: mode === "CORRECT" ? "correction" : "same_thread", retainPrevious: false, support: null, invalidatesBoardItemIds: mode === "CORRECT" ? ["existing"] : null };
-      const state = mode === "CORRECT" ? { ...createInitialTeachingState(), board: { revision: 0, active: { id: "existing", contribution: { mode: "REPRESENT" as const, content: { kind: "TEXT" as const, text: "Old" }, provenance: { basis: "DOMAIN_KNOWLEDGE" as const } }, sourceCheckpointIds: [], establishedAtRevision: 0 }, support: [], retained: [] } } : createInitialTeachingState();
-      expect(validate(raw(delta, { action: "KEEP" }, state.board.revision), state).ok).toBe(true);
-    }
-    for (const mode of ["RECONSTRUCT", "REPRESENT", "AUGMENT"]) {
-      const delta = { action: "SET_ACTIVE", contribution: board("RECONSTRUCT"), continuity: "same_thread", retainPrevious: false, support: [text(mode)], invalidatesBoardItemIds: null };
-      expect(validate(raw(delta, { action: "KEEP" })).ok).toBe(true);
-      expect(validate(raw({ action: "ADD_SUPPORT", targetBoardItemId: "existing", support: text(mode) }, { action: "KEEP" }, 1), { ...createInitialTeachingState(), board: { revision: 1, active: { id: "existing", contribution: { mode: "REPRESENT" as const, content: { kind: "TEXT" as const, text: "Existing" }, provenance: { basis: "DOMAIN_KNOWLEDGE" as const } }, sourceCheckpointIds: [], establishedAtRevision: 1 }, support: [], retained: [] } }).ok).toBe(true);
-      expect(validate(raw({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "NOTE", contribution: text(mode), targetBoardItemId: null })).ok).toBe(true);
-    }
-    for (const mode of ["RECONSTRUCT", "REPRESENT", "INITIATE"]) {
-      expect(validate(raw({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "QUESTION", contribution: text(mode), targetBoardItemId: null })).ok).toBe(true);
-    }
+    for (const mode of ["RECONSTRUCT", "REPRESENT"]) expect(validate(raw({ action: "SET_ACTIVE", contribution: board(mode), continuity: "same_thread", retainPrevious: false, support: null, invalidatesBoardItemIds: null }, { action: "KEEP" })).ok).toBe(true);
+    const augment = raw({ action: "SET_ACTIVE", contribution: board("AUGMENT", domainProvenance), continuity: "same_thread", retainPrevious: false, support: null, invalidatesBoardItemIds: null }, { action: "KEEP" });
+    expect(teachingInterpretationSchema.safeParse(augment).success).toBe(false);
+    expect(validate(augment, ALPHA_AUGMENT_CANDIDATE_P4).ok).toBe(true);
+    for (const kind of ["NOTE", "QUESTION", "TASK", "HINT"] as const) expect(validate(raw({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: kind, contribution: text("REPRESENT"), targetBoardItemId: null })).ok).toBe(true);
 
     const invalid = [
       raw({ action: "SET_ACTIVE", contribution: board("INITIATE"), continuity: "same_thread", retainPrevious: false, support: null, invalidatesBoardItemIds: null }, { action: "KEEP" }),
-      raw({ action: "ADD_SUPPORT", targetBoardItemId: "existing", support: text("CORRECT") }, { action: "KEEP" }, 1),
+      raw({ action: "SET_ACTIVE", contribution: board("CORRECT"), continuity: "correction", retainPrevious: false, support: null, invalidatesBoardItemIds: ["existing"] }, { action: "KEEP" }),
       raw({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "NOTE", contribution: text("INITIATE"), targetBoardItemId: null }),
-      raw({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "HINT", contribution: text("AUGMENT"), targetBoardItemId: null }),
+      raw({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "HINT", contribution: text("AUGMENT", domainProvenance), targetBoardItemId: null }),
     ];
     for (const candidate of invalid) expect(teachingInterpretationSchema.safeParse(candidate).success).toBe(false);
   });

@@ -9,6 +9,7 @@ export type ProviderContractSnapshot = {
   reasoningEffort: string;
   maxOutputTokens: number;
   policyVersion: string;
+  semanticProfileId: string;
   systemPolicy: string;
   systemPolicyDigest: string;
   structuredOutputSchema: JsonValue;

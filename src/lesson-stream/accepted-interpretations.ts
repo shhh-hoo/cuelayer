@@ -1,5 +1,6 @@
 import { exactSpeechReferenceIsGrounded } from "./evidence-checkpoints";
 import { reduceAcceptedStep } from "./teaching-state";
+import { ACTIVE_ALPHA_SEMANTIC_PROFILE, contributionModeAllowed, type AlphaSemanticProfile } from "./semantic-profile";
 import type {
   AcceptedInterpretationStep,
   BoardContent,
@@ -63,7 +64,7 @@ function validProvenance(value: unknown): value is ContributionProvenance {
   const hasState = Boolean(value.stateRefs?.length);
   if (value.basis === "SPEECH") return hasSpeech && !hasState;
   if (value.basis === "SPEECH_AND_STATE") return hasSpeech && hasState;
-  if (value.basis === "DOMAIN_KNOWLEDGE") return !hasState;
+  if (value.basis === "DOMAIN_KNOWLEDGE") return !hasSpeech && !hasState;
   return hasState;
 }
 
@@ -71,20 +72,20 @@ function contribution<T>(value: unknown, content: (candidate: unknown) => candid
   return object(value) && ["RECONSTRUCT", "REPRESENT", "AUGMENT", "CORRECT", "INITIATE"].includes(String(value.mode)) && content(value.content) && validProvenance(value.provenance);
 }
 function textContribution(value: unknown): value is TeachingContribution<string> { return contribution(value, (item): item is string => typeof item === "string" && item.trim().length > 0); }
-const boardActiveModeAllowed = (mode: ContributionMode) => ["RECONSTRUCT", "REPRESENT", "AUGMENT", "CORRECT"].includes(mode);
-const boardSupportModeAllowed = (mode: ContributionMode) => ["RECONSTRUCT", "REPRESENT", "AUGMENT"].includes(mode);
-const cueModeAllowed = (cueKind: TeachingCueKind, mode: ContributionMode) => cueKind === "NOTE"
+const broadBoardActiveModeAllowed = (mode: ContributionMode) => ["RECONSTRUCT", "REPRESENT", "AUGMENT", "CORRECT"].includes(mode);
+const broadBoardSupportModeAllowed = (mode: ContributionMode) => ["RECONSTRUCT", "REPRESENT", "AUGMENT"].includes(mode);
+const broadCueModeAllowed = (cueKind: TeachingCueKind, mode: ContributionMode) => cueKind === "NOTE"
   ? ["RECONSTRUCT", "REPRESENT", "AUGMENT"].includes(mode)
   : ["RECONSTRUCT", "REPRESENT", "INITIATE"].includes(mode);
 
 function validBoardDelta(value: unknown): value is BoardDelta {
   if (!object(value) || typeof value.action !== "string") return false;
   if (value.action === "KEEP") return ["filler", "transition", "repetition", "unfinished", "insufficient_evidence", "ambiguous_reference", "classroom_management", "no_board_value"].includes(String(value.reason));
-  if (value.action === "ADD_SUPPORT") return textContribution(value.support) && boardSupportModeAllowed(value.support.mode) && typeof value.targetBoardItemId === "string";
-  if (value.action !== "SET_ACTIVE" || !contribution(value.contribution, validBoardContent) || !boardActiveModeAllowed(value.contribution.mode)) return false;
+  if (value.action === "ADD_SUPPORT") return textContribution(value.support) && broadBoardSupportModeAllowed(value.support.mode) && typeof value.targetBoardItemId === "string";
+  if (value.action !== "SET_ACTIVE" || !contribution(value.contribution, validBoardContent) || !broadBoardActiveModeAllowed(value.contribution.mode)) return false;
   return ["same_thread", "topic_shift", "correction"].includes(String(value.continuity))
     && typeof value.retainPrevious === "boolean"
-    && (value.support === undefined || Array.isArray(value.support) && value.support.every((support) => textContribution(support) && boardSupportModeAllowed(support.mode)))
+    && (value.support === undefined || Array.isArray(value.support) && value.support.every((support) => textContribution(support) && broadBoardSupportModeAllowed(support.mode)))
     && (value.invalidatesBoardItemIds === undefined || Array.isArray(value.invalidatesBoardItemIds) && value.invalidatesBoardItemIds.every((id) => typeof id === "string"));
 }
 
@@ -93,7 +94,7 @@ function validCueDelta(value: unknown): value is TeachingCueDelta {
   if (value.action === "KEEP") return true;
   if (value.action === "SET") {
     if (!["NOTE", "QUESTION", "TASK", "HINT"].includes(String(value.cueKind)) || !textContribution(value.contribution)) return false;
-    return cueModeAllowed(value.cueKind as TeachingCueKind, value.contribution.mode)
+    return broadCueModeAllowed(value.cueKind as TeachingCueKind, value.contribution.mode)
       && (value.targetBoardItemId === undefined || typeof value.targetBoardItemId === "string");
   }
   return value.action === "RESOLVE_CURRENT" && ["answered", "completed", "teacher_moved_on", "replaced"].includes(String(value.reason)) && reference(value.evidence);
@@ -122,12 +123,42 @@ function stateReferencesExist(refs: readonly StateReference[], state: TeachingSt
   return refs.every((ref) => ref.kind === "BOARD_ITEM" ? boardIds.has(ref.id) : state.cue.active?.id === ref.id);
 }
 
+function contributionProvenanceAllowed(contribution: TeachingContribution<unknown>) {
+  if (["RECONSTRUCT", "REPRESENT"].includes(contribution.mode)) {
+    return ["SPEECH", "SPEECH_AND_STATE"].includes(contribution.provenance.basis)
+      && Boolean(contribution.provenance.speechRefs?.length);
+  }
+  if (contribution.mode === "AUGMENT") {
+    return ["DOMAIN_KNOWLEDGE", "STATE_AND_DOMAIN_KNOWLEDGE"].includes(contribution.provenance.basis);
+  }
+  return true;
+}
+
+function contributionModesAllowed(board: BoardDelta, cue: TeachingCueDelta, profile: AlphaSemanticProfile) {
+  if (board.action === "ADD_SUPPORT" && !contributionModeAllowed(profile, "BOARD_SUPPORT", board.support.mode)) return false;
+  if (board.action === "SET_ACTIVE") {
+    if (!contributionModeAllowed(profile, "BOARD_ACTIVE", board.contribution.mode)) return false;
+    if (board.support?.some((item) => !contributionModeAllowed(profile, "BOARD_SUPPORT", item.mode))) return false;
+  }
+  return cue.action !== "SET" || contributionModeAllowed(profile, cue.cueKind, cue.contribution.mode);
+}
+
+function contributions(board: BoardDelta, cue: TeachingCueDelta): TeachingContribution<unknown>[] {
+  const boardContributions = board.action === "ADD_SUPPORT"
+    ? [board.support]
+    : board.action === "SET_ACTIVE"
+      ? [board.contribution, ...(board.support ?? [])]
+      : [];
+  return [...boardContributions, ...(cue.action === "SET" ? [cue.contribution] : [])];
+}
+
 export function validateAndNormalizeProposal({
   proposal: raw,
   request,
   allCheckpoints,
   state,
   model,
+  profile = ACTIVE_ALPHA_SEMANTIC_PROFILE,
   acceptedAt = new Date().toISOString(),
 }: {
   proposal: unknown;
@@ -135,10 +166,12 @@ export function validateAndNormalizeProposal({
   allCheckpoints: CompactEvidenceCheckpoint[];
   state: TeachingStateSnapshot;
   model: string;
+  profile?: AlphaSemanticProfile;
   acceptedAt?: string;
 }): ValidationResult {
   if (!object(raw) || typeof raw.requestId !== "string" || typeof raw.baseBoardRevision !== "number" || !Number.isInteger(raw.baseBoardRevision) || raw.baseBoardRevision < 0 || typeof raw.baseCueRevision !== "number" || !Number.isInteger(raw.baseCueRevision) || raw.baseCueRevision < 0 || !Array.isArray(raw.steps) || !raw.steps.length || (raw.warnings !== undefined && (!Array.isArray(raw.warnings) || raw.warnings.length > 4 || !raw.warnings.every(warning)))) return { ok: false, error: "proposal-schema-invalid" };
   if (raw.requestId !== request.requestId) return { ok: false, error: "proposal-request-id-mismatch" };
+  if (request.semanticProfileId !== profile.id || request.policyVersion !== profile.policyVersion) return { ok: false, error: "proposal-capability-profile-mismatch" };
 
   const proposal = raw as unknown as TeachingInterpretationProposal;
   const boardConflict = proposal.baseBoardRevision !== state.board.revision && proposal.steps.some((step) => step.boardDelta.action !== "KEEP");
@@ -153,6 +186,15 @@ export function validateAndNormalizeProposal({
     const expected = request.newEvidence.slice(coverageOffset, coverageOffset + step.consumesCheckpointIds.length).map((checkpoint) => checkpoint.checkpointId);
     if (expected.length !== step.consumesCheckpointIds.length || expected.some((id, index) => id !== step.consumesCheckpointIds[index])) return { ok: false, error: "proposal-batch-coverage-invalid" };
     coverageOffset += step.consumesCheckpointIds.length;
+
+    if (!contributionModesAllowed(step.boardDelta, step.cueDelta, profile)) return { ok: false, error: "proposal-mode-not-allowed" };
+    if (contributions(step.boardDelta, step.cueDelta).some((item) => !contributionProvenanceAllowed(item))) return { ok: false, error: "proposal-contribution-provenance-invalid" };
+    if (step.cueDelta.action === "SET" && !["SPEECH", "SPEECH_AND_STATE"].includes(step.cueDelta.contribution.provenance.basis)) return { ok: false, error: "proposal-cue-origin-invalid" };
+
+    const currentCheckpointIds = new Set(step.consumesCheckpointIds);
+    const changesSurface = step.boardDelta.action !== "KEEP" || step.cueDelta.action !== "KEEP";
+    if (changesSurface && !step.evidenceRefs.some((ref) => currentCheckpointIds.has(ref.checkpointId))) return { ok: false, error: "proposal-current-trigger-missing" };
+    if (step.cueDelta.action === "RESOLVE_CURRENT" && !currentCheckpointIds.has(step.cueDelta.evidence.checkpointId)) return { ok: false, error: "proposal-cue-resolution-trigger-invalid" };
 
     const refs = [...step.evidenceRefs, ...boardReferences(step.boardDelta), ...cueReferences(step.cueDelta)];
     if (refs.some((item) => !exactSpeechReferenceIsGrounded(item, allCheckpoints))) return { ok: false, error: "proposal-speech-grounding-invalid" };
