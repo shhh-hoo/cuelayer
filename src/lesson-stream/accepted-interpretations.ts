@@ -23,7 +23,7 @@ type ValidationResult =
   | { ok: false; error: string };
 
 const object = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
-const reference = (value: unknown): value is SpeechReference => object(value) && typeof value.checkpointId === "string" && typeof value.quote === "string" && value.quote.trim().length > 0;
+const reference = (value: unknown): value is SpeechReference => object(value) && typeof value.checkpointId === "string" && typeof value.quote === "string";
 const stateReference = (value: unknown): value is StateReference => object(value) && ["BOARD_ITEM", "ACTIVE_CUE"].includes(String(value.kind)) && typeof value.id === "string" && value.id.length > 0;
 const warning = (value: unknown) => object(value) && typeof value.code === "string" && (value.detail === undefined || typeof value.detail === "string");
 const valueType = (value: unknown) => value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
