@@ -70,7 +70,7 @@ describe("OpenAI Teaching State interpreter", () => {
     expect(request.input[1].content).not.toContain("providerEvidence");
     expect(mocks.create.mock.calls[0]![1]).toEqual({ signal: controller.signal });
     expect(result.audit).toMatchObject({ providerRequestDigest: expect.any(String), providerResponse: { providerResponseId: "response-1", providerModel: "gpt-5.6-luna-actual", outputText: expect.any(String), rawStructuredOutput: { requestId: "request-1" }, providerResponseDigest: expect.any(String) } });
-    expect(result.audit.providerContract).toMatchObject({ semanticProfileId: "alpha-core-p4-v4", policyVersion: LESSON_POLICY_VERSION, systemPolicyDigest: expect.any(String), structuredOutputSchemaDigest: expect.any(String) });
+    expect(result.audit.providerContract).toMatchObject({ semanticProfileId: "alpha-core-p4-v5", policyVersion: LESSON_POLICY_VERSION, systemPolicyDigest: expect.any(String), structuredOutputSchemaDigest: expect.any(String) });
     const { providerResponseDigest, ...providerResponseFact } = result.audit.providerResponse;
     expect(providerResponseDigest).toBe(persistedAuditDigest(providerResponseFact));
   });
@@ -107,19 +107,19 @@ describe("OpenAI Teaching State interpreter", () => {
         consumesCheckpointIds: ["checkpoint-1"],
         boardDelta: {
           action: "SET_ACTIVE" as const,
-          contribution: { mode: "REPRESENT" as const, content: { kind: "TEXT" as const, text: "Temperature rises" }, provenance: { basis: "SPEECH" as const, speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], stateRefs: null } },
+          contribution: { mode: "REPRESENT" as const, content: { kind: "TEXT" as const, text: "Temperature rises" }, provenance: { basis: "SPEECH" as const, speechRefs: [{ checkpointId: "checkpoint-1" }], stateRefs: null } },
           continuity: "same_thread" as const,
           retainPrevious: false,
           support: null,
           invalidatesBoardItemIds: null,
         },
-        cueDelta: { action: "SET" as const, cueKind: "NOTE" as const, contribution: { mode: "REPRESENT" as const, content: "Notice the temperature change", provenance: { basis: "SPEECH" as const, speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], stateRefs: null } }, targetBoardItemId: null },
-        evidenceRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }],
+        cueDelta: { action: "SET" as const, cueKind: "NOTE" as const, contribution: { mode: "REPRESENT" as const, content: "Notice the temperature change", provenance: { basis: "SPEECH" as const, speechRefs: [{ checkpointId: "checkpoint-1" }], stateRefs: null } }, targetBoardItemId: null },
+        evidenceRefs: [{ checkpointId: "checkpoint-1" }],
         warnings: null,
       }],
       warnings: null,
     };
-    const proposal = normalizeTeachingProposal(parsed);
+    const proposal = normalizeTeachingProposal(parsed, input);
     expect(proposal.steps[0]).toMatchObject({ boardDelta: { action: "SET_ACTIVE" }, cueDelta: { action: "SET" } });
     expect(proposal.steps[0]!.boardDelta).not.toHaveProperty("support");
     expect(proposal.steps[0]!.boardDelta).not.toHaveProperty("invalidatesBoardItemIds");
@@ -137,28 +137,28 @@ describe("OpenAI Teaching State interpreter", () => {
       requestId: "request-1", baseBoardRevision: 0, baseCueRevision: 0,
       steps: [{
         consumesCheckpointIds: ["checkpoint-1"],
-        boardDelta: { action: "SET_ACTIVE", contribution: { mode: "RECONSTRUCT", content: { kind: "TEXT", text: "Temperature increases" }, provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], stateRefs: null } }, continuity: "same_thread", retainPrevious: false, support: [{ mode: "RECONSTRUCT", content: "Temperature increases", provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], stateRefs: null } }], invalidatesBoardItemIds: ["old-board"] },
-        cueDelta: { action: "SET", cueKind: "NOTE", contribution: { mode: "RECONSTRUCT", content: "Temperature increases", provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], stateRefs: null } }, targetBoardItemId: "board-request-1-accepted-0" },
+        boardDelta: { action: "SET_ACTIVE", contribution: { mode: "RECONSTRUCT", content: { kind: "TEXT", text: "Temperature increases" }, provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1" }], stateRefs: null } }, continuity: "same_thread", retainPrevious: false, support: [{ mode: "RECONSTRUCT", content: "Temperature increases", provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1" }], stateRefs: null } }], invalidatesBoardItemIds: ["old-board"] },
+        cueDelta: { action: "SET", cueKind: "NOTE", contribution: { mode: "RECONSTRUCT", content: "Temperature increases", provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1" }], stateRefs: null } }, targetBoardItemId: "board-request-1-accepted-0" },
         evidenceRefs: [], warnings: [{ code: "provider-note", detail: "kept" }],
       }],
       warnings: [{ code: "proposal-note", detail: "kept" }],
-    });
+    }, input);
     expect(proposal.steps[0]!.boardDelta).toMatchObject({ support: [{ mode: "RECONSTRUCT", provenance: { speechRefs: [{ checkpointId: "checkpoint-1" }] } }], invalidatesBoardItemIds: ["old-board"] });
     expect(proposal.steps[0]!.cueDelta).toMatchObject({ targetBoardItemId: "board-request-1-accepted-0" });
     expect(proposal.warnings).toEqual([{ code: "proposal-note", detail: "kept" }]);
   });
 
   it("derives provider and validator mode permissions from the same profile", () => {
-    const speechProvenance = { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], stateRefs: null };
+    const speechProvenance = { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1" }], stateRefs: null };
     const domainProvenance = { basis: "DOMAIN_KNOWLEDGE", speechRefs: null, stateRefs: null };
-    type TestProvenance = { basis: string; speechRefs: Array<{ checkpointId: string; quote: string }> | null; stateRefs: null };
+    type TestProvenance = { basis: string; speechRefs: Array<{ checkpointId: string }> | null; stateRefs: null };
     const board = (mode: string, provenance: TestProvenance = speechProvenance) => ({ mode, content: { kind: "TEXT", text: "Bounded board content" }, provenance });
     const text = (mode: string, provenance: TestProvenance = speechProvenance) => ({ mode, content: "Bounded cue content", provenance });
-    const raw = (boardDelta: unknown, cueDelta: unknown) => ({ requestId: "request-1", baseBoardRevision: 0, baseCueRevision: 0, steps: [{ consumesCheckpointIds: ["checkpoint-1"], boardDelta, cueDelta, evidenceRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], warnings: null }], warnings: null });
+    const raw = (boardDelta: unknown, cueDelta: unknown) => ({ requestId: "request-1", baseBoardRevision: 0, baseCueRevision: 0, steps: [{ consumesCheckpointIds: ["checkpoint-1"], boardDelta, cueDelta, evidenceRefs: [{ checkpointId: "checkpoint-1" }], warnings: null }], warnings: null });
     const validate = (candidate: unknown, profile = ACTIVE_ALPHA_SEMANTIC_PROFILE) => {
       const parsed = createTeachingInterpretationSchema(profile).parse(candidate);
-      const proposal = normalizeTeachingProposal(parsed);
       const request = { ...input, policyVersion: profile.policyVersion, semanticProfileId: profile.id };
+      const proposal = normalizeTeachingProposal(parsed, request);
       return validateAndNormalizeProposal({ proposal, request, allCheckpoints: input.newEvidence, state: createInitialTeachingState(), model: "test", profile });
     };
 

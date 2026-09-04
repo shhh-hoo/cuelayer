@@ -65,10 +65,32 @@ describe("Alpha contribution profile and provenance", () => {
     expect(validate(delta, { action: "KEEP" }, { profile: ALPHA_AUGMENT_CANDIDATE_P4, evidenceRefs: [] })).toEqual({ ok: false, error: "proposal-current-trigger-missing" });
   });
 
-  it("requires exact current quotes but not visible substring equality", () => {
+  it("resolves checkpoint references to canonical evidence without requiring model quote copying", () => {
     const visible = board("RECONSTRUCT", speechProvenance(), "Al₂Cl₆");
     expect(validate({ action: "SET_ACTIVE", contribution: visible, continuity: "same_thread", retainPrevious: false }, { action: "KEEP" }).ok).toBe(true);
-    expect(validate({ action: "SET_ACTIVE", contribution: visible, continuity: "same_thread", retainPrevious: false }, { action: "KEEP" }, { evidenceRefs: [speech("invented quote")] })).toEqual({ ok: false, error: "proposal-speech-grounding-invalid" });
+    const normalized = validate({ action: "SET_ACTIVE", contribution: visible, continuity: "same_thread", retainPrevious: false }, { action: "KEEP" }, { evidenceRefs: [speech("harmless punctuation difference.")] });
+    expect(normalized.ok).toBe(true);
+    if (normalized.ok) expect(normalized.steps[0]!.evidenceRefs).toEqual([{ checkpointId: "A", quote: checkpoint.text }]);
+    const unknown = { checkpointId: "missing", quote: "The formula sounded like d6." };
+    expect(validate({ action: "SET_ACTIVE", contribution: visible, continuity: "same_thread", retainPrevious: false }, { action: "KEEP" }, { evidenceRefs: [unknown] })).toEqual({ ok: false, error: "proposal-provenance-checkpoint-invalid" });
+  });
+
+  it("keeps a valid Active update while dropping an invalid optional Support deterministically", () => {
+    const delta = {
+      action: "SET_ACTIVE" as const,
+      contribution: board("REPRESENT", speechProvenance("Aluminium chloride forms a dimer"), "Activation energy"),
+      continuity: "same_thread" as const,
+      retainPrevious: false,
+      support: [{ mode: "REPRESENT" as const, content: "Standard symbol: Eₐ", provenance: { basis: "DOMAIN_KNOWLEDGE" as const } }],
+    };
+    const result = validate(delta, { action: "KEEP" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.steps[0]!.boardDelta).not.toHaveProperty("support");
+    expect(result.steps[0]!.warnings).toContainEqual({ code: "board_support_dropped" });
+    const replayed = replayLessonEvents([...request().events, interpretationAcceptedEvent("s", 3, result.steps[0]!)]);
+    expect(replayed.state.board.active?.contribution.content).toEqual({ kind: "TEXT", text: "Activation energy" });
+    expect(replayed.state.board.support).toEqual([]);
   });
 
   it("requires speech-bearing provenance for RECONSTRUCT and REPRESENT", () => {

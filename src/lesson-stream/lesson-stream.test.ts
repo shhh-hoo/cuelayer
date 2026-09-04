@@ -398,7 +398,10 @@ describe("proposal validation and deterministic state", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.steps[0]!.cueDelta).toEqual({ action: "SET", cueKind: "NOTE", contribution: visibleText("A", "Complete the task") });
+    expect(result.steps[0]!.cueDelta).toEqual({
+      action: "SET", cueKind: "NOTE",
+      contribution: { mode: "RECONSTRUCT", content: "Complete the task", provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "A", quote: "Complete the task." }] } },
+    });
     expect(result.steps[0]!.warnings).toContainEqual({ code: "cue_target_dropped" });
   });
 

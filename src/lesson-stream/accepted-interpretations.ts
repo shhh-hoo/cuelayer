@@ -1,4 +1,4 @@
-import { exactSpeechReferenceIsGrounded } from "./evidence-checkpoints.ts";
+import { canonicalSpeechReference } from "./evidence-checkpoints.ts";
 import { reduceAcceptedStep } from "./teaching-state.ts";
 import { ACTIVE_ALPHA_SEMANTIC_PROFILE, contributionModeAllowed, type AlphaSemanticProfile } from "./semantic-profile.ts";
 import type {
@@ -152,6 +152,40 @@ function contributions(board: BoardDelta, cue: TeachingCueDelta): TeachingContri
   return [...boardContributions, ...(cue.action === "SET" ? [cue.contribution] : [])];
 }
 
+function canonicalProvenance(provenance: ContributionProvenance, checkpoints: readonly CompactEvidenceCheckpoint[]) {
+  const speechRefs = provenance.speechRefs?.map((ref) => canonicalSpeechReference(ref.checkpointId, checkpoints));
+  if (speechRefs?.some((ref) => ref === undefined)) return undefined;
+  return {
+    ...provenance,
+    ...(speechRefs ? { speechRefs: speechRefs as SpeechReference[] } : {}),
+  };
+}
+
+function canonicalContribution<T>(item: TeachingContribution<T>, checkpoints: readonly CompactEvidenceCheckpoint[]) {
+  const provenance = canonicalProvenance(item.provenance, checkpoints);
+  return provenance ? { ...item, provenance } : undefined;
+}
+
+function canonicalPrimaryBoardDelta(delta: BoardDelta, checkpoints: readonly CompactEvidenceCheckpoint[]): BoardDelta | undefined {
+  if (delta.action === "KEEP") return delta;
+  if (delta.action === "ADD_SUPPORT") {
+    const support = canonicalContribution(delta.support, checkpoints);
+    return support ? { ...delta, support } : undefined;
+  }
+  const contribution = canonicalContribution(delta.contribution, checkpoints);
+  return contribution ? { ...delta, contribution } : undefined;
+}
+
+function canonicalCueDelta(delta: TeachingCueDelta, checkpoints: readonly CompactEvidenceCheckpoint[]): TeachingCueDelta | undefined {
+  if (delta.action === "KEEP") return delta;
+  if (delta.action === "RESOLVE_CURRENT") {
+    const evidence = canonicalSpeechReference(delta.evidence.checkpointId, checkpoints);
+    return evidence ? { ...delta, evidence } : undefined;
+  }
+  const contribution = canonicalContribution(delta.contribution, checkpoints);
+  return contribution ? { ...delta, contribution } : undefined;
+}
+
 export function validateAndNormalizeProposal({
   proposal: raw,
   request,
@@ -187,23 +221,43 @@ export function validateAndNormalizeProposal({
     if (expected.length !== step.consumesCheckpointIds.length || expected.some((id, index) => id !== step.consumesCheckpointIds[index])) return { ok: false, error: "proposal-batch-coverage-invalid" };
     coverageOffset += step.consumesCheckpointIds.length;
 
-    if (!contributionModesAllowed(step.boardDelta, step.cueDelta, profile)) return { ok: false, error: "proposal-mode-not-allowed" };
-    if (contributions(step.boardDelta, step.cueDelta).some((item) => !contributionProvenanceAllowed(item))) return { ok: false, error: "proposal-contribution-provenance-invalid" };
-    if (step.cueDelta.action === "SET" && !["SPEECH", "SPEECH_AND_STATE"].includes(step.cueDelta.contribution.provenance.basis)) return { ok: false, error: "proposal-cue-origin-invalid" };
+    const canonicalEvidenceRefs = step.evidenceRefs.map((ref) => canonicalSpeechReference(ref.checkpointId, allCheckpoints));
+    const primaryBoardDelta = canonicalPrimaryBoardDelta(step.boardDelta, allCheckpoints);
+    const primaryCueDelta = canonicalCueDelta(step.cueDelta, allCheckpoints);
+    if (!primaryBoardDelta || !primaryCueDelta || canonicalEvidenceRefs.some((ref) => ref === undefined)) return { ok: false, error: "proposal-provenance-checkpoint-invalid" };
+
+    let boardSupportDropped = false;
+    let normalizedBoardDelta = primaryBoardDelta;
+    if (primaryBoardDelta.action === "SET_ACTIVE" && primaryBoardDelta.support?.length) {
+      const safeSupport = primaryBoardDelta.support.flatMap((item) => {
+        const normalized = canonicalContribution(item, allCheckpoints);
+        const valid = normalized
+          && contributionModeAllowed(profile, "BOARD_SUPPORT", normalized.mode)
+          && contributionProvenanceAllowed(normalized)
+          && stateReferencesExist(normalized.provenance.stateRefs ?? [], rollingState);
+        if (!valid) boardSupportDropped = true;
+        return valid ? [normalized] : [];
+      });
+      const { support: _discardedSupport, ...boardWithoutSupport } = primaryBoardDelta;
+      normalizedBoardDelta = safeSupport.length ? { ...boardWithoutSupport, support: safeSupport } : boardWithoutSupport;
+    }
+
+    if (!contributionModesAllowed(normalizedBoardDelta, primaryCueDelta, profile)) return { ok: false, error: "proposal-mode-not-allowed" };
+    if (contributions(normalizedBoardDelta, primaryCueDelta).some((item) => !contributionProvenanceAllowed(item))) return { ok: false, error: "proposal-contribution-provenance-invalid" };
+    if (primaryCueDelta.action === "SET" && !["SPEECH", "SPEECH_AND_STATE"].includes(primaryCueDelta.contribution.provenance.basis)) return { ok: false, error: "proposal-cue-origin-invalid" };
 
     const currentCheckpointIds = new Set(step.consumesCheckpointIds);
-    const changesSurface = step.boardDelta.action !== "KEEP" || step.cueDelta.action !== "KEEP";
-    if (changesSurface && !step.evidenceRefs.some((ref) => currentCheckpointIds.has(ref.checkpointId))) return { ok: false, error: "proposal-current-trigger-missing" };
-    if (step.cueDelta.action === "RESOLVE_CURRENT" && !currentCheckpointIds.has(step.cueDelta.evidence.checkpointId)) return { ok: false, error: "proposal-cue-resolution-trigger-invalid" };
+    const changesSurface = normalizedBoardDelta.action !== "KEEP" || primaryCueDelta.action !== "KEEP";
+    if (changesSurface && !canonicalEvidenceRefs.some((ref) => ref && currentCheckpointIds.has(ref.checkpointId))) return { ok: false, error: "proposal-current-trigger-missing" };
+    if (primaryCueDelta.action === "RESOLVE_CURRENT" && !currentCheckpointIds.has(primaryCueDelta.evidence.checkpointId)) return { ok: false, error: "proposal-cue-resolution-trigger-invalid" };
 
-    const refs = [...step.evidenceRefs, ...boardReferences(step.boardDelta), ...cueReferences(step.cueDelta)];
-    if (refs.some((item) => !exactSpeechReferenceIsGrounded(item, allCheckpoints))) return { ok: false, error: "proposal-speech-grounding-invalid" };
-    if (!stateReferencesExist([...stateReferences(step.boardDelta), ...stateReferences(step.cueDelta)], rollingState)) return { ok: false, error: "proposal-state-reference-missing" };
-    if (step.boardDelta.action === "SET_ACTIVE" && step.boardDelta.continuity === "correction" && (step.boardDelta.retainPrevious || !step.boardDelta.invalidatesBoardItemIds?.length)) return { ok: false, error: "proposal-correction-invalid" };
-    if (step.boardDelta.action === "SET_ACTIVE" && step.boardDelta.contribution.mode === "CORRECT" && step.boardDelta.continuity !== "correction") return { ok: false, error: "proposal-correction-invalid" };
+    const refs = [...canonicalEvidenceRefs as SpeechReference[], ...boardReferences(normalizedBoardDelta), ...cueReferences(primaryCueDelta)];
+    if (!stateReferencesExist([...stateReferences(normalizedBoardDelta), ...stateReferences(primaryCueDelta)], rollingState)) return { ok: false, error: "proposal-state-reference-missing" };
+    if (normalizedBoardDelta.action === "SET_ACTIVE" && normalizedBoardDelta.continuity === "correction" && (normalizedBoardDelta.retainPrevious || !normalizedBoardDelta.invalidatesBoardItemIds?.length)) return { ok: false, error: "proposal-correction-invalid" };
+    if (normalizedBoardDelta.action === "SET_ACTIVE" && normalizedBoardDelta.contribution.mode === "CORRECT" && normalizedBoardDelta.continuity !== "correction") return { ok: false, error: "proposal-correction-invalid" };
 
-    const effectiveBoardDelta = boardConflict ? { action: "KEEP" as const, reason: "insufficient_evidence" as const } : step.boardDelta;
-    const effectiveCueDelta = cueConflict ? { action: "KEEP" as const } : step.cueDelta;
+    const effectiveBoardDelta = boardConflict ? { action: "KEEP" as const, reason: "insufficient_evidence" as const } : normalizedBoardDelta;
+    const effectiveCueDelta = cueConflict ? { action: "KEEP" as const } : primaryCueDelta;
     const boardItemIds = new Set([
       ...(rollingState.board.active ? [rollingState.board.active.id] : []),
       ...rollingState.board.retained.map((item) => item.id),
@@ -227,7 +281,7 @@ export function validateAndNormalizeProposal({
         })()
       : effectiveCueDelta;
 
-    const groundedReferences = refs.filter((item, index, items) => items.findIndex((candidate) => candidate.checkpointId === item.checkpointId && candidate.quote === item.quote) === index);
+    const groundedReferences = refs.filter((item, index, items) => items.findIndex((candidate) => candidate.checkpointId === item.checkpointId) === index);
     const accepted: AcceptedInterpretationStep = {
       interpretationId: `${request.requestId}-accepted`,
       requestId: request.requestId,
@@ -239,6 +293,7 @@ export function validateAndNormalizeProposal({
       cueDelta: normalizedCueDelta,
       evidenceRefs: groundedReferences,
       warnings: [
+        ...(boardSupportDropped ? [{ code: "board_support_dropped" }] : []),
         ...(cueTargetDropped ? [{ code: "cue_target_dropped" }] : []),
         ...(step.warnings ?? []).slice(0, 4),
         ...(proposal.warnings ?? []).slice(0, 2),

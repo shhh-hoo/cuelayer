@@ -102,7 +102,7 @@ export async function requestOpenAITeachingInterpretation(
     throw Object.assign(new Error("teaching-interpretation-structured-parse-failed"), { audit: { ...knownAudit, providerResponse: providerResponseSnapshot({ ...responseFact, rawStructuredOutput, rawStructuredOutputDigest }), failureStage: "structured_parse_error" } satisfies TeachingProviderFailureAudit });
   }
   let proposal: TeachingInterpretationProposal;
-  try { proposal = normalizeTeachingProposal(parsed.data); } catch (error) {
+  try { proposal = normalizeTeachingProposal(parsed.data, input); } catch (error) {
     const responseWithRaw = { ...responseFact, rawStructuredOutput, rawStructuredOutputDigest: persistedAuditDigest(rawStructuredOutput) };
     throw Object.assign(error instanceof Error ? error : new Error("teaching-normalization-failed"), { audit: { ...knownAudit, providerResponse: providerResponseSnapshot(responseWithRaw), failureStage: "normalization_error" } satisfies TeachingProviderFailureAudit });
   }

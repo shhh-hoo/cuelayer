@@ -14,7 +14,7 @@ describe("frozen Alpha semantics corpus and production harness", () => {
     const item = loadSemanticCorpus().cases[0]!;
     const replay = replayLessonEvents(item.initialLessonEvents);
     const { request } = buildTeachingInterpretationRequest({ requestId: "production-path", sessionId: item.id, events: replay.events, currentState: replay.state, newEvidence: item.orderedNewCheckpoints, profile: ACTIVE_ALPHA_SEMANTIC_PROFILE });
-    expect(request).toMatchObject({ semanticProfileId: "alpha-core-p4-v4", processedTimeline: expect.any(Array), currentState: replay.state, newEvidence: item.orderedNewCheckpoints });
+    expect(request).toMatchObject({ semanticProfileId: "alpha-core-p4-v5", processedTimeline: expect.any(Array), currentState: replay.state, newEvidence: item.orderedNewCheckpoints });
     expect(request).not.toHaveProperty("contextPolicy");
   });
 
@@ -27,7 +27,7 @@ describe("frozen Alpha semantics corpus and production harness", () => {
     expect(core.systemPolicy).toContain("Copy every request, checkpoint, Board, and Cue ID byte-for-byte");
     expect(augment.systemPolicy).toContain("Board active modes: RECONSTRUCT, REPRESENT, AUGMENT.");
     expect(augment.systemPolicy).toContain("standard formula, charge, or conventional symbol");
-    const candidate = { requestId: "r", baseBoardRevision: 0, baseCueRevision: 0, steps: [{ consumesCheckpointIds: ["A"], boardDelta: { action: "SET_ACTIVE", contribution: { mode: "AUGMENT", content: { kind: "TEXT", text: "Al₂Cl₆" }, provenance: { basis: "DOMAIN_KNOWLEDGE", speechRefs: null, stateRefs: null } }, continuity: "same_thread", retainPrevious: false, support: null, invalidatesBoardItemIds: null }, cueDelta: { action: "KEEP" }, evidenceRefs: [{ checkpointId: "A", quote: "dimer" }], warnings: null }], warnings: null };
+    const candidate = { requestId: "r", baseBoardRevision: 0, baseCueRevision: 0, steps: [{ consumesCheckpointIds: ["A"], boardDelta: { action: "SET_ACTIVE", contribution: { mode: "AUGMENT", content: { kind: "TEXT", text: "Al₂Cl₆" }, provenance: { basis: "DOMAIN_KNOWLEDGE", speechRefs: null, stateRefs: null } }, continuity: "same_thread", retainPrevious: false, support: null, invalidatesBoardItemIds: null }, cueDelta: { action: "KEEP" }, evidenceRefs: [{ checkpointId: "A" }], warnings: null }], warnings: null };
     expect(createTeachingInterpretationSchema(ACTIVE_ALPHA_SEMANTIC_PROFILE).safeParse(candidate).success).toBe(false);
     expect(createTeachingInterpretationSchema(ALPHA_AUGMENT_CANDIDATE_P4).safeParse(candidate).success).toBe(true);
   });

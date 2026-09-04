@@ -6,10 +6,10 @@ import { buildAlphaTeachingPolicy } from "./alpha-policy.ts";
 
 const id = z.string().min(1).max(160);
 const text = z.string().min(1).max(600);
-const speechReference = z.object({ checkpointId: id, quote: text }).strict();
+const checkpointReference = z.object({ checkpointId: id }).strict();
 const stateReference = z.object({ kind: z.enum(["BOARD_ITEM", "ACTIVE_CUE"]), id }).strict();
 const provenance = z.object({
-  speechRefs: z.array(speechReference).max(12).nullable(),
+  speechRefs: z.array(checkpointReference).max(12).nullable(),
   stateRefs: z.array(stateReference).max(6).nullable(),
   basis: z.enum(["SPEECH", "SPEECH_AND_STATE", "DOMAIN_KNOWLEDGE", "STATE_AND_DOMAIN_KNOWLEDGE"]),
 }).strict();
@@ -28,10 +28,11 @@ const warning = z.object({ code: z.string().min(1).max(80), detail: z.string().m
 export function createTeachingInterpretationSchema(profile: AlphaSemanticProfile) {
   const boardActiveContribution = contribution(boardContent, profile.boardActiveModes);
   const boardSupportContribution = contribution(text, profile.boardSupportModes);
+  const optionalBoardSupportContribution = contribution(text, ["RECONSTRUCT", "REPRESENT", "AUGMENT"]);
   const cueContribution = (kind: keyof AlphaSemanticProfile["cueModes"]) => contribution(text, profile.cueModes[kind]);
   const boardDelta = z.discriminatedUnion("action", [
     z.object({ action: z.literal("KEEP"), reason: keepReason }).strict(),
-    z.object({ action: z.literal("SET_ACTIVE"), contribution: boardActiveContribution, continuity: z.enum(["same_thread", "topic_shift", "correction"]), retainPrevious: z.boolean(), support: z.array(boardSupportContribution).max(2).nullable(), invalidatesBoardItemIds: z.array(id).max(4).nullable() }).strict(),
+    z.object({ action: z.literal("SET_ACTIVE"), contribution: boardActiveContribution, continuity: z.enum(["same_thread", "topic_shift", "correction"]), retainPrevious: z.boolean(), support: z.array(optionalBoardSupportContribution).max(2).nullable(), invalidatesBoardItemIds: z.array(id).max(4).nullable() }).strict(),
     z.object({ action: z.literal("ADD_SUPPORT"), support: boardSupportContribution, targetBoardItemId: id }).strict(),
   ]);
   const cueDelta = z.union([
@@ -40,9 +41,9 @@ export function createTeachingInterpretationSchema(profile: AlphaSemanticProfile
     z.object({ action: z.literal("SET"), cueKind: z.literal("QUESTION"), contribution: cueContribution("QUESTION"), targetBoardItemId: id.nullable() }).strict(),
     z.object({ action: z.literal("SET"), cueKind: z.literal("TASK"), contribution: cueContribution("TASK"), targetBoardItemId: id.nullable() }).strict(),
     z.object({ action: z.literal("SET"), cueKind: z.literal("HINT"), contribution: cueContribution("HINT"), targetBoardItemId: id.nullable() }).strict(),
-    z.object({ action: z.literal("RESOLVE_CURRENT"), reason: z.enum(["answered", "completed", "teacher_moved_on", "replaced"]), evidence: speechReference }).strict(),
+    z.object({ action: z.literal("RESOLVE_CURRENT"), reason: z.enum(["answered", "completed", "teacher_moved_on", "replaced"]), evidence: checkpointReference }).strict(),
   ]);
-  const step = z.object({ consumesCheckpointIds: z.array(id).min(1).max(20), boardDelta, cueDelta, evidenceRefs: z.array(speechReference).max(12), warnings: z.array(warning).max(4).nullable() }).strict();
+  const step = z.object({ consumesCheckpointIds: z.array(id).min(1).max(20), boardDelta, cueDelta, evidenceRefs: z.array(checkpointReference).max(12), warnings: z.array(warning).max(4).nullable() }).strict();
   return z.object({ requestId: id, baseBoardRevision: z.number().int().nonnegative(), baseCueRevision: z.number().int().nonnegative(), steps: z.array(step).min(1).max(20), warnings: z.array(warning).max(4).nullable() }).strict();
 }
 
@@ -76,7 +77,7 @@ export function teachingResponseRequest(input: TeachingInterpretationRequest, pr
 }
 
 type ProviderProvenance = {
-  speechRefs: Array<{ checkpointId: string; quote: string }> | null;
+  speechRefs: Array<{ checkpointId: string }> | null;
   stateRefs: Array<{ kind: "BOARD_ITEM" | "ACTIVE_CUE"; id: string }> | null;
   basis: "SPEECH" | "SPEECH_AND_STATE" | "DOMAIN_KNOWLEDGE" | "STATE_AND_DOMAIN_KNOWLEDGE";
 };
@@ -88,13 +89,13 @@ type ProviderBoardDelta =
 type ProviderCueDelta =
   | { action: "KEEP" }
   | { action: "SET"; cueKind: "NOTE" | "QUESTION" | "TASK" | "HINT"; contribution: ProviderContribution<string>; targetBoardItemId: string | null }
-  | { action: "RESOLVE_CURRENT"; reason: "answered" | "completed" | "teacher_moved_on" | "replaced"; evidence: { checkpointId: string; quote: string } };
+  | { action: "RESOLVE_CURRENT"; reason: "answered" | "completed" | "teacher_moved_on" | "replaced"; evidence: { checkpointId: string } };
 type ProviderWarning = { code: string; detail: string | null };
 type ProviderProposal = {
   requestId: string;
   baseBoardRevision: number;
   baseCueRevision: number;
-  steps: Array<{ consumesCheckpointIds: string[]; boardDelta: ProviderBoardDelta; cueDelta: ProviderCueDelta; evidenceRefs: Array<{ checkpointId: string; quote: string }>; warnings: ProviderWarning[] | null }>;
+  steps: Array<{ consumesCheckpointIds: string[]; boardDelta: ProviderBoardDelta; cueDelta: ProviderCueDelta; evidenceRefs: Array<{ checkpointId: string }>; warnings: ProviderWarning[] | null }>;
   warnings: ProviderWarning[] | null;
 };
 
@@ -102,30 +103,34 @@ function normalizeWarnings(warnings: ProviderWarning[] | null) {
   if (warnings === null) return undefined;
   return warnings.map((item) => item.detail === null ? { code: item.code } : { code: item.code, detail: item.detail });
 }
-function normalizeProvenance(item: ProviderProvenance) {
-  return { ...(item.speechRefs === null ? {} : { speechRefs: item.speechRefs }), ...(item.stateRefs === null ? {} : { stateRefs: item.stateRefs }), basis: item.basis };
+function normalizeProvenance(item: ProviderProvenance, evidenceText: ReadonlyMap<string, string>) {
+  return { ...(item.speechRefs === null ? {} : { speechRefs: item.speechRefs.map((ref) => ({ ...ref, quote: evidenceText.get(ref.checkpointId) ?? "" })) }), ...(item.stateRefs === null ? {} : { stateRefs: item.stateRefs }), basis: item.basis };
 }
-function normalizeContribution<T>(item: ProviderContribution<T>) {
-  return { mode: item.mode, content: item.content, provenance: normalizeProvenance(item.provenance) };
+function normalizeContribution<T>(item: ProviderContribution<T>, evidenceText: ReadonlyMap<string, string>) {
+  return { mode: item.mode, content: item.content, provenance: normalizeProvenance(item.provenance, evidenceText) };
 }
-function normalizeBoardDelta(delta: ProviderBoardDelta) {
+function normalizeBoardDelta(delta: ProviderBoardDelta, evidenceText: ReadonlyMap<string, string>) {
   switch (delta.action) {
     case "KEEP": return { action: "KEEP" as const, reason: delta.reason };
-    case "ADD_SUPPORT": return { action: "ADD_SUPPORT" as const, support: normalizeContribution(delta.support), targetBoardItemId: delta.targetBoardItemId };
-    case "SET_ACTIVE": return { action: "SET_ACTIVE" as const, contribution: normalizeContribution(delta.contribution), continuity: delta.continuity, retainPrevious: delta.retainPrevious, ...(delta.support === null ? {} : { support: delta.support.map(normalizeContribution) }), ...(delta.invalidatesBoardItemIds === null ? {} : { invalidatesBoardItemIds: delta.invalidatesBoardItemIds }) };
+    case "ADD_SUPPORT": return { action: "ADD_SUPPORT" as const, support: normalizeContribution(delta.support, evidenceText), targetBoardItemId: delta.targetBoardItemId };
+    case "SET_ACTIVE": return { action: "SET_ACTIVE" as const, contribution: normalizeContribution(delta.contribution, evidenceText), continuity: delta.continuity, retainPrevious: delta.retainPrevious, ...(delta.support === null ? {} : { support: delta.support.map((item) => normalizeContribution(item, evidenceText)) }), ...(delta.invalidatesBoardItemIds === null ? {} : { invalidatesBoardItemIds: delta.invalidatesBoardItemIds }) };
   }
 }
-function normalizeCueDelta(delta: ProviderCueDelta) {
+function normalizeCueDelta(delta: ProviderCueDelta, evidenceText: ReadonlyMap<string, string>) {
   switch (delta.action) {
     case "KEEP": return { action: "KEEP" as const };
-    case "RESOLVE_CURRENT": return { action: "RESOLVE_CURRENT" as const, reason: delta.reason, evidence: delta.evidence };
-    case "SET": return { action: "SET" as const, cueKind: delta.cueKind, contribution: normalizeContribution(delta.contribution), ...(delta.targetBoardItemId === null ? {} : { targetBoardItemId: delta.targetBoardItemId }) };
+    case "RESOLVE_CURRENT": return { action: "RESOLVE_CURRENT" as const, reason: delta.reason, evidence: { ...delta.evidence, quote: evidenceText.get(delta.evidence.checkpointId) ?? "" } };
+    case "SET": return { action: "SET" as const, cueKind: delta.cueKind, contribution: normalizeContribution(delta.contribution, evidenceText), ...(delta.targetBoardItemId === null ? {} : { targetBoardItemId: delta.targetBoardItemId }) };
   }
 }
 
 /** Converts nullable structured-output DTO fields into the optional domain representation. */
-export function normalizeTeachingProposal(value: unknown): TeachingInterpretationProposal {
+export function normalizeTeachingProposal(value: unknown, input: TeachingInterpretationRequest): TeachingInterpretationProposal {
   const parsed = value as ProviderProposal;
+  const evidenceText = new Map([
+    ...input.processedTimeline.flatMap((item) => item.type === "evidence" ? [[item.checkpointId, item.text] as const] : []),
+    ...input.newEvidence.map((item) => [item.checkpointId, item.text] as const),
+  ]);
   const warnings = normalizeWarnings(parsed.warnings);
   return {
     requestId: parsed.requestId,
@@ -133,7 +138,7 @@ export function normalizeTeachingProposal(value: unknown): TeachingInterpretatio
     baseCueRevision: parsed.baseCueRevision,
     steps: parsed.steps.map((item) => {
       const stepWarnings = normalizeWarnings(item.warnings);
-      return { consumesCheckpointIds: item.consumesCheckpointIds, boardDelta: normalizeBoardDelta(item.boardDelta), cueDelta: normalizeCueDelta(item.cueDelta), evidenceRefs: item.evidenceRefs, ...(stepWarnings ? { warnings: stepWarnings } : {}) };
+      return { consumesCheckpointIds: item.consumesCheckpointIds, boardDelta: normalizeBoardDelta(item.boardDelta, evidenceText), cueDelta: normalizeCueDelta(item.cueDelta, evidenceText), evidenceRefs: item.evidenceRefs.map((ref) => ({ ...ref, quote: evidenceText.get(ref.checkpointId) ?? "" })), ...(stepWarnings ? { warnings: stepWarnings } : {}) };
     }),
     ...(warnings ? { warnings } : {}),
   };

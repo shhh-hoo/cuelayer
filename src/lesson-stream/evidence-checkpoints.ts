@@ -44,3 +44,9 @@ export function exactSpeechReferenceIsGrounded(reference: { checkpointId: string
   const checkpoint = checkpoints.find((item) => item.checkpointId === reference.checkpointId);
   return Boolean(checkpoint && reference.quote.trim() && checkpoint.text.includes(reference.quote));
 }
+
+/** Resolves model-supplied evidence identity to immutable canonical text. */
+export function canonicalSpeechReference(checkpointId: string, checkpoints: readonly CompactEvidenceCheckpoint[]) {
+  const checkpoint = checkpoints.find((item) => item.checkpointId === checkpointId);
+  return checkpoint ? { checkpointId, quote: checkpoint.text } : undefined;
+}
