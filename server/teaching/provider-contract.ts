@@ -52,7 +52,7 @@ export const teachingInterpretationSchema = createTeachingInterpretationSchema(A
 export function teachingProviderContract(profile: AlphaSemanticProfile = ACTIVE_ALPHA_SEMANTIC_PROFILE) {
   const schema = createTeachingInterpretationSchema(profile);
   return {
-    reasoning: { effort: "none" as const },
+    reasoning: { effort: "low" as const },
     temperature: 0,
     max_output_tokens: 2_048,
     semanticProfileId: profile.id,
