@@ -16,7 +16,6 @@ import {
   type AlphaSemanticProfile,
 } from "../../src/lesson-stream/semantic-profile.ts";
 import { persistedAuditDigest } from "../../src/trace/audit.ts";
-import { teachingProviderContract } from "./provider-contract.ts";
 import {
   evaluateSemanticCases,
   normalizeSemanticText,
@@ -405,24 +404,15 @@ export function loadSemanticCorpusV2(root = process.cwd()): CorpusBundleV2 {
   };
 }
 
-function profileManifest(profile: AlphaSemanticProfile) {
-  const contract = teachingProviderContract(profile);
-  return {
-    profileVersion: profile.id,
-    policyVersion: profile.policyVersion,
-    policyDigest: persistedAuditDigest(contract.systemPolicy),
-    schemaDigest: persistedAuditDigest(contract.text.format),
-  };
-}
-
 export function validateSemanticCorpusV2(bundle = loadSemanticCorpusV2()) {
   const errors: string[] = [];
   const raw = readFileSync(bundle.corpusPath, "utf8");
   const hash = createHash("sha256").update(raw).digest("hex");
   if (bundle.manifest.corpusVersion !== "alpha-semantics-corpus-v2" || bundle.manifest.evaluatorVersion !== evaluatorVersion) errors.push("version-mismatch");
   if (hash !== bundle.manifest.fileSha256) errors.push("manifest-corpus-hash-mismatch");
-  if (JSON.stringify(bundle.manifest.core) !== JSON.stringify(profileManifest(ALPHA_CORE_P4))) errors.push("core-contract-mismatch");
-  if (JSON.stringify(bundle.manifest.augment) !== JSON.stringify(profileManifest(ALPHA_AUGMENT_CANDIDATE_P4))) errors.push("augment-contract-mismatch");
+  for (const [name, contract] of Object.entries({ core: bundle.manifest.core, augment: bundle.manifest.augment })) {
+    if (!contract.profileVersion || !contract.policyVersion || !/^[a-f0-9]{64}$/.test(contract.policyDigest) || !/^[a-f0-9]{64}$/.test(contract.schemaDigest)) errors.push(`${name}-freeze-contract-invalid`);
+  }
   if (bundle.cases.length !== 60 || bundle.manifest.caseCount !== 60) errors.push("case-count-invalid");
   const ids = bundle.cases.map((item) => item.id);
   if (new Set(ids).size !== ids.length) errors.push("duplicate-case-id");

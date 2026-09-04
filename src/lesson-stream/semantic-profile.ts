@@ -1,8 +1,8 @@
 import type { ContributionMode, TeachingCueKind } from "./contracts.ts";
 
 export type AlphaSemanticProfile = {
-  id: "alpha-core-p4-v1" | "alpha-augment-p4-v1";
-  policyVersion: "bounded-agent-p4-semantics-v1";
+  id: "alpha-core-p4-v2" | "alpha-augment-p4-v2";
+  policyVersion: "bounded-agent-p4-semantics-v2";
   contextProjection: "P4";
   boardActiveModes: readonly ContributionMode[];
   boardSupportModes: readonly ContributionMode[];
@@ -19,8 +19,8 @@ const cueModes = {
 } as const;
 
 export const ALPHA_CORE_P4: AlphaSemanticProfile = Object.freeze({
-  id: "alpha-core-p4-v1",
-  policyVersion: "bounded-agent-p4-semantics-v1",
+  id: "alpha-core-p4-v2",
+  policyVersion: "bounded-agent-p4-semantics-v2",
   contextProjection: "P4",
   boardActiveModes: ["RECONSTRUCT", "REPRESENT"] as const,
   boardSupportModes: ["RECONSTRUCT", "REPRESENT"] as const,
@@ -31,7 +31,7 @@ export const ALPHA_CORE_P4: AlphaSemanticProfile = Object.freeze({
 
 export const ALPHA_AUGMENT_CANDIDATE_P4: AlphaSemanticProfile = Object.freeze({
   ...ALPHA_CORE_P4,
-  id: "alpha-augment-p4-v1",
+  id: "alpha-augment-p4-v2",
   boardActiveModes: ["RECONSTRUCT", "REPRESENT", "AUGMENT"] as const,
   boardSupportModes: ["RECONSTRUCT", "REPRESENT", "AUGMENT"] as const,
 });

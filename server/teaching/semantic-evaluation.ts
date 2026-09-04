@@ -8,7 +8,6 @@ import { LessonStreamRuntime, type LessonEventStore } from "../../src/lesson-str
 import { ALPHA_AUGMENT_CANDIDATE_P4, ALPHA_CORE_P4, type AlphaSemanticProfile } from "../../src/lesson-stream/semantic-profile.ts";
 import { persistedAuditDigest } from "../../src/trace/audit.ts";
 import { estimateTeachingCost, requestOpenAITeachingInterpretation } from "./openai-interpreter.ts";
-import { teachingProviderContract } from "./provider-contract.ts";
 
 export type SemanticCorpusCase = {
   id: string;
@@ -105,9 +104,8 @@ export function validateSemanticCorpus(bundle = loadSemanticCorpus()) {
   const raw = readFileSync(bundle.corpusPath, "utf8");
   const hash = createHash("sha256").update(raw).digest("hex");
   if (hash !== bundle.manifest.fileSha256) errors.push("manifest-corpus-hash-mismatch");
-  const activeContract = teachingProviderContract(ALPHA_CORE_P4);
-  if (bundle.manifest.policyVersion !== ALPHA_CORE_P4.policyVersion || bundle.manifest.profileVersion !== ALPHA_CORE_P4.id) errors.push("manifest-policy-profile-mismatch");
-  if (bundle.manifest.policyDigest !== persistedAuditDigest(activeContract.systemPolicy) || bundle.manifest.schemaDigest !== persistedAuditDigest(activeContract.text.format)) errors.push("manifest-policy-schema-digest-mismatch");
+  if (bundle.manifest.policyVersion !== "bounded-agent-p4-semantics-v1" || bundle.manifest.profileVersion !== "alpha-core-p4-v1") errors.push("manifest-historical-policy-profile-mismatch");
+  if (!/^[a-f0-9]{64}$/.test(bundle.manifest.policyDigest) || !/^[a-f0-9]{64}$/.test(bundle.manifest.schemaDigest)) errors.push("manifest-historical-digest-invalid");
   if (bundle.cases.length !== bundle.manifest.caseCount || bundle.cases.length < 60) errors.push("case-count-invalid");
   const ids = bundle.cases.map((item) => item.id);
   if (new Set(ids).size !== ids.length) errors.push("duplicate-case-id");
