@@ -3,7 +3,7 @@ import { buildTeachingInterpretationRequest } from "../../src/lesson-stream/cont
 import { replayLessonEvents } from "../../src/lesson-stream/replay";
 import { ACTIVE_ALPHA_SEMANTIC_PROFILE, ALPHA_AUGMENT_CANDIDATE_P4 } from "../../src/lesson-stream/semantic-profile";
 import { createTeachingInterpretationSchema, teachingProviderContract } from "./provider-contract";
-import { loadSemanticCorpus, summarizeSemanticResults, validateSemanticCorpus } from "./semantic-evaluation";
+import { loadSemanticCorpus, normalizeSemanticText, summarizeSemanticResults, validateSemanticCorpus } from "./semantic-evaluation";
 
 describe("frozen Alpha semantics corpus and production harness", () => {
   it("validates frozen hash, split, unique IDs, replayable prefixes, and holdout risk coverage", () => {
@@ -30,8 +30,14 @@ describe("frozen Alpha semantics corpus and production harness", () => {
   });
 
   it("produces deterministic exact-count summaries", () => {
-    const result = { reconstructMatch: true, representMatch: null, contributionModes: [], usefulAugment: null, mustAugmentHit: null, safetyViolations: [], usage: { inputTokens: 10, cachedInputTokens: 2, outputTokens: 3, totalTokens: 13 }, latencyMs: 20, accepted: true, structuredParse: true, interventionMatch: true, boardTransitionMatch: true, cueLifecycleMatch: true, contributionModeMatch: true, mismatches: [], caseId: "x" } as never;
+    const result = { reconstructMatch: true, representMatch: null, contributionModes: [], usefulAugment: null, mustAugmentHit: null, safetyViolations: [], usage: { inputTokens: 10, cachedInputTokens: 2, outputTokens: 3, totalTokens: 13 }, latencyMs: 20, accepted: true, structuredParse: true, interventionMatch: true, boardTransitionMatch: true, cueLifecycleMatch: true, contributionModeMatch: true, mismatches: [], caseId: "x", tags: ["reconstruct"], expectedBoardActions: ["KEEP"], boardActions: ["KEEP"], expectedCueActions: ["KEEP"], cueActions: ["KEEP"], expectedCueKinds: [null], cueKinds: [null], allowedContributionModes: [] } as never;
     expect(summarizeSemanticResults([result])).toEqual(summarizeSemanticResults([result]));
     expect(summarizeSemanticResults([result])).toMatchObject({ structuredParse: { numerator: 1, denominator: 1 }, reconstruct: { numerator: 1, denominator: 1 }, represent: { numerator: 0, denominator: 0 }, totals: { inputTokens: 10, cachedInputTokens: 2, outputTokens: 3 } });
+  });
+
+  it("normalizes harmless Chemistry glyph variants without erasing identity or charge", () => {
+    expect(normalizeSemanticText("SO₄²⁻")).toBe("so42-");
+    expect(normalizeSemanticText("Eₐ")).toBe("ea");
+    expect(normalizeSemanticText("SO₄²⁻")).not.toBe(normalizeSemanticText("SO₄²⁺"));
   });
 });

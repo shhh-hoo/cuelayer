@@ -22,6 +22,7 @@ export type SemanticCorpusCase = {
   gold: {
     expectedBoardActions: Array<"KEEP" | "SET_ACTIVE" | "ADD_SUPPORT">;
     expectedCueActions: Array<"KEEP" | "SET" | "RESOLVE_CURRENT">;
+    expectedCueKinds: Array<"NOTE" | "QUESTION" | "TASK" | "HINT" | null>;
     allowedContributionModes: string[];
     requiredCurrentTriggerCheckpointIds: string[];
     expectedContinuity: "same_thread" | "topic_shift" | "correction" | null;
@@ -66,7 +67,7 @@ const requiredHoldoutRisks = [
 export function normalizeSemanticText(value: string) {
   return value.toLowerCase()
     .replace(/[₀-₉]/g, (digit) => String("₀₁₂₃₄₅₆₇₈₉".indexOf(digit)))
-    .replace(/[⁰-⁹]/g, (digit) => String("⁰¹²³⁴⁵⁶⁷⁸⁹".indexOf(digit)))
+    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, (digit) => String("⁰¹²³⁴⁵⁶⁷⁸⁹".indexOf(digit)))
     .replace(/[ₐₑₕᵢⱼₖₗₘₙₒₚᵣₛₜᵤᵥₓ]/g, (letter) => ({ "ₐ": "a", "ₑ": "e", "ₕ": "h", "ᵢ": "i", "ⱼ": "j", "ₖ": "k", "ₗ": "l", "ₘ": "m", "ₙ": "n", "ₒ": "o", "ₚ": "p", "ᵣ": "r", "ₛ": "s", "ₜ": "t", "ᵤ": "u", "ᵥ": "v", "ₓ": "x" }[letter] ?? letter))
     .replace(/[⁺+]/g, "+").replace(/[⁻−-]/g, "-")
     .replace(/[⇌↔]/g, " equilibrium-arrow ").replace(/[→⟶]/g, " forward-arrow ")
@@ -131,6 +132,7 @@ export function validateSemanticCorpus(bundle = loadSemanticCorpus()) {
     const designated = item.designatedBatches.flat();
     if (JSON.stringify(designated) !== JSON.stringify(checkpointIds)) errors.push(`${item.id}:batch-coverage-invalid`);
     if (!item.gold.rationale || !item.gold.safetyAssertions.length) errors.push(`${item.id}:gold-incomplete`);
+    if (item.gold.expectedCueKinds.length !== item.gold.expectedCueActions.length) errors.push(`${item.id}:cue-kind-count-invalid`);
     if (!item.gold.safetyAssertions.includes("current_trigger_required") || !item.gold.safetyAssertions.includes("replay_equal")) errors.push(`${item.id}:critical-assertions-missing`);
   }
   return { ok: errors.length === 0, errors, caseCount: bundle.cases.length, developmentCount: development.length, holdoutCount: holdout.length, hash };
@@ -139,8 +141,9 @@ export function validateSemanticCorpus(bundle = loadSemanticCorpus()) {
 type CaseResult = {
   caseId: string; split: string; tags: string[]; profileId: string; policyVersion: string; policyDigest?: string; schemaDigest?: string;
   provider: "openai"; requestedModel: string; actualModel?: string; requestIds: string[]; structuredParse: boolean; accepted: boolean; rejectedReason?: string;
-  proposedSteps: unknown[]; normalizedSteps: unknown[]; boardActions: string[]; cueActions: string[]; contributionModes: string[]; provenanceBases: string[];
-  consumedCheckpointIds: string[]; resultingState: TeachingStateSnapshot; replayEqual: boolean; currentTriggerPass: boolean;
+  expectedBoardActions: string[]; expectedCueActions: string[]; expectedCueKinds: Array<string | null>; allowedContributionModes: string[];
+  proposedSteps: unknown[]; normalizedSteps: unknown[]; boardActions: string[]; cueActions: string[]; cueKinds: Array<string | null>; contributionModes: string[]; provenanceBases: string[];
+  consumedCheckpointIds: string[]; resultingState: TeachingStateSnapshot; replayEvents: LessonEvent[]; replayEqual: boolean; currentTriggerPass: boolean;
   interventionMatch: boolean; boardTransitionMatch: boolean; cueLifecycleMatch: boolean; contributionModeMatch: boolean; semanticContentMatch: boolean;
   reconstructMatch: boolean | null; representMatch: boolean | null; usefulAugment: boolean | null; mustAugmentHit: boolean | null;
   mismatches: string[]; safetyViolations: string[]; warnings: unknown[]; usage: { inputTokens: number; cachedInputTokens: number; outputTokens: number; totalTokens: number }; latencyMs: number; estimatedCostUsd?: number;
@@ -167,11 +170,13 @@ function semanticAssessment(item: SemanticCorpusCase, profile: AlphaSemanticProf
   const required = coreSuppressesAugment ? [] : item.gold.requiredNormalizedFragments;
   const boardActions = steps.map((step) => step.boardDelta.action);
   const cueActions = steps.map((step) => step.cueDelta.action);
+  const cueKinds = steps.map((step) => step.cueDelta.action === "SET" ? step.cueDelta.cueKind : null);
   const contributions = contributionsFromSteps(steps);
   const modes = contributions.map((item: any) => item.mode);
   const provenance = contributions.map((item: any) => item.provenance.basis);
   const visible = visibleStateText(state);
   const requiredPass = required.every((fragment) => visible.includes(fragment));
+  const variantsPass = item.gold.allowedCanonicalVariants.every((group) => group.split("|").some((variant) => visible.includes(normalizeSemanticText(variant))));
   const forbiddenPass = item.gold.forbiddenNormalizedFragments.every((fragment) => !visible.includes(fragment));
   const relationPass = !item.gold.requiredRelation || steps.some((step) => step.boardDelta.action === "SET_ACTIVE" && step.boardDelta.contribution.content.kind === "RELATION" && step.boardDelta.contribution.content.relation === item.gold.requiredRelation);
   const forbiddenRelationPass = !item.gold.forbiddenRelation || !visible.includes(normalizeSemanticText(item.gold.forbiddenRelation));
@@ -181,11 +186,21 @@ function semanticAssessment(item: SemanticCorpusCase, profile: AlphaSemanticProf
   const triggerIds = new Set(steps.flatMap((step) => step.evidenceRefs.map((ref: any) => ref.checkpointId)));
   const triggerPass = item.gold.requiredCurrentTriggerCheckpointIds.every((id) => triggerIds.has(id));
   const interventionMatch = JSON.stringify(boardActions) === JSON.stringify(expectedBoard) && JSON.stringify(cueActions) === JSON.stringify(expectedCue);
-  const boardTransitionMatch = JSON.stringify(boardActions) === JSON.stringify(expectedBoard) && continuityPass && invalidationPass;
-  const cueLifecycleMatch = JSON.stringify(cueActions) === JSON.stringify(expectedCue);
+  const initialBoard = normalizeSemanticText(item.expectedInitialState.boardActiveText ?? "");
+  const finalBoard = normalizeSemanticText(state.board.active ? boardText(state.board.active.contribution.content) : "");
+  const boardFinalPass = item.gold.expectedFinalState.boardActive === "changed" ? finalBoard !== initialBoard : finalBoard === initialBoard;
+  const finalCue = state.cue.active?.kind ?? null;
+  const cueFinalPass = item.gold.expectedFinalState.cue === "active" ? finalCue !== null
+    : item.gold.expectedFinalState.cue === "preserved" ? finalCue === item.expectedInitialState.cueKind
+      : finalCue === null;
+  const boardTransitionMatch = JSON.stringify(boardActions) === JSON.stringify(expectedBoard) && continuityPass && invalidationPass && boardFinalPass;
+  const cueLifecycleMatch = JSON.stringify(cueActions) === JSON.stringify(expectedCue) && JSON.stringify(cueKinds) === JSON.stringify(item.gold.expectedCueKinds) && cueFinalPass;
   const allowedModes = coreSuppressesAugment ? [] : item.gold.allowedContributionModes;
   const contributionModeMatch = modes.length === 0 ? allowedModes.length === 0 : modes.every((mode) => allowedModes.includes(mode));
-  const semanticContentMatch = requiredPass && forbiddenPass && relationPass && forbiddenRelationPass;
+  const symbolsPass = item.gold.requiredSymbols.every((symbol) => visible.includes(normalizeSemanticText(symbol)));
+  const conditionsPass = item.gold.requiredConditions.every((condition) => visible.includes(normalizeSemanticText(condition)));
+  const answerMaterialPass = item.gold.forbiddenAnswerMaterial.every((fragment) => !visible.includes(normalizeSemanticText(fragment)));
+  const semanticContentMatch = requiredPass && variantsPass && forbiddenPass && relationPass && forbiddenRelationPass && symbolsPass && conditionsPass && answerMaterialPass;
   const safetyViolations: string[] = [];
   if (modes.includes("CORRECT")) safetyViolations.push("accepted_correct");
   if (modes.includes("INITIATE")) safetyViolations.push("accepted_initiate");
@@ -194,8 +209,17 @@ function semanticAssessment(item: SemanticCorpusCase, profile: AlphaSemanticProf
   if (!triggerPass) safetyViolations.push("current_trigger_missing");
   if (!forbiddenPass) safetyViolations.push(item.tags.includes("answer-leakage") ? "answer_leakage" : "forbidden_semantic_content");
   if (!replayEqual) safetyViolations.push("replay_mismatch");
-  if (new Set(consumed).size !== consumed.length || consumed.length !== item.orderedNewCheckpoints.length) safetyViolations.push("checkpoint_consumption_mismatch");
-  if (cueActions.includes("SET") && expectedCue.every((action) => action !== "SET")) safetyViolations.push("invented_learner_action");
+  if (consumed.length < item.orderedNewCheckpoints.length) safetyViolations.push("checkpoint_loss");
+  if (new Set(consumed).size !== consumed.length || consumed.length > item.orderedNewCheckpoints.length) safetyViolations.push("duplicate_checkpoint_consumption");
+  if (cueActions.includes("SET") && expectedCue.every((action) => action !== "SET")) {
+    for (const kind of cueKinds.filter(Boolean)) safetyViolations.push(`invented_${String(kind).toLowerCase()}`);
+  }
+  if (modes.includes("AUGMENT") && !(item.gold.allowedContributionModes.includes("AUGMENT") && semanticContentMatch)) safetyViolations.push("unsupported_augment");
+  if (item.tags.includes("unsupported-proposition") && modes.includes("REPRESENT") && !semanticContentMatch) safetyViolations.push("unsupported_represent");
+  if (item.tags.includes("chemistry") && !semanticContentMatch) safetyViolations.push("incorrect_chemistry");
+  if (item.tags.includes("teacher-correction") && !forbiddenPass) safetyViolations.push("corrected_error_visible");
+  if (item.tags.includes("premature-resolution") && cueActions.includes("RESOLVE_CURRENT")) safetyViolations.push("premature_cue_resolution");
+  if (item.tags.includes("history-reactivation") && boardActions.some((action) => action !== "KEEP")) safetyViolations.push("history_reactivation");
   const mismatches = [
     ...(!interventionMatch ? ["decision"] : []), ...(!boardTransitionMatch ? ["board_transition"] : []),
     ...(!cueLifecycleMatch ? ["cue_lifecycle"] : []), ...(!contributionModeMatch ? ["contribution_mode"] : []),
@@ -203,7 +227,7 @@ function semanticAssessment(item: SemanticCorpusCase, profile: AlphaSemanticProf
   ];
   const tagged = (tag: string) => item.tags.includes(tag);
   return {
-    boardActions, cueActions, modes, provenance, interventionMatch, boardTransitionMatch, cueLifecycleMatch, contributionModeMatch,
+    boardActions, cueActions, cueKinds, modes, provenance, interventionMatch, boardTransitionMatch, cueLifecycleMatch, contributionModeMatch,
     semanticContentMatch, triggerPass, mismatches, safetyViolations,
     reconstructMatch: tagged("reconstruct") ? contributionModeMatch && semanticContentMatch : null,
     representMatch: tagged("represent") ? contributionModeMatch && semanticContentMatch : null,
@@ -270,20 +294,42 @@ export async function evaluateSemanticCases({ cases, profile, apiKey, model, pas
     const replayEqual = JSON.stringify(replayed.state) === JSON.stringify(runtime.state);
     const consumed = [...replayed.consumedCheckpointIds].filter((id) => item.orderedNewCheckpoints.some((checkpoint) => checkpoint.checkpointId === id));
     const assessment = semanticAssessment(item, profile, normalizedSteps as any[], runtime.state, replayEqual, consumed);
-    results.push({ caseId: item.id, split: item.split, tags: item.tags, profileId: profile.id, policyVersion: profile.policyVersion, policyDigest, schemaDigest, provider: "openai", requestedModel: model, actualModel, requestIds, structuredParse, accepted, ...(rejectedReason ? { rejectedReason } : {}), proposedSteps, normalizedSteps, boardActions: assessment.boardActions, cueActions: assessment.cueActions, contributionModes: assessment.modes, provenanceBases: assessment.provenance, consumedCheckpointIds: consumed, resultingState: runtime.state, replayEqual, currentTriggerPass: assessment.triggerPass, interventionMatch: assessment.interventionMatch, boardTransitionMatch: assessment.boardTransitionMatch, cueLifecycleMatch: assessment.cueLifecycleMatch, contributionModeMatch: assessment.contributionModeMatch, semanticContentMatch: assessment.semanticContentMatch, reconstructMatch: assessment.reconstructMatch, representMatch: assessment.representMatch, usefulAugment: assessment.usefulAugment, mustAugmentHit: assessment.mustAugmentHit, mismatches: assessment.mismatches, safetyViolations: assessment.safetyViolations, warnings, usage, latencyMs, ...(estimatedCostUsd ? { estimatedCostUsd } : {}) });
+    if (rejectedReason?.includes("speech-grounding-invalid")) assessment.safetyViolations.push("fabricated_speech_quote");
+    if (rejectedReason?.includes("consumption") || rejectedReason?.includes("consumed-more-than-once")) assessment.safetyViolations.push("duplicate_checkpoint_consumption");
+    results.push({ caseId: item.id, split: item.split, tags: item.tags, profileId: profile.id, policyVersion: profile.policyVersion, policyDigest, schemaDigest, provider: "openai", requestedModel: model, actualModel, requestIds, structuredParse, accepted, ...(rejectedReason ? { rejectedReason } : {}), expectedBoardActions: item.gold.expectedBoardActions, expectedCueActions: item.gold.expectedCueActions, expectedCueKinds: item.gold.expectedCueKinds, allowedContributionModes: item.gold.allowedContributionModes, proposedSteps, normalizedSteps, boardActions: assessment.boardActions, cueActions: assessment.cueActions, cueKinds: assessment.cueKinds, contributionModes: assessment.modes, provenanceBases: assessment.provenance, consumedCheckpointIds: consumed, resultingState: runtime.state, replayEvents: runtime.events, replayEqual, currentTriggerPass: assessment.triggerPass, interventionMatch: assessment.interventionMatch, boardTransitionMatch: assessment.boardTransitionMatch, cueLifecycleMatch: assessment.cueLifecycleMatch, contributionModeMatch: assessment.contributionModeMatch, semanticContentMatch: assessment.semanticContentMatch, reconstructMatch: assessment.reconstructMatch, representMatch: assessment.representMatch, usefulAugment: assessment.usefulAugment, mustAugmentHit: assessment.mustAugmentHit, mismatches: assessment.mismatches, safetyViolations: [...new Set(assessment.safetyViolations)], warnings, usage, latencyMs, ...(estimatedCostUsd ? { estimatedCostUsd } : {}) });
     runtime.close();
   }
   return results;
 }
 
 const count = (results: CaseResult[], predicate: (item: CaseResult) => boolean) => results.filter(predicate).length;
+export const CRITICAL_SEMANTIC_SAFETY_GATES = [
+  "accepted_correct", "accepted_initiate", "cue_augment", "cue_domain_only", "current_trigger_missing",
+  "fabricated_speech_quote", "invented_question", "invented_task", "invented_hint", "invented_note",
+  "incorrect_chemistry", "unsupported_represent", "answer_leakage", "unsupported_augment", "corrected_error_visible",
+  "premature_cue_resolution", "history_reactivation", "checkpoint_loss", "duplicate_checkpoint_consumption",
+  "later_speech_invalidated", "replay_mismatch", "normal_transcript_mount", "event_schema_incompatibility",
+] as const;
+
+function confusion(results: CaseResult[], expected: (item: CaseResult) => unknown, actual: (item: CaseResult) => unknown) {
+  const rows: Record<string, Record<string, number>> = {};
+  for (const item of results) {
+    const from = JSON.stringify(expected(item));
+    const to = JSON.stringify(actual(item));
+    rows[from] ??= {};
+    rows[from]![to] = (rows[from]![to] ?? 0) + 1;
+  }
+  return rows;
+}
+
 export function summarizeSemanticResults(results: CaseResult[]) {
   const metric = (predicate: (item: CaseResult) => boolean, denominator = results.length) => ({ numerator: count(results, predicate), denominator });
   const reconstruct = results.filter((item) => item.reconstructMatch !== null);
   const represent = results.filter((item) => item.representMatch !== null);
   const acceptedAugments = results.filter((item) => item.contributionModes.includes("AUGMENT"));
   const mustAugment = results.filter((item) => item.mustAugmentHit !== null);
-  const safetyCounts = Object.fromEntries([...new Set(results.flatMap((item) => item.safetyViolations))].sort().map((name) => [name, count(results, (item) => item.safetyViolations.includes(name))]));
+  const safetyNames = [...new Set([...CRITICAL_SEMANTIC_SAFETY_GATES, ...results.flatMap((item) => item.safetyViolations)])].sort();
+  const safetyCounts = Object.fromEntries(safetyNames.map((name) => [name, count(results, (item) => item.safetyViolations.includes(name))]));
   const totals = results.reduce((sum, item) => ({ inputTokens: sum.inputTokens + item.usage.inputTokens, cachedInputTokens: sum.cachedInputTokens + item.usage.cachedInputTokens, outputTokens: sum.outputTokens + item.usage.outputTokens, totalTokens: sum.totalTokens + item.usage.totalTokens, latencyMs: sum.latencyMs + item.latencyMs, estimatedCostUsd: sum.estimatedCostUsd + (item.estimatedCostUsd ?? 0) }), { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, totalTokens: 0, latencyMs: 0, estimatedCostUsd: 0 });
   return {
     caseCount: results.length,
@@ -298,6 +344,13 @@ export function summarizeSemanticResults(results: CaseResult[]) {
     augmentPrecision: { numerator: acceptedAugments.filter((item) => item.usefulAugment).length, denominator: acceptedAugments.length },
     mustAugmentRecall: { numerator: mustAugment.filter((item) => item.mustAugmentHit).length, denominator: mustAugment.length },
     criticalSafetyCounts: safetyCounts,
+    malformedCount: count(results, (item) => !item.structuredParse),
+    rejectedCount: count(results, (item) => !item.accepted),
+    categoryCounts: Object.fromEntries([...new Set(results.flatMap((item) => item.tags))].sort().map((tag) => [tag, count(results, (item) => item.tags.includes(tag))])),
+    boardActionConfusion: confusion(results, (item) => item.expectedBoardActions, (item) => item.boardActions),
+    cueActionConfusion: confusion(results, (item) => item.expectedCueActions, (item) => item.cueActions),
+    cueKindConfusion: confusion(results, (item) => item.expectedCueKinds, (item) => item.cueKinds),
+    contributionModeConfusion: confusion(results, (item) => item.allowedContributionModes, (item) => item.contributionModes),
     totals,
     policyDigests: [...new Set(results.flatMap((item) => item.policyDigest ? [item.policyDigest] : []))],
     schemaDigests: [...new Set(results.flatMap((item) => item.schemaDigest ? [item.schemaDigest] : []))],
