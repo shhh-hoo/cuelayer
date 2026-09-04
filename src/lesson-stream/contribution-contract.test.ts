@@ -102,6 +102,23 @@ describe("Alpha contribution profile and provenance", () => {
     expect(reduceAcceptedStep(afterTask, boardStep, new Map([["B", 2]])).cue.active?.kind).toBe("TASK");
   });
 
+  it("keeps explicit Support attached to a newly established topic", () => {
+    const step: AcceptedInterpretationStep = {
+      interpretationId: "topic-with-support", requestId: "topic-with-support", stepIndex: 0,
+      consumesCheckpointIds: ["A"], baseBoardRevision: 0, baseCueRevision: 0,
+      boardDelta: {
+        action: "SET_ACTIVE",
+        contribution: board("REPRESENT", speechProvenance(), "Electrolysis"),
+        continuity: "topic_shift", retainPrevious: false,
+        support: [{ mode: "REPRESENT", content: "Reduction occurs at the cathode.", provenance: speechProvenance() }],
+      },
+      cueDelta: { action: "KEEP" }, evidenceRefs: [speech("Electrolysis")], warnings: [], model: "test",
+      policyVersion: ALPHA_CORE_P4.policyVersion, acceptedAt: "2026-09-03T00:00:00.000Z",
+    };
+    const state = reduceAcceptedStep(createInitialTeachingState(), step, new Map([["A", 1]]));
+    expect(state.board).toMatchObject({ active: { contribution: { content: { text: "Electrolysis" } } }, support: [{ targetBoardItemId: "board-topic-with-support-0", contribution: { content: "Reduction occurs at the cathode." } }] });
+  });
+
   it("replays previously accepted broad-vocabulary events without current-profile validation", () => {
     const accepted: AcceptedInterpretationStep = { interpretationId: "legacy", requestId: "legacy", stepIndex: 0, consumesCheckpointIds: ["A"], baseBoardRevision: 0, baseCueRevision: 0, boardDelta: { action: "SET_ACTIVE", contribution: board("CORRECT", { basis: "DOMAIN_KNOWLEDGE" }, "Legacy correction"), continuity: "correction", retainPrevious: false, invalidatesBoardItemIds: ["historical"] }, cueDelta: { action: "SET", cueKind: "TASK", contribution: { mode: "INITIATE", content: "Legacy task", provenance: { basis: "DOMAIN_KNOWLEDGE" } } }, evidenceRefs: [], warnings: [], model: "legacy", policyVersion: "bounded-agent-p4-alpha-v2", acceptedAt: "2026-09-03T00:00:00.000Z" };
     const events = [...request().events, interpretationAcceptedEvent("s", 3, accepted)];

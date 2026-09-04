@@ -288,17 +288,17 @@
     "topic-shift": 6,
     "transformation": 3
   },
-  "fileSha256": "49eea74075c7e144321c0103c899bb823a7b7e25c73ecf9af7ec763740133b72",
+  "fileSha256": "22d1456f1195dec9bf86023ab1d503ab0be025176bcf9d716ab940e028f52565",
   "core": {
-    "profileVersion": "alpha-core-p4-v1",
-    "policyVersion": "bounded-agent-p4-semantics-v1",
-    "policyDigest": "6432f70f184032b86cb9a63f0b3c270dcfdd19686db2b81882abea72acee5760",
+    "profileVersion": "alpha-core-p4-v2",
+    "policyVersion": "bounded-agent-p4-semantics-v2",
+    "policyDigest": "2eeb6878ba2d8effaf8de3c19c6e0a70f00ebbfa3c4cee4fdf180439c20e5a3a",
     "schemaDigest": "0f28469be469b9bdbcd60094e6215725c1f22cfecbe8a01f2364dcd6a9d622ed"
   },
   "augment": {
-    "profileVersion": "alpha-augment-p4-v1",
-    "policyVersion": "bounded-agent-p4-semantics-v1",
-    "policyDigest": "ac60860280b40d3c4d2bfc6a9c365610f6513967acb7b9d60eeb8006ac781eb1",
+    "profileVersion": "alpha-augment-p4-v2",
+    "policyVersion": "bounded-agent-p4-semantics-v2",
+    "policyDigest": "9df45be4631de23a59473a36de5e0bd4eafcc186e4a39a8d4f3b83a31743d7a6",
     "schemaDigest": "018a8a9d613ddb5eaf03b14b0d04333d6892e7575cf862674c4eea5e7df88af7"
   },
   "creationTimestamp": "2026-09-04T00:00:00.000Z"

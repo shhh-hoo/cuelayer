@@ -44,6 +44,7 @@ export type V2ProfileGold = {
   expectedCueKinds: Array<TeachingCueKind | null>;
   allowedContributionModes: ContributionMode[];
   allowedProvenanceBases?: Array<"SPEECH" | "SPEECH_AND_STATE" | "DOMAIN_KNOWLEDGE" | "STATE_AND_DOMAIN_KNOWLEDGE">;
+  requiredModeProvenance?: Array<{ mode: ContributionMode; bases: Array<"SPEECH" | "SPEECH_AND_STATE" | "DOMAIN_KNOWLEDGE" | "STATE_AND_DOMAIN_KNOWLEDGE"> }>;
   requiredCurrentTriggerCheckpointIds: string[];
   expectedContinuity?: "same_thread" | "topic_shift" | "correction";
   expectedInvalidations?: "INITIAL_ACTIVE" | "INITIAL_RETAINED" | string[];
@@ -306,6 +307,11 @@ export function assessSemanticResultV2(item: SemanticCorpusCaseV2, profile: Alph
     : modes.every((mode) => gold.allowedContributionModes.includes(mode));
   const provenanceMatch = !gold.allowedProvenanceBases?.length
     || provenanceBases.every((basis) => gold.allowedProvenanceBases!.includes(basis as never));
+  const modeProvenanceMatch = !gold.requiredModeProvenance?.length
+    || contributions.every((contribution) => {
+      const requirement = gold.requiredModeProvenance!.find((item) => item.mode === contribution.mode);
+      return Boolean(requirement?.bases.includes(contribution.provenance.basis));
+    });
 
   const replay = replayLessonEvents(raw.replayEvents);
   const pending = new Set(pendingEvidence(replay).map((checkpoint) => checkpoint.checkpointId));
@@ -329,7 +335,7 @@ export function assessSemanticResultV2(item: SemanticCorpusCaseV2, profile: Alph
   if (cueActions.includes("SET") && gold.expectedCueActions.every((action) => action !== "SET")) {
     for (const kind of cueKinds.filter(Boolean)) safetyViolations.push(`invented_${String(kind).toLowerCase()}`);
   }
-  if (modes.includes("AUGMENT") && (!gold.allowedContributionModes.includes("AUGMENT") || !semantic.ok || !provenanceMatch)) safetyViolations.push("unsupported_augment");
+  if (modes.includes("AUGMENT") && (!gold.allowedContributionModes.includes("AUGMENT") || !semantic.ok || !provenanceMatch || !modeProvenanceMatch)) safetyViolations.push("unsupported_augment");
   if (modes.includes("REPRESENT") && item.tags.includes("unsupported-proposition") && !semantic.ok) safetyViolations.push("unsupported_represent");
   if (semantic.failures.some((failure) => failure.startsWith("answer_leakage"))) safetyViolations.push("answer_leakage");
   if (item.tags.includes("teacher-correction") && !semantic.ok) safetyViolations.push("corrected_error_visible");
@@ -344,6 +350,7 @@ export function assessSemanticResultV2(item: SemanticCorpusCaseV2, profile: Alph
     ...(!cueLifecycleMatch ? ["cue_lifecycle"] : []),
     ...(!contributionModeMatch ? ["contribution_mode"] : []),
     ...(!provenanceMatch ? ["provenance"] : []),
+    ...(!modeProvenanceMatch ? ["mode_provenance"] : []),
     ...(!semantic.ok ? ["semantic_content"] : []),
   ];
   const mustAugmentHit = gold.mustAugment ? modes.includes("AUGMENT") && semantic.ok : null;
@@ -361,6 +368,7 @@ export function assessSemanticResultV2(item: SemanticCorpusCaseV2, profile: Alph
     cueLifecycleMatch,
     contributionModeMatch,
     provenanceMatch,
+    modeProvenanceMatch,
     semanticContentMatch: semantic.ok,
     semanticPredicateFailures: semantic.failures,
     reconstructMatch: item.tags.includes("reconstruct") ? contributionModeMatch && semantic.ok : null,

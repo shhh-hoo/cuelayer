@@ -350,10 +350,10 @@ function finalGold(seed: Scenario, current: CompactEvidenceCheckpoint[], initial
   const lastBoard = board.at(-1)!;
   const lastCue = cue.at(-1)!;
   const active = board.includes("SET_ACTIVE")
-    ? isCoreAugmentCase ? seed.corePredicate ?? null : seed.activePredicate ?? seed.predicate ?? null
+    ? seed.mustAugment ? seed.corePredicate ?? null : seed.activePredicate ?? seed.predicate ?? null
     : "INITIAL";
   const support = board.includes("SET_ACTIVE")
-    ? seed.supportPredicates ?? []
+    ? seed.mustAugment && profile === "augment" ? seed.predicate ? [seed.predicate] : [] : seed.supportPredicates ?? []
     : board.includes("ADD_SUPPORT")
       ? seed.supportPredicates ?? (seed.predicate ? [seed.predicate] : [])
       : "INITIAL";
@@ -367,7 +367,7 @@ function finalGold(seed: Scenario, current: CompactEvidenceCheckpoint[], initial
   const allowedContributionModes: ContributionMode[] = isCoreAugmentCase
     ? ["REPRESENT"]
     : seed.mode ? [seed.mode]
-      : seed.mustAugment ? ["AUGMENT"]
+      : seed.mustAugment ? ["REPRESENT", "AUGMENT"]
         : seed.negativeAugment && seed.mode ? [seed.mode]
           : [];
   return {
@@ -375,7 +375,10 @@ function finalGold(seed: Scenario, current: CompactEvidenceCheckpoint[], initial
     expectedCueActions: cue,
     expectedCueKinds: cueKinds,
     allowedContributionModes,
-    ...(seed.mustAugment && profile === "augment" ? { allowedProvenanceBases: ["DOMAIN_KNOWLEDGE", "STATE_AND_DOMAIN_KNOWLEDGE"] } : {}),
+    ...(seed.mustAugment && profile === "augment" ? { requiredModeProvenance: [
+      { mode: "REPRESENT" as const, bases: ["SPEECH" as const, "SPEECH_AND_STATE" as const] },
+      { mode: "AUGMENT" as const, bases: ["DOMAIN_KNOWLEDGE" as const, "STATE_AND_DOMAIN_KNOWLEDGE" as const] },
+    ] } : {}),
     requiredCurrentTriggerCheckpointIds: nonKeepIndexes.map((index) => current[index]!.checkpointId),
     ...(seed.continuity ? { expectedContinuity: seed.continuity } : {}),
     ...(seed.invalidations ? { expectedInvalidations: seed.invalidations } : {}),

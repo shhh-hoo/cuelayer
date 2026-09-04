@@ -33,17 +33,17 @@ function reduceBoard(state: TeachingStateSnapshot["board"], step: AcceptedInterp
 
   const revision = state.revision + 1;
   const active = boardItemFor(step, revision);
-  if (delta.continuity === "topic_shift") return { revision, active, support: [], retained: [] };
-
-  const invalidated = new Set(delta.invalidatesBoardItemIds ?? []);
-  const previous = [state.active, ...state.retained].filter((item): item is BoardItem => item !== undefined && !invalidated.has(item.id));
-  const retainPrevious = delta.continuity === "same_thread" && delta.retainPrevious;
-  const retained = retainPrevious ? previous.slice(0, 2) : [];
   const support = (delta.support ?? []).slice(0, 2).map((contribution, index): BoardSupport => ({
     id: `support-${step.interpretationId}-${step.stepIndex}-${index}`,
     targetBoardItemId: active.id,
     contribution,
   }));
+  if (delta.continuity === "topic_shift") return { revision, active, support, retained: [] };
+
+  const invalidated = new Set(delta.invalidatesBoardItemIds ?? []);
+  const previous = [state.active, ...state.retained].filter((item): item is BoardItem => item !== undefined && !invalidated.has(item.id));
+  const retainPrevious = delta.continuity === "same_thread" && delta.retainPrevious;
+  const retained = retainPrevious ? previous.slice(0, 2) : [];
   return { revision, active, support, retained };
 }
 
