@@ -61,18 +61,16 @@ export async function requestOpenAITeachingInterpretation(
     model: request.model,
     ...(request.service_tier ? { service_tier: request.service_tier } : {}),
     reasoning: request.reasoning,
-    temperature: request.temperature,
     max_output_tokens: request.max_output_tokens,
     input: request.input.map((item) => ({ role: item.role, content: item.content })),
     text: { format: jsonValue(request.text.format) },
   };
   const contract = teachingProviderContract(profile);
   const structuredOutputSchema = providerRequest.text.format;
-  const contractFact = { model, ...(options?.serviceTier ? { serviceTier: options.serviceTier } : {}), semanticProfileId: profile.id, policyVersion: profile.policyVersion, reasoning: contract.reasoning, temperature: contract.temperature, maxOutputTokens: contract.max_output_tokens, systemPolicy: contract.systemPolicy, structuredOutputSchema };
+  const contractFact = { model, ...(options?.serviceTier ? { serviceTier: options.serviceTier } : {}), semanticProfileId: profile.id, policyVersion: profile.policyVersion, reasoning: contract.reasoning, maxOutputTokens: contract.max_output_tokens, systemPolicy: contract.systemPolicy, structuredOutputSchema };
   const providerContract = {
     requestedModel: model,
     ...(options?.serviceTier ? { serviceTier: options.serviceTier } : {}),
-    temperature: contract.temperature,
     reasoningEffort: contract.reasoning.effort,
     maxOutputTokens: contract.max_output_tokens,
     policyVersion: input.policyVersion,

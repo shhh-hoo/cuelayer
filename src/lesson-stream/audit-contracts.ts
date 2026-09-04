@@ -5,7 +5,7 @@ export type TeachingProviderUsage = { inputTokens: number; cachedInputTokens: nu
 export type ProviderContractSnapshot = {
   requestedModel: string;
   serviceTier?: string;
-  temperature: number;
+  temperature?: number;
   reasoningEffort: string;
   maxOutputTokens: number;
   policyVersion: string;
@@ -21,7 +21,7 @@ export type ProviderRequestEnvelope = {
   model: string;
   service_tier?: string;
   reasoning: { effort: string };
-  temperature: number;
+  temperature?: number;
   max_output_tokens: number;
   input: Array<{ role: "system" | "user"; content: string }>;
   text: { format: JsonValue };

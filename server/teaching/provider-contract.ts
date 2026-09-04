@@ -53,7 +53,6 @@ export function teachingProviderContract(profile: AlphaSemanticProfile = ACTIVE_
   const schema = createTeachingInterpretationSchema(profile);
   return {
     reasoning: { effort: "low" as const },
-    temperature: 0,
     max_output_tokens: 2_048,
     semanticProfileId: profile.id,
     policyVersion: profile.policyVersion,
@@ -67,7 +66,6 @@ export function teachingResponseRequest(input: TeachingInterpretationRequest, pr
   const contract = teachingProviderContract(profile);
   return {
     reasoning: contract.reasoning,
-    temperature: contract.temperature,
     max_output_tokens: contract.max_output_tokens,
     input: [
       { role: "system" as const, content: contract.systemPolicy },

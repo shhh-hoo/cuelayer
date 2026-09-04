@@ -57,7 +57,7 @@ describe("OpenAI Teaching State interpreter", () => {
     expect(result).toMatchObject({ proposal: { requestId: "request-1", steps: [{ boardDelta: { action: "KEEP" } }] }, usage: { inputTokens: 300, cachedInputTokens: 80, outputTokens: 40, totalTokens: 340 } });
     const request = mocks.create.mock.calls[0]![0];
     expect(request.reasoning).toEqual({ effort: "low" });
-    expect(request.temperature).toBe(0);
+    expect(request).not.toHaveProperty("temperature");
     expect(request.input[0].content).toContain("currentState is current authority");
     expect(request.input[0].content).toContain("newEvidence is the sole deliberation trigger");
     expect(request.input[0].content).toContain("Every non-KEEP step must include evidenceRefs");
@@ -70,7 +70,7 @@ describe("OpenAI Teaching State interpreter", () => {
     expect(request.input[1].content).not.toContain("providerEvidence");
     expect(mocks.create.mock.calls[0]![1]).toEqual({ signal: controller.signal });
     expect(result.audit).toMatchObject({ providerRequestDigest: expect.any(String), providerResponse: { providerResponseId: "response-1", providerModel: "gpt-5.6-luna-actual", outputText: expect.any(String), rawStructuredOutput: { requestId: "request-1" }, providerResponseDigest: expect.any(String) } });
-    expect(result.audit.providerContract).toMatchObject({ semanticProfileId: "alpha-core-p4-v3", policyVersion: LESSON_POLICY_VERSION, systemPolicyDigest: expect.any(String), structuredOutputSchemaDigest: expect.any(String) });
+    expect(result.audit.providerContract).toMatchObject({ semanticProfileId: "alpha-core-p4-v4", policyVersion: LESSON_POLICY_VERSION, systemPolicyDigest: expect.any(String), structuredOutputSchemaDigest: expect.any(String) });
     const { providerResponseDigest, ...providerResponseFact } = result.audit.providerResponse;
     expect(providerResponseDigest).toBe(persistedAuditDigest(providerResponseFact));
   });
