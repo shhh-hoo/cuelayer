@@ -1,7 +1,7 @@
-import type { ContextProjectionDiagnostics, LessonEvent, ProcessedTimelineEntry, TeachingInterpretationRequest, TeachingStateSnapshot, CompactEvidenceCheckpoint } from "./contracts";
-import { LESSON_POLICY_VERSION } from "./contracts";
-import { ACTIVE_ALPHA_SEMANTIC_PROFILE, type AlphaSemanticProfile } from "./semantic-profile";
-import { createInitialTeachingState, reduceLessonEvent } from "./teaching-state";
+import type { ContextProjectionDiagnostics, LessonEvent, ProcessedTimelineEntry, TeachingInterpretationRequest, TeachingStateSnapshot, CompactEvidenceCheckpoint } from "./contracts.ts";
+import { LESSON_POLICY_VERSION } from "./contracts.ts";
+import { ACTIVE_ALPHA_SEMANTIC_PROFILE, type AlphaSemanticProfile } from "./semantic-profile.ts";
+import { createInitialTeachingState, reduceLessonEvent } from "./teaching-state.ts";
 
 const estimatedTokens = (value: unknown) => Math.ceil(JSON.stringify(value).length / 4);
 

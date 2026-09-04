@@ -1,4 +1,4 @@
-import type { LessonEvent } from "./contracts";
+import type { LessonEvent } from "./contracts.ts";
 
 const DATABASE_NAME = "cuelayer-lesson-stream-v1";
 const DATABASE_VERSION = 1;
@@ -40,7 +40,8 @@ function openDatabase(): Promise<IDBDatabase> {
 }
 
 export class LocalLessonEventStore {
-  private constructor(private readonly database: IDBDatabase) {}
+  private readonly database: IDBDatabase;
+  private constructor(database: IDBDatabase) { this.database = database; }
 
   static async open() { return new LocalLessonEventStore(await openDatabase()); }
   close() { this.database.close(); }

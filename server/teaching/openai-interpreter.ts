@@ -31,7 +31,7 @@ function jsonValue(value: unknown): JsonValue {
   return JSON.parse(JSON.stringify(value)) as JsonValue;
 }
 
-function safeResponseFact(response: { id?: string; model?: string; service_tier?: string; usage?: unknown; output_text?: string; status?: string; incomplete_details?: { reason?: string | null } | null }): Omit<ProviderResponseSnapshot, "providerResponseDigest"> {
+function safeResponseFact(response: { id?: string; model?: string; service_tier?: string | null; usage?: unknown; output_text?: string; status?: string; incomplete_details?: { reason?: string | null } | null }): Omit<ProviderResponseSnapshot, "providerResponseDigest"> {
   const snapshot = {
     ...(response.id ? { providerResponseId: response.id } : {}),
     ...(response.model ? { providerModel: response.model } : {}),

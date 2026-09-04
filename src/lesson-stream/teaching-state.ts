@@ -1,4 +1,4 @@
-import { NOTE_EXPIRY_MS, type AcceptedInterpretationStep, type BoardItem, type BoardSupport, type LessonEvent, type TeachingStateSnapshot } from "./contracts";
+import { NOTE_EXPIRY_MS, type AcceptedInterpretationStep, type BoardItem, type BoardSupport, type LessonEvent, type TeachingStateSnapshot } from "./contracts.ts";
 
 export function createInitialTeachingState(): TeachingStateSnapshot {
   return {

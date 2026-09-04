@@ -1,5 +1,5 @@
-import { LESSON_EVENT_SCHEMA_VERSION, type CompactEvidenceCheckpoint, type GroundingRecord, type LessonEvent, type TeachingStateSnapshot } from "./contracts";
-import { createInitialTeachingState, reduceLessonEvent } from "./teaching-state";
+import { LESSON_EVENT_SCHEMA_VERSION, type CompactEvidenceCheckpoint, type GroundingRecord, type LessonEvent, type TeachingStateSnapshot } from "./contracts.ts";
+import { createInitialTeachingState, reduceLessonEvent } from "./teaching-state.ts";
 
 export type LessonReplay = {
   events: LessonEvent[];

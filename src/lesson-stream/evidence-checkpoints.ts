@@ -1,5 +1,5 @@
-import type { CanonicalSpeechSpan, SpeechRunId } from "../session/speech-types";
-import type { CompactEvidenceCheckpoint, GroundingRecord, SpeechEvidenceWarning } from "./contracts";
+import type { CanonicalSpeechSpan, SpeechRunId } from "../session/speech-types.ts";
+import type { CompactEvidenceCheckpoint, GroundingRecord, SpeechEvidenceWarning } from "./contracts.ts";
 
 const LEXICAL = /[\p{L}\p{N}]/u;
 

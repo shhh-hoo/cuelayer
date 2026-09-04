@@ -1,6 +1,6 @@
-import { exactSpeechReferenceIsGrounded } from "./evidence-checkpoints";
-import { reduceAcceptedStep } from "./teaching-state";
-import { ACTIVE_ALPHA_SEMANTIC_PROFILE, contributionModeAllowed, type AlphaSemanticProfile } from "./semantic-profile";
+import { exactSpeechReferenceIsGrounded } from "./evidence-checkpoints.ts";
+import { reduceAcceptedStep } from "./teaching-state.ts";
+import { ACTIVE_ALPHA_SEMANTIC_PROFILE, contributionModeAllowed, type AlphaSemanticProfile } from "./semantic-profile.ts";
 import type {
   AcceptedInterpretationStep,
   BoardContent,
@@ -16,7 +16,7 @@ import type {
   TeachingInterpretationProposal,
   TeachingInterpretationRequest,
   TeachingStateSnapshot,
-} from "./contracts";
+} from "./contracts.ts";
 
 type ValidationResult =
   | { ok: true; steps: AcceptedInterpretationStep[]; boardConflict: boolean; cueConflict: boolean }

@@ -1,5 +1,5 @@
 import type { SpeechRunId, SpeechWord } from "../session/speech-types";
-import { ACTIVE_ALPHA_SEMANTIC_PROFILE } from "./semantic-profile";
+import { ACTIVE_ALPHA_SEMANTIC_PROFILE } from "./semantic-profile.ts";
 
 export const LESSON_POLICY_VERSION = ACTIVE_ALPHA_SEMANTIC_PROFILE.policyVersion;
 export const LESSON_EVENT_SCHEMA_VERSION = "lesson-event-v3-learner-agency";

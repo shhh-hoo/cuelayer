@@ -1,13 +1,13 @@
-import type { CanonicalSpeechSpan } from "../session/speech-types";
-import { checkpointFromClosedSpan } from "./evidence-checkpoints";
-import { validateAndNormalizeProposal } from "./accepted-interpretations";
-import { checkpointCommittedEvent, cueExpiredEvent, interpretationAcceptedEvent, lessonEndedEvent, lessonStartedEvent, speechRunAllocatedEvent } from "./events";
-import { pendingEvidence, replayLessonEvents, type LessonReplay } from "./replay";
-import { LocalLessonEventStore } from "./store";
-import { reduceAcceptedStep } from "./teaching-state";
-import type { AcceptedInterpretationStep, LessonEvent, TeachingInterpretationRequest, TeachingStateSnapshot } from "./contracts";
-import type { SpeechRunId } from "../session/speech-types";
-import type { AlphaSemanticProfile } from "./semantic-profile";
+import type { CanonicalSpeechSpan } from "../session/speech-types.ts";
+import { checkpointFromClosedSpan } from "./evidence-checkpoints.ts";
+import { validateAndNormalizeProposal } from "./accepted-interpretations.ts";
+import { checkpointCommittedEvent, cueExpiredEvent, interpretationAcceptedEvent, lessonEndedEvent, lessonStartedEvent, speechRunAllocatedEvent } from "./events.ts";
+import { pendingEvidence, replayLessonEvents, type LessonReplay } from "./replay.ts";
+import { LocalLessonEventStore } from "./store.ts";
+import { reduceAcceptedStep } from "./teaching-state.ts";
+import type { AcceptedInterpretationStep, LessonEvent, TeachingInterpretationRequest, TeachingStateSnapshot } from "./contracts.ts";
+import type { SpeechRunId } from "../session/speech-types.ts";
+import type { AlphaSemanticProfile } from "./semantic-profile.ts";
 
 export type LessonEventStore = {
   append(events: readonly LessonEvent[]): Promise<void>;
@@ -22,12 +22,19 @@ export type ProposalAcceptance =
 export class LessonStreamRuntime {
   private writeChain: Promise<unknown> = Promise.resolve();
   private listeners = new Set<() => void>();
+  readonly sessionId: string;
+  private readonly store: LessonEventStore;
+  private replayValue: LessonReplay;
 
   private constructor(
-    readonly sessionId: string,
-    private readonly store: LessonEventStore,
-    private replayValue: LessonReplay,
-  ) {}
+    sessionId: string,
+    store: LessonEventStore,
+    replayValue: LessonReplay,
+  ) {
+    this.sessionId = sessionId;
+    this.store = store;
+    this.replayValue = replayValue;
+  }
 
   static async open(sessionId: string, providedStore?: LessonEventStore) {
     const store = providedStore ?? await LocalLessonEventStore.open();

@@ -151,8 +151,9 @@ describe("OpenAI Teaching State interpreter", () => {
   it("derives provider and validator mode permissions from the same profile", () => {
     const speechProvenance = { basis: "SPEECH", speechRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], stateRefs: null };
     const domainProvenance = { basis: "DOMAIN_KNOWLEDGE", speechRefs: null, stateRefs: null };
-    const board = (mode: string, provenance = speechProvenance) => ({ mode, content: { kind: "TEXT", text: "Bounded board content" }, provenance });
-    const text = (mode: string, provenance = speechProvenance) => ({ mode, content: "Bounded cue content", provenance });
+    type TestProvenance = { basis: string; speechRefs: Array<{ checkpointId: string; quote: string }> | null; stateRefs: null };
+    const board = (mode: string, provenance: TestProvenance = speechProvenance) => ({ mode, content: { kind: "TEXT", text: "Bounded board content" }, provenance });
+    const text = (mode: string, provenance: TestProvenance = speechProvenance) => ({ mode, content: "Bounded cue content", provenance });
     const raw = (boardDelta: unknown, cueDelta: unknown) => ({ requestId: "request-1", baseBoardRevision: 0, baseCueRevision: 0, steps: [{ consumesCheckpointIds: ["checkpoint-1"], boardDelta, cueDelta, evidenceRefs: [{ checkpointId: "checkpoint-1", quote: "Temperature increases" }], warnings: null }], warnings: null });
     const validate = (candidate: unknown, profile = ACTIVE_ALPHA_SEMANTIC_PROFILE) => {
       const parsed = createTeachingInterpretationSchema(profile).parse(candidate);

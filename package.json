@@ -8,6 +8,9 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "eval:semantics:freeze": "node --experimental-strip-types scripts/build-semantics-corpus.ts",
+    "eval:semantics:validate": "node --experimental-strip-types scripts/evaluate-semantics.ts --validate",
+    "eval:semantics:live": "node --experimental-strip-types scripts/evaluate-semantics.ts --live",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -23,6 +26,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@types/node": "^26.4.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "6.1.1",
