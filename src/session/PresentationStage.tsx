@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { PresentationStatus, SessionStatus } from "./session-types";
 import type { CanonicalSpeechState, SpeechStatus } from "./speech-types";
 import type { TeachingStateSnapshot } from "../lesson-stream/contracts";
+import type { TeachingRenderOrigin } from "./use-live-teaching";
 import { TeachingSurfaceLayer } from "./TeachingSurfaceLayer";
 import { presentationModeFor, type PresentationMode } from "./presentation-mode";
 import type { BoardDensity } from "../teaching-cue/BoardLayout";
@@ -16,6 +17,7 @@ type PresentationStageProps = {
   speechStatus: SpeechStatus;
   showSpeechDebug: boolean;
   teachingState: TeachingStateSnapshot;
+  teachingRenderOrigin?: TeachingRenderOrigin;
   onTeachingSurfaceRendered?(details: { renderId: string; boardRevision: number; cueRevision: number; presentationMode: PresentationMode; density: BoardDensity; state: TeachingStateSnapshot }): void;
   onTeachingCueExpire(cueId: string, now: number): void;
 };
@@ -27,7 +29,7 @@ const emptyStageCopy: Record<Exclude<PresentationStatus, "ready">, { title: stri
   error: { title: "Presentation not connected", detail: "Choose a presentation again to continue." },
 };
 
-export const PresentationStage = forwardRef<HTMLElement, PresentationStageProps>(function PresentationStage({ stream, presentationStatus, sessionStatus, children, speech, speechStatus, showSpeechDebug, teachingState, onTeachingSurfaceRendered, onTeachingCueExpire }, ref) {
+export const PresentationStage = forwardRef<HTMLElement, PresentationStageProps>(function PresentationStage({ stream, presentationStatus, sessionStatus, children, speech, speechStatus, showSpeechDebug, teachingState, teachingRenderOrigin, onTeachingSurfaceRendered, onTeachingCueExpire }, ref) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -45,7 +47,7 @@ export const PresentationStage = forwardRef<HTMLElement, PresentationStageProps>
     <div className="presentation-background">
       {stream ? <video ref={videoRef} className="presentation-video" autoPlay muted playsInline aria-label="Live shared presentation" /> : null}
     </div>
-    <TeachingSurfaceLayer state={teachingState} presentationMode={presentationMode} onRendered={onTeachingSurfaceRendered} onCueExpire={onTeachingCueExpire} />
+    <TeachingSurfaceLayer state={teachingState} origin={teachingRenderOrigin} presentationMode={presentationMode} onRendered={onTeachingSurfaceRendered} onCueExpire={onTeachingCueExpire} />
     {showSpeechDebug && speechStatus !== "off" && speechStatus !== "ended" ? <aside className="speech-inspection-surface" aria-label="Live speech debug inspection">
       <span>Live speech · {speechStatus}</span>
       {speech.spans.slice(-3).map((span) => <p key={span.id}>{span.text}</p>)}

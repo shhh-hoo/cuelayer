@@ -18,6 +18,10 @@ function event(eventId: string): SessionTraceEvent {
 }
 
 describe("trace viewer snapshot equality", () => {
+  it("keeps a frozen v2 archive event readable after the v3 audit expansion", () => {
+    expect(event("legacy:1")).toMatchObject({ schemaVersion: 2, type: "session.ended", payload: { reason: "test" } });
+  });
+
   it("keeps the current React array when polling returns the same immutable events", () => {
     const current = [event("page:1"), event("page:2")];
     const reloaded = [event("page:1"), event("page:2")];

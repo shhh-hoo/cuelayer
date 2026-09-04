@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import type { BoardContent, BoardItem, TeachingStateSnapshot } from "../lesson-stream/contracts";
+import type { TeachingRenderOrigin } from "./use-live-teaching";
 import { BoardLayout, boardDensityForContent, type BoardDensity } from "../teaching-cue/BoardLayout";
 import type { PresentationMode } from "./presentation-mode";
 import "./teaching-surface.css";
@@ -22,18 +23,24 @@ function RetainedItem({ item }: { item: BoardItem }) {
   return <div className="teaching-board-retained-item" data-board-item-id={item.id}><Content content={item.contribution.content} /></div>;
 }
 
-export function TeachingSurfaceLayer({ state, presentationMode, onCueExpire, onRendered }: {
+export function teachingSurfaceRenderDetails({ state, presentationMode, origin }: { state: TeachingStateSnapshot; presentationMode: PresentationMode; origin?: TeachingRenderOrigin }) {
+  const renderId = `render-${state.board.revision}-${state.cue.revision}-${presentationMode}`;
+  const density = boardDensityForContent({ presentationMode, retainedCount: state.board.retained.length, cueTextLength: state.cue.active?.contribution.content.length ?? 0 });
+  return { renderId, boardRevision: state.board.revision, cueRevision: state.cue.revision, presentationMode, density, state, ...(origin ? { origin } : {}) };
+}
+
+export function TeachingSurfaceLayer({ state, presentationMode, origin, onCueExpire, onRendered }: {
   state: TeachingStateSnapshot;
   presentationMode: PresentationMode;
   onCueExpire?(cueId: string, now: number): void;
-  onRendered?(details: { renderId: string; boardRevision: number; cueRevision: number; presentationMode: PresentationMode; density: BoardDensity; state: TeachingStateSnapshot }): void;
+  origin?: TeachingRenderOrigin;
+  onRendered?(details: { renderId: string; boardRevision: number; cueRevision: number; presentationMode: PresentationMode; density: BoardDensity; state: TeachingStateSnapshot; origin?: TeachingRenderOrigin }): void;
 }) {
-  const renderId = `render-${state.board.revision}-${state.cue.revision}-${presentationMode}`;
-  const density = boardDensityForContent({ presentationMode, retainedCount: state.board.retained.length, cueTextLength: state.cue.active?.contribution.content.length ?? 0 });
+  const details = useMemo(() => teachingSurfaceRenderDetails({ state, presentationMode, origin }), [origin, presentationMode, state]);
+  const { renderId, density } = details;
   useEffect(() => {
-    if (!state.board.active && !state.cue.active) return;
-    onRendered?.({ renderId, boardRevision: state.board.revision, cueRevision: state.cue.revision, presentationMode, density, state });
-  }, [density, onRendered, presentationMode, renderId, state.board.active, state.board.revision, state.cue.active, state.cue.revision]);
+    onRendered?.(details);
+  }, [details, onRendered]);
 
   if (!state.board.active && !state.cue.active) return null;
   return <section className="teaching-surface-layer" data-render-id={renderId} data-board-revision={state.board.revision} data-cue-revision={state.cue.revision} aria-label="Live teaching surface">

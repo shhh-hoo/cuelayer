@@ -11,7 +11,7 @@ import { useCanonicalSpeechSpanLifecycle } from "./use-canonical-speech-span-lif
 import { closeOpenCanonicalSpeechSpans } from "./canonical-speech";
 import { TeachingTraceDrawer } from "./TeachingTraceDrawer";
 import { traceDraft } from "../trace/contracts";
-import { auditDigest } from "../trace/audit";
+import { persistedAuditDigest } from "../trace/audit";
 import { useCanonicalTrace } from "../trace/use-canonical-trace";
 import { useSessionTrace } from "../trace/use-session-trace";
 import { useTraceViewer } from "../trace/use-trace-viewer";
@@ -81,10 +81,10 @@ export function SessionPage() {
     }, { priority: "critical", correlation: { rootId: "presentation" } }));
   }, [state.presentation.error?.message, state.presentation.status, trace.emit]);
 
-  const onTeachingSurfaceRendered = useCallback(({ renderId, boardRevision, cueRevision, presentationMode, density, state: renderedState }: { renderId: string; boardRevision: number; cueRevision: number; presentationMode: "presentationless" | "presentation-overlay"; density: BoardDensity; state: import("../lesson-stream/contracts").TeachingStateSnapshot }) => {
-    trace.emit(traceDraft("teaching_surface.rendered", { renderId, boardRevision, cueRevision, presentationMode, density, state: renderedState, stateDigest: auditDigest(renderedState), ...(renderedState.board.active ? { activeBoardItemId: renderedState.board.active.id } : {}), ...(renderedState.cue.active ? { activeCueId: renderedState.cue.active.id } : {}) }, {
+  const onTeachingSurfaceRendered = useCallback(({ renderId, boardRevision, cueRevision, presentationMode, density, state: renderedState, origin }: { renderId: string; boardRevision: number; cueRevision: number; presentationMode: "presentationless" | "presentation-overlay"; density: BoardDensity; state: import("../lesson-stream/contracts").TeachingStateSnapshot; origin?: import("./use-live-teaching").TeachingRenderOrigin }) => {
+    trace.emit(traceDraft("teaching_surface.rendered", { renderId, boardRevision, cueRevision, presentationMode, density, state: renderedState, stateDigest: persistedAuditDigest(renderedState), ...(renderedState.board.active ? { activeBoardItemId: renderedState.board.active.id } : {}), ...(renderedState.cue.active ? { activeCueId: renderedState.cue.active.id } : {}), ...(origin ? { origin } : {}) }, {
       priority: "critical",
-      correlation: { rootId: `teaching-state:${boardRevision}:${cueRevision}`, renderId, boardRevision, cueRevision },
+      correlation: { rootId: `teaching-state:${boardRevision}:${cueRevision}`, renderId, boardRevision, cueRevision, ...(origin ? { plannerRequestId: origin.requestId, interpretationId: origin.interpretationId, lessonEventId: origin.lessonEventId, stepIndex: origin.stepIndex } : {}) },
     }));
     const layoutKey = `${presentationMode}:${density}`;
     if (teachingLayoutRef.current !== layoutKey) {
@@ -220,7 +220,7 @@ export function SessionPage() {
       <a href="/" className="session-brand">CueLayer</a>
       <p>Live session</p>
     </header>
-    <PresentationStage ref={stageRef} stream={state.presentation.stream} presentationStatus={state.presentation.status} sessionStatus={state.status} speech={state.speech.canonical} speechStatus={state.speech.status} showSpeechDebug={showSpeechDebug} teachingState={liveTeaching.state} onTeachingSurfaceRendered={onTeachingSurfaceRendered} onTeachingCueExpire={(cueId) => void liveTeaching.expireCue(cueId)}>
+    <PresentationStage ref={stageRef} stream={state.presentation.stream} presentationStatus={state.presentation.status} sessionStatus={state.status} speech={state.speech.canonical} speechStatus={state.speech.status} showSpeechDebug={showSpeechDebug} teachingState={liveTeaching.state} teachingRenderOrigin={liveTeaching.renderOrigin} onTeachingSurfaceRendered={onTeachingSurfaceRendered} onTeachingCueExpire={(cueId) => void liveTeaching.expireCue(cueId)}>
       <SessionControls sessionStatus={state.status} isFullscreen={isFullscreen} onPauseToggle={toggleSessionPause} onFullscreen={toggleFullscreen} onEnd={() => void endSession()} speechStatus={state.speech.status} onSpeechToggle={() => void toggleSpeech()} onSpeechPrepare={prepareSpeechmaticsAudioContext} />
     </PresentationStage>
     <section className="session-panel" aria-live="polite">

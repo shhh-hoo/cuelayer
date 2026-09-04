@@ -1,5 +1,7 @@
-import type { SpeechRunId } from "../session/speech-types";
-import type { TeachingInterpretationProposal, TeachingInterpretationRequest, TeachingStateSnapshot } from "../lesson-stream/contracts";
+import type { SpeechRunId } from "../session/speech-types.ts";
+import type { LessonEvent, TeachingInterpretationProposal, TeachingInterpretationRequest, TeachingStateSnapshot } from "../lesson-stream/contracts.ts";
+import type { JsonValue } from "./audit.ts";
+import type { ProviderContractSnapshot, ProviderRequestEnvelope, ProviderResponseSnapshot } from "../lesson-stream/audit-contracts.ts";
 
 // V3 is additive. V2 JSONL remains readable because event records are never migrated.
 export const TRACE_SCHEMA_VERSION = 3 as const;
@@ -18,6 +20,7 @@ export type TraceCorrelation = {
   plannerRequestId?: string;
   checkpointId?: string;
   interpretationId?: string;
+  lessonEventId?: string;
   stepIndex?: number;
   boardRevision?: number;
   cueRevision?: number;
@@ -122,17 +125,18 @@ export type SessionTracePayloads = {
   "evidence.checkpoint_committed": { runId: SpeechRunId; checkpointId: string; lessonSequence: number; sourceFinalIds: string[]; warningCodes: string[] };
   "evidence.checkpoint_pending": { checkpointId: string; pendingCount: number; oldestPendingAgeMs: number; estimatedTokens: number };
   "interpretation.request_started": { requestId: string; checkpointIds: string[]; pendingCount: number; projectedInputTokens: number };
-  "interpretation.request_snapshot": { requestId: string; sessionId: string; policyVersion: string; request: TeachingInterpretationRequest; requestDigest: string; checkpointIds: string[]; baseBoardRevision: number; baseCueRevision: number };
-  "provider.contract_snapshot": { contractDigest: string; requestedModel: string; serviceTier?: string; temperature: number; reasoningEffort: string; maxOutputTokens: number; policyVersion: string; systemPolicy: string; systemPolicyDigest: string; structuredOutputSchema: unknown; structuredOutputSchemaDigest: string; providerContract: unknown };
-  "provider.request_snapshot": { requestId: string; providerRequest: unknown; providerContractDigest: string; domainRequestDigest: string; providerSnapshotUnavailable?: "client_abort" | "provider_error" };
-  "provider.response_snapshot": { requestId: string; providerResponseId?: string; providerModel?: string; serviceTier?: string; usage?: { inputTokens: number; cachedInputTokens: number; outputTokens: number; totalTokens: number }; rawStructuredOutput: unknown; rawStructuredOutputDigest: string; outputText?: string; status?: string; incompleteDetails?: unknown };
+  "interpretation.request_snapshot": { requestId: string; sessionId: string; policyVersion: string; request: TeachingInterpretationRequest; requestDigest: string; requestBaseState: TeachingStateSnapshot; requestBaseStateDigest: string; checkpointIds: string[]; baseBoardRevision: number; baseCueRevision: number };
+  "provider.contract_snapshot": { contractDigest: string; requestedModel: string; serviceTier?: string; temperature: number; reasoningEffort: string; maxOutputTokens: number; policyVersion: string; systemPolicy: string; systemPolicyDigest: string; structuredOutputSchema: JsonValue; structuredOutputSchemaDigest: string; providerContract: ProviderContractSnapshot };
+  "provider.request_snapshot": { requestId: string; providerRequest: ProviderRequestEnvelope; providerRequestDigest: string; providerContractDigest: string; domainRequestDigest: string; providerSnapshotUnavailable?: "client_abort" | "provider_error" };
+  "provider.response_snapshot": { requestId: string; providerResponse: ProviderResponseSnapshot; providerResponseDigest: string };
   "interpretation.proposal_normalized": { requestId: string; rawStructuredOutputDigest: string; normalizedProposal: TeachingInterpretationProposal; normalizedProposalDigest: string };
-  "interpretation.validation_result": { requestId: string; status: "accepted" | "rejected" | "provider_error" | "structured_parse_error" | "normalization_error"; reason?: string; normalizedProposal?: TeachingInterpretationProposal; normalizedProposalDigest?: string; boardConflict?: boolean; cueConflict?: boolean; acceptedStepCount?: number; currentBoardRevision: number; currentCueRevision: number };
+  "interpretation.validation_result": { requestId: string; status: "accepted" | "rejected" | "provider_error" | "structured_parse_error" | "normalization_error"; reason?: string; normalizedProposal?: TeachingInterpretationProposal; normalizedProposalDigest?: string; boardConflict?: boolean; cueConflict?: boolean; acceptedStepCount?: number; requestBaseState: TeachingStateSnapshot; validationState: TeachingStateSnapshot; currentBoardRevision: number; currentCueRevision: number; validationDigest: string };
+  "audit.unavailable": { requestId: string; stage: "provider_contract" | "provider_response"; reason: "client_abort" | "network_error" | "server_audit_unavailable" };
   "interpretation.request_completed": { requestId: string; latencyMs: number; inputTokens?: number; cachedInputTokens?: number; outputTokens?: number; estimatedCostUsd?: number; costStatus: "estimated" | "rates_unconfigured" };
   "interpretation.request_timeout": { requestId: string; latencyMs: number; pendingCount: number };
   "interpretation.output_rejected": { requestId: string; reason: string; pendingCount: number };
   "interpretation.channel_conflict": { requestId: string; channel: "board" | "cue" };
-  "interpretation.step_accepted": { requestId: string; interpretationId: string; lessonEventId?: string; lessonEventSequence?: number; stepIndex: number; checkpointIds: string[]; boardAction: string; cueAction: string; boardMode?: string; boardSpeechRefCount?: number; cueMode?: string; cueSpeechRefCount?: number; acceptedContribution: AcceptedContributionAudit; stateBefore: TeachingStateSnapshot; stateBeforeDigest: string; stateAfter: TeachingStateSnapshot; stateAfterDigest: string };
+  "interpretation.step_accepted": { requestId: string; interpretationId: string; lessonEventId?: string; lessonEventSequence?: number; acceptedLessonEvent?: Extract<LessonEvent, { type: "interpretation.step_accepted" }>; acceptedLessonEventDigest?: string; actualModel?: string; stepIndex: number; checkpointIds: string[]; boardAction: string; cueAction: string; boardMode?: string; boardSpeechRefCount?: number; cueMode?: string; cueSpeechRefCount?: number; acceptedContribution: AcceptedContributionAudit; stateBefore: TeachingStateSnapshot; stateBeforeDigest: string; stateAfter: TeachingStateSnapshot; stateAfterDigest: string };
   "board.keep": { reason: string };
   "board.active_set": { boardItemId: string; continuity: string };
   "board.support_added": { boardItemId: string; supportId: string };
@@ -143,7 +147,7 @@ export type SessionTracePayloads = {
   "teaching_cue.set": { cueId: string; kind: string };
   "teaching_cue.resolved": { cueId: string; reason: string };
   "teaching_cue.expired": { cueId: string };
-  "teaching_surface.rendered": { renderId: string; boardRevision: number; cueRevision: number; presentationMode: string; density?: string; state?: TeachingStateSnapshot; stateDigest?: string; activeBoardItemId?: string; activeCueId?: string };
+  "teaching_surface.rendered": { renderId: string; boardRevision: number; cueRevision: number; presentationMode: string; density?: string; state?: TeachingStateSnapshot; stateDigest?: string; activeBoardItemId?: string; activeCueId?: string; origin?: { requestId: string; interpretationId: string; lessonEventId: string; stepIndex: number } };
   "teaching_surface.layout_changed": { presentationMode: string; density: string };
   "teaching_surface.render_failed": { message: string };
   "context_projection.created": {

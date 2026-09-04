@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { TeachingStateSnapshot } from "../lesson-stream/contracts";
 import { createInitialTeachingState } from "../lesson-stream/teaching-state";
-import { TeachingSurfaceLayer } from "./TeachingSurfaceLayer";
+import { TeachingSurfaceLayer, teachingSurfaceRenderDetails } from "./TeachingSurfaceLayer";
 
 const teachingState: TeachingStateSnapshot = {
   lessonRevision: 3,
@@ -34,6 +34,12 @@ const teachingState: TeachingStateSnapshot = {
 describe("TeachingSurfaceLayer", () => {
   it("is visually quiet without accepted Board or Cue state", () => {
     expect(renderToStaticMarkup(<TeachingSurfaceLayer state={createInitialTeachingState()} presentationMode="presentationless" />)).toBe("");
+  });
+
+  it("creates an empty-state render fact, preserving an acceptance origin when present", () => {
+    expect(teachingSurfaceRenderDetails({ state: createInitialTeachingState(), presentationMode: "presentationless", origin: { requestId: "request-1", interpretationId: "interpretation-1", lessonEventId: "lesson-event-1", stepIndex: 0 } })).toMatchObject({
+      renderId: "render-0-0-presentationless", boardRevision: 0, cueRevision: 0, origin: { lessonEventId: "lesson-event-1" },
+    });
   });
 
   it("renders bounded Board and Cue siblings from Teaching State", () => {

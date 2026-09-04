@@ -26,7 +26,7 @@ describe("session trace contract", () => {
   it("keeps complete typed audit snapshots while still redacting secrets and binary media", () => {
     const processedTimeline = Array.from({ length: 240 }, (_, index) => ({ type: "evidence", checkpointId: `checkpoint-${index}`, sequence: index + 1, text: `Evidence ${index}`, warnings: [] }));
     const event = prepareTraceEvent("session-test", "browser-test", 1, traceDraft("interpretation.request_snapshot", {
-      requestId: "request-1", sessionId: "session-test", policyVersion: "p4", requestDigest: "digest", checkpointIds: ["checkpoint-239"], baseBoardRevision: 0, baseCueRevision: 0,
+      requestId: "request-1", sessionId: "session-test", policyVersion: "p4", requestDigest: "digest", requestBaseState: { lessonRevision: 0, processedThroughSequence: 0, board: { revision: 0, support: [], retained: [] }, cue: { revision: 0 } }, requestBaseStateDigest: "state-digest", checkpointIds: ["checkpoint-239"], baseBoardRevision: 0, baseCueRevision: 0,
       request: { requestId: "request-1", sessionId: "session-test", policyVersion: "p4", processedTimeline, currentState: { lessonRevision: 0, processedThroughSequence: 0, board: { revision: 0, support: [], retained: [] }, cue: { revision: 0 } }, newEvidence: [], expected: { firstUnconsumedSequence: 1, lastUnconsumedSequence: 240 }, secret: "sk-never-store-this", pcm: new Uint8Array([1, 2]) } as never,
     }));
     const sanitized = sanitizeTraceEvent(event);

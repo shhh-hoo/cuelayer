@@ -15,8 +15,8 @@ export type LessonEventStore = {
 };
 
 export type ProposalAcceptance =
-  | { ok: true; steps: AcceptedInterpretationStep[]; transitions: Array<{ step: AcceptedInterpretationStep; lessonEventId: string; lessonEventSequence: number; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot }>; boardConflict: boolean; cueConflict: boolean; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot }
-  | { ok: false; error: string };
+  | { ok: true; steps: AcceptedInterpretationStep[]; transitions: Array<{ step: AcceptedInterpretationStep; lessonEvent: Extract<LessonEvent, { type: "interpretation.step_accepted" }>; lessonEventId: string; lessonEventSequence: number; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot }>; boardConflict: boolean; cueConflict: boolean; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot }
+  | { ok: false; error: string; validationState: TeachingStateSnapshot };
 
 export class LessonStreamRuntime {
   private writeChain: Promise<unknown> = Promise.resolve();
@@ -120,10 +120,10 @@ export class LessonStreamRuntime {
     isCurrent?: () => boolean;
   }): Promise<ProposalAcceptance> {
     return this.serialize(async () => {
-      if (!isCurrent()) return { ok: false, error: "interpretation-stale-speech-run" };
+      if (!isCurrent()) return { ok: false, error: "interpretation-stale-speech-run", validationState: this.replayValue.state };
       const stateBefore = this.replayValue.state;
       const validation = validateAndNormalizeProposal({ proposal, request, allCheckpoints: this.replayValue.checkpoints, state: stateBefore, model });
-      if (!validation.ok) return validation;
+      if (!validation.ok) return { ...validation, validationState: stateBefore };
       const checkpointSequences = new Map(this.replayValue.checkpoints.map((checkpoint) => [checkpoint.checkpointId, checkpoint.lessonSequence]));
       let rollingState = stateBefore;
       const stateTransitions = validation.steps.map((step) => {
@@ -132,12 +132,12 @@ export class LessonStreamRuntime {
         return { step, stateBefore: before, stateAfter: rollingState };
       });
       const firstSequence = this.nextEventSequence();
-      const events = validation.steps.map((step, index) => interpretationAcceptedEvent(this.sessionId, firstSequence + index, step));
+      const events = validation.steps.map((step, index) => interpretationAcceptedEvent(this.sessionId, firstSequence + index, step) as Extract<LessonEvent, { type: "interpretation.step_accepted" }>);
       await this.appendNow(events);
       return {
         ok: true,
         steps: validation.steps,
-        transitions: stateTransitions.map((transition, index) => ({ ...transition, lessonEventId: events[index]!.eventId, lessonEventSequence: events[index]!.sequence })),
+        transitions: stateTransitions.map((transition, index) => ({ ...transition, lessonEvent: events[index]!, lessonEventId: events[index]!.eventId, lessonEventSequence: events[index]!.sequence })),
         boardConflict: validation.boardConflict,
         cueConflict: validation.cueConflict,
         stateBefore,

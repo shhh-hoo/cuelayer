@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildTeachingInterpretationRequest } from "../lesson-stream/context-projection";
 import { LosslessInterpretationScheduler } from "../lesson-stream/pending-evidence";
-import { createHttpTeachingInterpreter, type TeachingInterpreter } from "../lesson-stream/planner";
+import { createHttpTeachingInterpreter, TeachingInterpreterError, type TeachingInterpreter } from "../lesson-stream/planner";
 import { LessonStreamRuntime } from "../lesson-stream/runtime";
 import { createInitialTeachingState } from "../lesson-stream/teaching-state";
 import type { TeachingStateSnapshot } from "../lesson-stream/contracts";
 import type { AcceptedInterpretationStep } from "../lesson-stream/contracts";
 import { traceDraft, type AcceptedContributionAudit, type TraceEmitter } from "../trace/contracts";
-import { auditDigest } from "../trace/audit";
+import { persistedAuditDigest } from "../trace/audit";
 import type { CanonicalSpeechState, SpeechRunId, SpeechStatus } from "./speech-types";
 import type { SessionStatus } from "./session-types";
 import { RetryBackoff } from "./retry-backoff";
@@ -58,18 +58,19 @@ export function emitAcceptedStepTrace({
   plannerRequestId,
   emit,
 }: {
-  transition: { step: AcceptedInterpretationStep; lessonEventId?: string; lessonEventSequence?: number; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot };
+  transition: { step: AcceptedInterpretationStep; lessonEvent?: Extract<import("../lesson-stream/contracts").LessonEvent, { type: "interpretation.step_accepted" }>; lessonEventId?: string; lessonEventSequence?: number; stateBefore: TeachingStateSnapshot; stateAfter: TeachingStateSnapshot };
   speechRunId: SpeechRunId;
   plannerRequestId: string;
   emit: TraceEmitter;
 }) {
-  const { step, stateBefore, stateAfter, lessonEventId, lessonEventSequence } = transition;
-  const correlation = { rootId: `interpretation:${plannerRequestId}`, runId: speechRunId, plannerRequestId, interpretationId: step.interpretationId, stepIndex: step.stepIndex, boardRevision: stateAfter.board.revision, cueRevision: stateAfter.cue.revision };
+  const { step, stateBefore, stateAfter, lessonEvent, lessonEventId, lessonEventSequence } = transition;
+  const correlation = { rootId: `interpretation:${plannerRequestId}`, runId: speechRunId, plannerRequestId, interpretationId: step.interpretationId, ...(lessonEventId ? { lessonEventId } : {}), stepIndex: step.stepIndex, boardRevision: stateAfter.board.revision, cueRevision: stateAfter.cue.revision };
   emit(traceDraft("interpretation.step_accepted", {
     requestId: plannerRequestId,
     interpretationId: step.interpretationId,
     ...(lessonEventId ? { lessonEventId } : {}),
     ...(lessonEventSequence !== undefined ? { lessonEventSequence } : {}),
+    ...(lessonEvent ? { acceptedLessonEvent: lessonEvent, acceptedLessonEventDigest: persistedAuditDigest(lessonEvent), actualModel: lessonEvent.step.model } : {}),
     stepIndex: step.stepIndex,
     checkpointIds: step.consumesCheckpointIds,
     boardAction: step.boardDelta.action,
@@ -78,9 +79,9 @@ export function emitAcceptedStepTrace({
     ...(step.cueDelta.action === "SET" ? { cueMode: step.cueDelta.contribution.mode, cueSpeechRefCount: step.cueDelta.contribution.provenance.speechRefs?.length ?? 0 } : {}),
     acceptedContribution: acceptedContributionAudit(step),
     stateBefore,
-    stateBeforeDigest: auditDigest(stateBefore),
+    stateBeforeDigest: persistedAuditDigest(stateBefore),
     stateAfter,
-    stateAfterDigest: auditDigest(stateAfter),
+    stateAfterDigest: persistedAuditDigest(stateAfter),
   }, { correlation }));
   if (step.boardDelta.action === "KEEP") emit(traceDraft("board.keep", { reason: step.boardDelta.reason }, { correlation }));
   if (step.boardDelta.action === "SET_ACTIVE") {
@@ -100,6 +101,7 @@ export function emitAcceptedStepTrace({
 }
 
 export type LiveTeachingStatus = "restoring" | "ready" | "interpreting" | "degraded";
+export type TeachingRenderOrigin = { requestId: string; interpretationId: string; lessonEventId: string; stepIndex: number };
 
 export function useLiveTeaching({
   sessionId,
@@ -135,6 +137,7 @@ export function useLiveTeaching({
   const [pendingCount, setPendingCount] = useState(0);
   const [error, setError] = useState<string>();
   const [runtimeEpoch, setRuntimeEpoch] = useState(0);
+  const [renderOrigin, setRenderOrigin] = useState<TeachingRenderOrigin>();
 
   const syncRuntime = useCallback((runtime: LessonStreamRuntime) => {
     setState(runtime.state);
@@ -212,7 +215,9 @@ export function useLiveTeaching({
       sessionId,
       policyVersion: request.policyVersion,
       request,
-      requestDigest: auditDigest(request),
+      requestDigest: persistedAuditDigest(request),
+      requestBaseState: request.currentState,
+      requestBaseStateDigest: persistedAuditDigest(request.currentState),
       checkpointIds: request.newEvidence.map((item) => item.checkpointId),
       baseBoardRevision: request.currentState.board.revision,
       baseCueRevision: request.currentState.cue.revision,
@@ -242,14 +247,14 @@ export function useLiveTeaching({
           structuredOutputSchemaDigest: audit.providerContract.structuredOutputSchemaDigest,
           providerContract: audit.providerContract,
         }, { correlation: traceCorrelation }));
-        onTrace?.(traceDraft("provider.request_snapshot", { requestId: work.requestId, providerRequest: audit.providerRequest, providerContractDigest: audit.providerContract.providerContractDigest, domainRequestDigest: audit.domainRequestDigest }, { correlation: traceCorrelation }));
-        onTrace?.(traceDraft("provider.response_snapshot", { requestId: work.requestId, ...audit.providerResponse }, { correlation: traceCorrelation }));
-        onTrace?.(traceDraft("interpretation.proposal_normalized", { requestId: work.requestId, rawStructuredOutputDigest: audit.providerResponse.rawStructuredOutputDigest, normalizedProposal: response.proposal, normalizedProposalDigest: audit.normalizedProposalDigest }, { correlation: traceCorrelation }));
+        onTrace?.(traceDraft("provider.request_snapshot", { requestId: work.requestId, providerRequest: audit.providerRequest, providerRequestDigest: audit.providerRequestDigest, providerContractDigest: audit.providerContract.providerContractDigest, domainRequestDigest: audit.domainRequestDigest }, { correlation: traceCorrelation }));
+        onTrace?.(traceDraft("provider.response_snapshot", { requestId: work.requestId, providerResponse: audit.providerResponse, providerResponseDigest: audit.providerResponse.providerResponseDigest }, { correlation: traceCorrelation }));
+        if (audit.providerResponse.rawStructuredOutputDigest) onTrace?.(traceDraft("interpretation.proposal_normalized", { requestId: work.requestId, rawStructuredOutputDigest: audit.providerResponse.rawStructuredOutputDigest, normalizedProposal: response.proposal, normalizedProposalDigest: audit.normalizedProposalDigest }, { correlation: traceCorrelation }));
       }
       const acceptance = await runtime.acceptProposal({
         proposal: response.proposal,
         request,
-        model: MODEL_NAME,
+        model: response.audit?.providerResponse.providerModel ?? response.audit?.providerContract.requestedModel ?? MODEL_NAME,
         isCurrent: () => activeRunRef.current === work.speechRunId && runtimeRef.current === runtime,
       });
       if (!acceptance.ok) {
@@ -258,23 +263,29 @@ export function useLiveTeaching({
           status: "rejected",
           reason: acceptance.error,
           normalizedProposal: response.proposal,
-          normalizedProposalDigest: response.audit?.normalizedProposalDigest ?? auditDigest(response.proposal),
+          normalizedProposalDigest: response.audit?.normalizedProposalDigest ?? persistedAuditDigest(response.proposal),
+          requestBaseState: request.currentState,
+          validationState: acceptance.validationState,
           currentBoardRevision: request.currentState.board.revision,
           currentCueRevision: request.currentState.cue.revision,
+          validationDigest: persistedAuditDigest({ requestId: work.requestId, status: "rejected", reason: acceptance.error, normalizedProposal: response.proposal, normalizedProposalDigest: response.audit?.normalizedProposalDigest ?? persistedAuditDigest(response.proposal), requestBaseState: request.currentState, validationState: acceptance.validationState, currentBoardRevision: request.currentState.board.revision, currentCueRevision: request.currentState.cue.revision }),
         }, { correlation: traceCorrelation }));
         onTrace?.(traceDraft("interpretation.output_rejected", { requestId: work.requestId, reason: acceptance.error, pendingCount: schedulerRef.current.pendingCount }, { correlation: { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId } }));
-        throw new Error(acceptance.error);
+        throw Object.assign(new Error(acceptance.error), { validationClassified: true });
       }
       onTrace?.(traceDraft("interpretation.validation_result", {
         requestId: work.requestId,
         status: "accepted",
         normalizedProposal: response.proposal,
-        normalizedProposalDigest: response.audit?.normalizedProposalDigest ?? auditDigest(response.proposal),
+        normalizedProposalDigest: response.audit?.normalizedProposalDigest ?? persistedAuditDigest(response.proposal),
         boardConflict: acceptance.boardConflict,
         cueConflict: acceptance.cueConflict,
         acceptedStepCount: acceptance.steps.length,
-        currentBoardRevision: request.currentState.board.revision,
-        currentCueRevision: request.currentState.cue.revision,
+        requestBaseState: request.currentState,
+        validationState: acceptance.stateBefore,
+        currentBoardRevision: acceptance.stateBefore.board.revision,
+        currentCueRevision: acceptance.stateBefore.cue.revision,
+        validationDigest: persistedAuditDigest({ requestId: work.requestId, status: "accepted", normalizedProposal: response.proposal, normalizedProposalDigest: response.audit?.normalizedProposalDigest ?? persistedAuditDigest(response.proposal), boardConflict: acceptance.boardConflict, cueConflict: acceptance.cueConflict, acceptedStepCount: acceptance.steps.length, requestBaseState: request.currentState, validationState: acceptance.stateBefore, currentBoardRevision: acceptance.stateBefore.board.revision, currentCueRevision: acceptance.stateBefore.cue.revision }),
       }, { correlation: traceCorrelation }));
       if (acceptance.boardConflict) onTrace?.(traceDraft("interpretation.channel_conflict", { requestId: work.requestId, channel: "board" }, { correlation: { rootId: `interpretation:${work.requestId}`, plannerRequestId: work.requestId } }));
       if (acceptance.cueConflict) onTrace?.(traceDraft("interpretation.channel_conflict", { requestId: work.requestId, channel: "cue" }, { correlation: { rootId: `interpretation:${work.requestId}`, plannerRequestId: work.requestId } }));
@@ -285,23 +296,32 @@ export function useLiveTeaching({
       const latencyMs = Math.max(0, Date.now() - work.startedAtMs);
       onTrace?.(traceDraft("interpretation.request_completed", { requestId: work.requestId, latencyMs, ...(response.usage ? { inputTokens: response.usage.inputTokens, cachedInputTokens: response.usage.cachedInputTokens, outputTokens: response.usage.outputTokens } : {}), ...(response.estimatedCostUsd === undefined ? { costStatus: "rates_unconfigured" as const } : { costStatus: "estimated" as const, estimatedCostUsd: response.estimatedCostUsd }) }, { correlation: { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId } }));
       acceptance.transitions.forEach((transition) => emitAcceptedStepTrace({ transition, speechRunId, plannerRequestId: work.requestId, emit: onTrace }));
+      const finalTransition = acceptance.transitions.at(-1);
+      if (finalTransition) setRenderOrigin({ requestId: work.requestId, interpretationId: finalTransition.step.interpretationId, lessonEventId: finalTransition.lessonEventId, stepIndex: finalTransition.step.stepIndex });
       queueMicrotask(() => pumpRef.current());
     }).catch((reason: unknown) => {
-      const failureAudit = reason && typeof reason === "object" ? (reason as { audit?: { providerContract?: import("../lesson-stream/planner").TeachingInterpretationAudit["providerContract"]; providerRequest?: unknown; domainRequestDigest?: string; failureStage?: "provider_error" | "structured_parse_error" | "normalization_error" } }).audit : undefined;
-      if (failureAudit?.providerContract && failureAudit.domainRequestDigest) {
+      const validationAlreadyClassified = reason instanceof Error && (reason as Error & { validationClassified?: boolean }).validationClassified === true;
+      const failureAudit = reason instanceof TeachingInterpreterError ? reason.audit : undefined;
+      if (failureAudit) {
         const contract = failureAudit.providerContract;
         onTrace?.(traceDraft("provider.contract_snapshot", {
           contractDigest: contract.providerContractDigest, requestedModel: contract.requestedModel, ...(contract.serviceTier ? { serviceTier: contract.serviceTier } : {}), temperature: contract.temperature, reasoningEffort: contract.reasoningEffort, maxOutputTokens: contract.maxOutputTokens, policyVersion: contract.policyVersion, systemPolicy: contract.systemPolicy, systemPolicyDigest: contract.systemPolicyDigest, structuredOutputSchema: contract.structuredOutputSchema, structuredOutputSchemaDigest: contract.structuredOutputSchemaDigest, providerContract: contract,
         }, { correlation: traceCorrelation }));
-        onTrace?.(traceDraft("provider.request_snapshot", { requestId: work.requestId, providerRequest: failureAudit.providerRequest ?? {}, providerContractDigest: contract.providerContractDigest, domainRequestDigest: failureAudit.domainRequestDigest, providerSnapshotUnavailable: controller.signal.aborted ? "client_abort" : "provider_error" }, { correlation: traceCorrelation }));
+        onTrace?.(traceDraft("provider.request_snapshot", { requestId: work.requestId, providerRequest: failureAudit.providerRequest, providerRequestDigest: failureAudit.providerRequestDigest, providerContractDigest: contract.providerContractDigest, domainRequestDigest: failureAudit.domainRequestDigest, providerSnapshotUnavailable: controller.signal.aborted ? "client_abort" : "provider_error" }, { correlation: traceCorrelation }));
+        if (failureAudit.providerResponse) onTrace?.(traceDraft("provider.response_snapshot", { requestId: work.requestId, providerResponse: failureAudit.providerResponse, providerResponseDigest: failureAudit.providerResponse.providerResponseDigest }, { correlation: traceCorrelation }));
+      } else if (!validationAlreadyClassified) {
+        onTrace?.(traceDraft("audit.unavailable", { requestId: work.requestId, stage: "provider_contract", reason: controller.signal.aborted ? "client_abort" : "network_error" }, { correlation: traceCorrelation }));
       }
-      onTrace?.(traceDraft("interpretation.validation_result", {
-        requestId: work.requestId,
-        status: failureAudit?.failureStage ?? "provider_error",
-        reason: reason instanceof Error ? reason.message : "teaching-provider-unavailable",
-        currentBoardRevision: request.currentState.board.revision,
-        currentCueRevision: request.currentState.cue.revision,
-      }, { correlation: traceCorrelation }));
+      if (!validationAlreadyClassified) {
+        const validationState = runtime.state;
+        const stage = failureAudit?.failureStage ?? "provider_error";
+        const message = reason instanceof Error ? reason.message : "teaching-provider-unavailable";
+        onTrace?.(traceDraft("interpretation.validation_result", {
+          requestId: work.requestId, status: stage, reason: message, requestBaseState: request.currentState, validationState,
+          currentBoardRevision: validationState.board.revision, currentCueRevision: validationState.cue.revision,
+          validationDigest: persistedAuditDigest({ requestId: work.requestId, status: stage, reason: message, requestBaseState: request.currentState, validationState, currentBoardRevision: validationState.board.revision, currentCueRevision: validationState.cue.revision }),
+        }, { correlation: traceCorrelation }));
+      }
       schedulerRef.current.settleFailed(work.requestId);
       const message = reason instanceof Error ? reason.message : "teaching-provider-unavailable";
       setError(message);
@@ -399,5 +419,5 @@ export function useLiveTeaching({
     }
   }, [onTrace]);
 
-  return { state, status, pendingCount, error, expireCue, allocateSpeechRunId, endLesson };
+  return { state, renderOrigin, status, pendingCount, error, expireCue, allocateSpeechRunId, endLesson };
 }

@@ -1018,7 +1018,7 @@ Context/cost:
 
 `canonical_speech_mounted` must not be a normal successful learner-render reason after `LIVE-STATE`.
 
-Audit snapshots are complete, typed, and credential-free: the domain request (including its full historical timeline), provider contract/envelope, raw structured output, normalized proposal, validation result, persisted lesson event, Teaching State before/after, and learner-rendered state are retained with canonical SHA-256 digests. Generic diagnostic payload limits never truncate those snapshots. The Lesson Event Log remains replay authority and domain truth; the audit trace remains observational evidence.
+Audit snapshots are complete, typed, and credential-free: the domain request (including its full historical timeline), provider contract/envelope, raw structured output and transport text, normalized proposal, validation result, persisted lesson event, Teaching State before/after, and learner-rendered state are retained with canonical SHA-256 digests. Those digests are recomputable from the exact persisted sanitized DTO. Generic diagnostic payload limits never truncate those snapshots. The Lesson Event Log remains replay authority and domain truth; the audit trace remains observational evidence.
 
 ---
 

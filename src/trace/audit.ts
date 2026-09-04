@@ -1,3 +1,8 @@
+import { sanitizeAuditValue } from "./contracts.ts";
+
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+
 /** Deterministic, browser-safe JSON representation for durable audit facts. */
 export function canonicalJson(value: unknown): string {
   if (value === null || typeof value === "boolean") return JSON.stringify(value);
@@ -5,7 +10,7 @@ export function canonicalJson(value: unknown): string {
   if (typeof value === "string") return JSON.stringify(value);
   if (typeof value === "bigint") return JSON.stringify(value.toString());
   if (typeof value === "undefined") return "null";
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")} ]`.replace(", ", ",");
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (typeof value === "object") {
     const object = value as Record<string, unknown>;
     return `{${Object.keys(object).sort().filter((key) => object[key] !== undefined).map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(",")}}`;
@@ -48,3 +53,6 @@ export function sha256(value: string): string {
 }
 
 export function auditDigest(value: unknown) { return sha256(canonicalJson(value)); }
+
+/** Digest the same safe DTO representation that is persisted into the audit trace. */
+export function persistedAuditDigest(value: unknown) { return auditDigest(sanitizeAuditValue(value)); }

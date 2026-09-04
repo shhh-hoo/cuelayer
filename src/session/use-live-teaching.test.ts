@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { AcceptedInterpretationStep } from "../lesson-stream/contracts";
 import { createInitialTeachingState, reduceAcceptedStep } from "../lesson-stream/teaching-state";
 import type { SessionTraceDraft } from "../trace/contracts";
+import { persistedAuditDigest } from "../trace/audit";
+import { interpretationAcceptedEvent } from "../lesson-stream/events";
 import { checkpointTraceIdentity, emitAcceptedStepTrace } from "./use-live-teaching";
 
 const step = (stepIndex: number, cueDelta: AcceptedInterpretationStep["cueDelta"]): AcceptedInterpretationStep => ({
@@ -48,5 +50,16 @@ describe("live teaching trace correlation", () => {
         },
       },
     });
+  });
+
+  it("retains the exact persisted lesson event and recomputable state digests", () => {
+    const accepted = step(0, { action: "KEEP" });
+    const before = createInitialTeachingState();
+    const after = reduceAcceptedStep(before, accepted, new Map([["A", 1]]));
+    const lessonEvent = interpretationAcceptedEvent("session-audit", 7, accepted) as Extract<import("../lesson-stream/contracts").LessonEvent, { type: "interpretation.step_accepted" }>;
+    const drafts: SessionTraceDraft[] = [];
+    emitAcceptedStepTrace({ transition: { step: accepted, lessonEvent, lessonEventId: lessonEvent.eventId, lessonEventSequence: lessonEvent.sequence, stateBefore: before, stateAfter: after }, speechRunId: "speech-run-audit", plannerRequestId: accepted.requestId, emit: (draft) => drafts.push(draft) });
+    const event = drafts.find((draft) => draft.type === "interpretation.step_accepted");
+    expect(event).toMatchObject({ payload: { lessonEventId: lessonEvent.eventId, acceptedLessonEvent: lessonEvent, acceptedLessonEventDigest: persistedAuditDigest(lessonEvent), stateBeforeDigest: persistedAuditDigest(before), stateAfterDigest: persistedAuditDigest(after) } });
   });
 });

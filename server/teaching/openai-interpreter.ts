@@ -1,35 +1,11 @@
 import OpenAI from "openai";
 import type { TeachingInterpretationProposal, TeachingInterpretationRequest } from "../../src/lesson-stream/contracts.ts";
-import { auditDigest } from "../../src/trace/audit.ts";
-import { normalizeTeachingProposal, teachingProviderContract, teachingResponseRequest } from "./provider-contract.ts";
+import type { JsonValue } from "../../src/trace/audit.ts";
+import { persistedAuditDigest } from "../../src/trace/audit.ts";
+import type { TeachingProviderAudit, TeachingProviderFailureAudit, TeachingProviderUsage, ProviderRequestEnvelope, ProviderResponseSnapshot } from "../../src/lesson-stream/audit-contracts.ts";
+import { normalizeTeachingProposal, teachingInterpretationSchema, teachingProviderContract, teachingResponseRequest } from "./provider-contract.ts";
 
-export type TeachingProviderUsage = {
-  inputTokens: number;
-  cachedInputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-};
-
-export type TeachingProviderAudit = {
-  providerContract: {
-    requestedModel: string;
-    serviceTier?: string;
-    temperature: number;
-    reasoningEffort: string;
-    maxOutputTokens: number;
-    policyVersion: string;
-    systemPolicy: string;
-    systemPolicyDigest: string;
-    structuredOutputSchema: unknown;
-    structuredOutputSchemaDigest: string;
-    providerContractDigest: string;
-  };
-  providerRequest: unknown;
-  domainRequestDigest: string;
-  providerResponse: { providerResponseId?: string; providerModel?: string; serviceTier?: string; usage?: TeachingProviderUsage; rawStructuredOutput: unknown; rawStructuredOutputDigest: string; outputText?: string; status?: string; incompleteDetails?: unknown };
-  normalizedProposalDigest: string;
-};
-export type TeachingProviderFailureAudit = Pick<TeachingProviderAudit, "providerContract" | "providerRequest" | "domainRequestDigest"> & { failureStage: "provider_error" | "structured_parse_error" | "normalization_error" };
+export type { TeachingProviderAudit, TeachingProviderFailureAudit, TeachingProviderUsage } from "../../src/lesson-stream/audit-contracts.ts";
 export type TeachingProviderResult = { proposal: TeachingInterpretationProposal; usage?: TeachingProviderUsage; serviceTier?: string; audit: TeachingProviderAudit };
 
 export function estimateTeachingCost(usage: TeachingProviderUsage | undefined, rates: { inputPerMillion?: number; cachedInputPerMillion?: number; outputPerMillion?: number }) {
@@ -50,6 +26,27 @@ function normalizeUsage(usage: unknown): TeachingProviderUsage | undefined {
   };
 }
 
+function jsonValue(value: unknown): JsonValue {
+  return JSON.parse(JSON.stringify(value)) as JsonValue;
+}
+
+function safeResponseFact(response: { id?: string; model?: string; service_tier?: string; usage?: unknown; output_text?: string; status?: string; incomplete_details?: { reason?: string | null } | null }): Omit<ProviderResponseSnapshot, "providerResponseDigest"> {
+  const snapshot = {
+    ...(response.id ? { providerResponseId: response.id } : {}),
+    ...(response.model ? { providerModel: response.model } : {}),
+    ...(response.service_tier ? { serviceTier: response.service_tier } : {}),
+    ...(normalizeUsage(response.usage) ? { usage: normalizeUsage(response.usage) } : {}),
+    ...(response.output_text ? { outputText: response.output_text } : {}),
+    ...(response.status ? { status: response.status } : {}),
+    ...(response.incomplete_details?.reason ? { incompleteDetails: { reason: response.incomplete_details.reason } } : {}),
+  };
+  return snapshot;
+}
+
+function providerResponseSnapshot(fact: Omit<ProviderResponseSnapshot, "providerResponseDigest">): ProviderResponseSnapshot {
+  return { ...fact, providerResponseDigest: persistedAuditDigest(fact) };
+}
+
 export async function requestOpenAITeachingInterpretation(
   input: TeachingInterpretationRequest,
   apiKey: string,
@@ -58,8 +55,17 @@ export async function requestOpenAITeachingInterpretation(
 ): Promise<TeachingProviderResult> {
   const client = new OpenAI({ apiKey });
   const request = { model, ...teachingResponseRequest(input), ...(options?.serviceTier ? { service_tier: options.serviceTier } : {}) };
+  const providerRequest: ProviderRequestEnvelope = {
+    model: request.model,
+    ...(request.service_tier ? { service_tier: request.service_tier } : {}),
+    reasoning: request.reasoning,
+    temperature: request.temperature,
+    max_output_tokens: request.max_output_tokens,
+    input: request.input.map((item) => ({ role: item.role, content: item.content })),
+    text: { format: jsonValue(request.text.format) },
+  };
   const contract = teachingProviderContract();
-  const structuredOutputSchema = contract.text.format;
+  const structuredOutputSchema = providerRequest.text.format;
   const contractFact = { model, ...(options?.serviceTier ? { serviceTier: options.serviceTier } : {}), reasoning: contract.reasoning, temperature: contract.temperature, maxOutputTokens: contract.max_output_tokens, systemPolicy: contract.systemPolicy, structuredOutputSchema };
   const providerContract = {
     requestedModel: model,
@@ -69,41 +75,44 @@ export async function requestOpenAITeachingInterpretation(
     maxOutputTokens: contract.max_output_tokens,
     policyVersion: input.policyVersion,
     systemPolicy: contract.systemPolicy,
-    systemPolicyDigest: auditDigest(contract.systemPolicy),
+    systemPolicyDigest: persistedAuditDigest(contract.systemPolicy),
     structuredOutputSchema,
-    structuredOutputSchemaDigest: auditDigest(structuredOutputSchema),
-    providerContractDigest: auditDigest(contractFact),
+    structuredOutputSchemaDigest: persistedAuditDigest(structuredOutputSchema),
+    providerContractDigest: persistedAuditDigest(contractFact),
   };
-  const knownAudit = { providerContract, providerRequest: request, domainRequestDigest: auditDigest(input) };
-  let response: Awaited<ReturnType<typeof client.responses.parse>>;
+  const knownAudit = { providerContract, providerRequest, providerRequestDigest: persistedAuditDigest(providerRequest), domainRequestDigest: persistedAuditDigest(input) };
+  let response: Awaited<ReturnType<typeof client.responses.create>>;
   try {
-    response = await client.responses.parse(request, { signal: options?.signal });
+    response = await client.responses.create(request, { signal: options?.signal });
   } catch (error) {
     throw Object.assign(error instanceof Error ? error : new Error("teaching-provider-unavailable"), { audit: { ...knownAudit, failureStage: "provider_error" } satisfies TeachingProviderFailureAudit });
   }
-  if (!response.output_parsed) throw Object.assign(new Error("teaching-interpretation-empty-response"), { audit: { ...knownAudit, failureStage: "structured_parse_error" } satisfies TeachingProviderFailureAudit });
-  const rawStructuredOutput = response.output_parsed;
-  let proposal: TeachingInterpretationProposal;
-  try { proposal = normalizeTeachingProposal(rawStructuredOutput); } catch (error) {
-    throw Object.assign(error instanceof Error ? error : new Error("teaching-normalization-failed"), { audit: { ...knownAudit, failureStage: "normalization_error" } satisfies TeachingProviderFailureAudit });
+  const responseFact = safeResponseFact(response);
+  const responseAudit = providerResponseSnapshot(responseFact);
+  let rawStructuredOutput: JsonValue;
+  try {
+    rawStructuredOutput = jsonValue(JSON.parse(response.output_text));
+  } catch (error) {
+    throw Object.assign(error instanceof Error ? error : new Error("teaching-interpretation-structured-parse-failed"), { audit: { ...knownAudit, providerResponse: responseAudit, failureStage: "structured_parse_error" } satisfies TeachingProviderFailureAudit });
   }
-  const responseValue = response as unknown as { id?: unknown; model?: unknown; service_tier?: unknown; output_text?: unknown; status?: unknown; incomplete_details?: unknown };
-  const usage = normalizeUsage(response.usage);
-  const responseAudit = {
-    ...(typeof responseValue.id === "string" ? { providerResponseId: responseValue.id } : {}),
-    ...(typeof responseValue.model === "string" ? { providerModel: responseValue.model } : {}),
-    ...(typeof responseValue.service_tier === "string" ? { serviceTier: responseValue.service_tier } : {}),
-    ...(usage ? { usage } : {}),
-    rawStructuredOutput,
-    rawStructuredOutputDigest: auditDigest(rawStructuredOutput),
-    ...(typeof responseValue.output_text === "string" ? { outputText: responseValue.output_text } : {}),
-    ...(typeof responseValue.status === "string" ? { status: responseValue.status } : {}),
-    ...(responseValue.incomplete_details !== undefined ? { incompleteDetails: responseValue.incomplete_details } : {}),
-  };
+  const parsed = teachingInterpretationSchema.safeParse(rawStructuredOutput);
+  if (!parsed.success) {
+    const rawStructuredOutputDigest = persistedAuditDigest(rawStructuredOutput);
+    throw Object.assign(new Error("teaching-interpretation-structured-parse-failed"), { audit: { ...knownAudit, providerResponse: providerResponseSnapshot({ ...responseFact, rawStructuredOutput, rawStructuredOutputDigest }), failureStage: "structured_parse_error" } satisfies TeachingProviderFailureAudit });
+  }
+  let proposal: TeachingInterpretationProposal;
+  try { proposal = normalizeTeachingProposal(parsed.data); } catch (error) {
+    const responseWithRaw = { ...responseFact, rawStructuredOutput, rawStructuredOutputDigest: persistedAuditDigest(rawStructuredOutput) };
+    throw Object.assign(error instanceof Error ? error : new Error("teaching-normalization-failed"), { audit: { ...knownAudit, providerResponse: providerResponseSnapshot(responseWithRaw), failureStage: "normalization_error" } satisfies TeachingProviderFailureAudit });
+  }
+  const rawStructuredOutputDigest = persistedAuditDigest(rawStructuredOutput);
+  const responseWithRaw = { ...responseFact, rawStructuredOutput, rawStructuredOutputDigest };
+  const safeProviderResponse = providerResponseSnapshot(responseWithRaw);
+  const usage = safeProviderResponse.usage;
   return {
     proposal,
     usage,
     ...(typeof response.service_tier === "string" ? { serviceTier: response.service_tier } : {}),
-    audit: { ...knownAudit, providerResponse: responseAudit, normalizedProposalDigest: auditDigest(proposal) },
+    audit: { ...knownAudit, providerResponse: safeProviderResponse, normalizedProposalDigest: persistedAuditDigest(proposal) },
   };
 }

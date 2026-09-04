@@ -1,24 +1,22 @@
 import type { TeachingInterpretationProposal, TeachingInterpretationRequest } from "./contracts";
-
-export type TeachingInterpretationAudit = {
-  providerContract: { requestedModel: string; serviceTier?: string; temperature: number; reasoningEffort: string; maxOutputTokens: number; policyVersion: string; systemPolicy: string; systemPolicyDigest: string; structuredOutputSchema: unknown; structuredOutputSchemaDigest: string; providerContractDigest: string };
-  providerRequest: unknown;
-  domainRequestDigest: string;
-  providerResponse: { providerResponseId?: string; providerModel?: string; serviceTier?: string; usage?: { inputTokens: number; cachedInputTokens: number; outputTokens: number; totalTokens: number }; rawStructuredOutput: unknown; rawStructuredOutputDigest: string; outputText?: string; status?: string; incompleteDetails?: unknown };
-  normalizedProposalDigest: string;
-};
+import type { TeachingProviderAudit, TeachingProviderFailureAudit } from "./audit-contracts";
+export type { TeachingProviderAudit as TeachingInterpretationAudit } from "./audit-contracts";
 
 export type TeachingInterpretationResponse = {
   proposal: TeachingInterpretationProposal;
   usage?: { inputTokens: number; cachedInputTokens: number; outputTokens: number; totalTokens: number };
   estimatedCostUsd?: number;
   serviceTier?: string;
-  audit?: TeachingInterpretationAudit;
+  audit?: TeachingProviderAudit;
 };
 
 export type TeachingInterpreter = {
   interpret(request: TeachingInterpretationRequest, options?: { signal?: AbortSignal }): Promise<TeachingInterpretationResponse>;
 };
+
+export class TeachingInterpreterError extends Error {
+  constructor(message: string, readonly audit?: TeachingProviderFailureAudit) { super(message); }
+}
 
 export function createHttpTeachingInterpreter(endpoint = "/api/teaching/interpretation"): TeachingInterpreter {
   return {
@@ -29,10 +27,9 @@ export function createHttpTeachingInterpreter(endpoint = "/api/teaching/interpre
         body: JSON.stringify(request),
         signal: options?.signal,
       });
-      const body = await response.json().catch(() => ({})) as Partial<TeachingInterpretationResponse> & { error?: string; audit?: unknown };
+      const body = await response.json().catch(() => ({})) as Partial<TeachingInterpretationResponse> & { error?: string; audit?: TeachingProviderFailureAudit };
       if (!response.ok || !body.proposal) {
-        const error = Object.assign(new Error(body.error ?? "Teaching interpretation is temporarily unavailable."), { audit: body.audit });
-        throw error;
+        throw new TeachingInterpreterError(body.error ?? "Teaching interpretation is temporarily unavailable.", body.audit);
       }
       return body as TeachingInterpretationResponse;
     },

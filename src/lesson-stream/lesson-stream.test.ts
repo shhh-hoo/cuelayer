@@ -281,6 +281,7 @@ describe("lesson evidence and replay", () => {
     expect(result.transitions.map((transition) => [transition.stateBefore.cue.revision, transition.stateAfter.cue.revision])).toEqual([[0, 1], [1, 2]]);
     expect(result.transitions[0]!.stateBefore.cue.active).toBeUndefined();
     expect(result.transitions[1]!.stateBefore.cue.active?.id).toBe("cue-step-transitions-accepted-0");
+    expect(result.transitions[0]!.lessonEvent).toMatchObject({ type: "interpretation.step_accepted", eventId: result.transitions[0]!.lessonEventId, sequence: result.transitions[0]!.lessonEventSequence, step: { model: "test-model" } });
   });
 });
 

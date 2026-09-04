@@ -2,17 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LESSON_POLICY_VERSION, type TeachingInterpretationRequest } from "../../src/lesson-stream/contracts";
 import { createInitialTeachingState } from "../../src/lesson-stream/teaching-state";
 
-const mocks = vi.hoisted(() => ({ constructor: vi.fn(), parse: vi.fn() }));
+const mocks = vi.hoisted(() => ({ constructor: vi.fn(), create: vi.fn() }));
 vi.mock("openai", () => ({
   default: class MockOpenAI {
     constructor(options: unknown) { mocks.constructor(options); }
-    responses = { parse: mocks.parse };
+    responses = { create: mocks.create };
   },
 }));
 
 import { estimateTeachingCost, requestOpenAITeachingInterpretation } from "./openai-interpreter";
 import { normalizeTeachingProposal, teachingInterpretationSchema } from "./provider-contract";
 import { validateAndNormalizeProposal } from "../../src/lesson-stream/accepted-interpretations";
+import { persistedAuditDigest } from "../../src/trace/audit";
 
 const input: TeachingInterpretationRequest = {
   requestId: "request-1",
@@ -27,12 +28,14 @@ const input: TeachingInterpretationRequest = {
 describe("OpenAI Teaching State interpreter", () => {
   beforeEach(() => {
     mocks.constructor.mockReset();
-    mocks.parse.mockReset();
+    mocks.create.mockReset();
   });
 
   it("uses one structured P4 request and exposes compact usage", async () => {
-    mocks.parse.mockResolvedValue({
-      output_parsed: {
+    mocks.create.mockResolvedValue({
+      id: "response-1",
+      model: "gpt-5.6-luna-actual",
+      output_text: JSON.stringify({
         requestId: "request-1",
         baseBoardRevision: 0,
         baseCueRevision: 0,
@@ -44,13 +47,13 @@ describe("OpenAI Teaching State interpreter", () => {
           warnings: null,
         }],
         warnings: null,
-      },
+      }),
       usage: { input_tokens: 300, output_tokens: 40, total_tokens: 340, input_tokens_details: { cached_tokens: 80 } },
     });
     const controller = new AbortController();
     const result = await requestOpenAITeachingInterpretation(input, "test-key", "gpt-5.6-luna", { signal: controller.signal });
     expect(result).toMatchObject({ proposal: { requestId: "request-1", steps: [{ boardDelta: { action: "KEEP" } }] }, usage: { inputTokens: 300, cachedInputTokens: 80, outputTokens: 40, totalTokens: 340 } });
-    const request = mocks.parse.mock.calls[0]![0];
+    const request = mocks.create.mock.calls[0]![0];
     expect(request.reasoning).toEqual({ effort: "none" });
     expect(request.temperature).toBe(0);
     expect(request.input[0].content).toContain("currentState is current authority");
@@ -65,13 +68,33 @@ describe("OpenAI Teaching State interpreter", () => {
     expect(request.input[1].content).toBe(JSON.stringify(input));
     expect(request.input[1].content).not.toContain('"words"');
     expect(request.input[1].content).not.toContain("providerEvidence");
-    expect(mocks.parse.mock.calls[0]![1]).toEqual({ signal: controller.signal });
+    expect(mocks.create.mock.calls[0]![1]).toEqual({ signal: controller.signal });
+    expect(result.audit).toMatchObject({ providerRequestDigest: expect.any(String), providerResponse: { providerResponseId: "response-1", providerModel: "gpt-5.6-luna-actual", outputText: expect.any(String), rawStructuredOutput: { requestId: "request-1" }, providerResponseDigest: expect.any(String) } });
+    const { providerResponseDigest, ...providerResponseFact } = result.audit.providerResponse;
+    expect(providerResponseDigest).toBe(persistedAuditDigest(providerResponseFact));
   });
 
   it("estimates cost only from explicitly configured rates", () => {
     const usage = { inputTokens: 300, cachedInputTokens: 80, outputTokens: 40, totalTokens: 340 };
     expect(estimateTeachingCost(usage, {})).toBeUndefined();
     expect(estimateTeachingCost(usage, { inputPerMillion: 1, cachedInputPerMillion: 0.25, outputPerMillion: 4 })).toBeCloseTo(0.0004);
+  });
+
+  it("captures the safe transport response before structured parsing fails", async () => {
+    mocks.create.mockResolvedValue({ id: "response-malformed", model: "gpt-actual", output_text: "not JSON", status: "completed", usage: { input_tokens: 1, output_tokens: 1 } });
+    await expect(requestOpenAITeachingInterpretation(input, "test-key", "gpt-requested")).rejects.toMatchObject({
+      audit: {
+        failureStage: "structured_parse_error",
+        providerResponse: { providerResponseId: "response-malformed", providerModel: "gpt-actual", outputText: "not JSON", providerResponseDigest: expect.any(String) },
+      },
+    });
+  });
+
+  it("retains parsed structured output when schema parsing fails", async () => {
+    mocks.create.mockResolvedValue({ id: "response-normalization", model: "gpt-actual", output_text: JSON.stringify({ requestId: "request-1", baseBoardRevision: 0, baseCueRevision: 0, steps: [], warnings: null }) });
+    await expect(requestOpenAITeachingInterpretation(input, "test-key", "gpt-requested")).rejects.toMatchObject({
+      audit: { failureStage: "structured_parse_error", providerResponse: { rawStructuredOutput: { requestId: "request-1" } } },
+    });
   });
 
   it("normalizes nullable structured-output fields before domain validation", () => {
