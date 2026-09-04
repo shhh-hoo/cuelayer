@@ -1,10 +1,12 @@
 # SEMANTICS evaluation record
 
-**Status:** `REVISE`  
-**Promotion:** `AUGMENT_DISABLED`  
+**Current status:** `OFFLINE_SEMANTICS_PASS`
+**Current promotion:** `AUGMENT_ENABLED` for exact frozen profile `alpha-augment-p4-v7`
 **Live gate:** not `LIVE_SEMANTICS_PASS`  
-**Frozen baseline commit:** `e149f15e2583084b89c2cfc4588de2175896fe9a`  
-**Evaluation date:** September 4, 2026
+**Current frozen baseline commit:** `fdd22f05bea764b900e5d3af31813361054e755e`
+**Current evaluation date:** September 5, 2026
+
+The v5 decision is authoritative for the current branch. The v1 and v2 records below remain unchanged historical evidence of earlier failed gates; the final v5 record appears at the end of this document.
 
 ## Frozen authority and configuration
 
@@ -188,3 +190,42 @@ Complete JSON, failure JSONL, Markdown, and replay artifacts are stored under `r
 `AUGMENT_ENABLED = false`. Candidate AUGMENT precision and must-augment recall were 100% in both locked passes with five positive cases, but the candidate regressed/fell below the required core gates and produced invented learner tasks. `ACTIVE_ALPHA_SEMANTIC_PROFILE` therefore remains `ALPHA_CORE_P4`; the candidate is not promoted.
 
 Status remains `REVISE` and `AUGMENT_DISABLED`. Because the valid offline v2 evaluation did not pass, real microphone/Speechmatics dogfood and Chrome/Firefox live regression were intentionally not run as compensating evidence. `LIVE_SEMANTICS_PASS` is not claimed. The live gates listed in the v1 record remain outstanding.
+
+---
+
+## V5 corrected contract and locked evaluation — September 5, 2026
+
+V3–v5 replace the defective source-transformation and quote-copying assumptions without rewriting any prior corpus or result. Teacher-originated imperative cognitive actions are Cue `TASK`s, including “write NH4+”, “read the heading”, and “predict”. `RECONSTRUCT` versus `REPRESENT` is diagnostic when the final learner-visible semantics, provenance, profile permissions, and state transition are correct. The provider returns checkpoint IDs; deterministic code resolves accepted references to complete immutable canonical checkpoint text and rejects nonexistent IDs. A valid `SET_ACTIVE` may retain its primary Active contribution while dropping only an invalid optional Support with `board_support_dropped`.
+
+### Frozen v5 authority
+
+- Corpus: `alpha-semantics-corpus-v5`, 60 cases (40 development / 20 locked holdout).
+- Corpus SHA-256: `107d2315cf4f64c42256955c05f24e6a7c15508a30def82039c69fcf9e43355c`.
+- Evaluator: `alpha-semantics-evaluator-v5`.
+- Benchmark/runtime/policy freeze commit: `fdd22f05bea764b900e5d3af31813361054e755e`.
+- Core: `alpha-core-p4-v7`; policy digest `7875409eb044a9e8e657434841e0c1b96cab5f13ee94ed383be4624c08826ce4`.
+- Candidate: `alpha-augment-p4-v7`; policy digest `aa6335f586197f38a21fbd75bcf3048dc881cbe3835f33b1d1e29b2d9a08514d`.
+- Provider/model: OpenAI / `gpt-5.6-luna`, low reasoning, no temperature, repair, retry, fallback, or model judge.
+- Structured-output checkpoint IDs are request-scoped enums, so each holdout request intentionally has its own recorded schema digest.
+- No corpus, gold, evaluator, policy, profile, or schema changed after the freeze and before the four locked runs.
+
+### Development audit
+
+The final core development run passed the core Alpha gate: 40/40 parse and acceptance, 39/40 intervention and Board, 38/40 Cue, and 40/40 final semantics, with every hard-zero gate clean. The candidate development run was retained as a genuine non-passing audit: 40/40 parse, 39/40 accepted, 38/40 intervention, 35/40 Board, 37/40 Cue, 39/40 semantics, and 10/10 AUGMENT precision/recall. It did not trigger post-freeze tuning; promotion depended on the two locked candidate runs and their explicit core non-regression gates.
+
+### Locked v5 results
+
+| Profile/pass | Parse | Accepted | Decision | Board | Cue | Semantic | Mode diagnostic | AUGMENT precision | Must-augment recall | Hard zeros | Failed cases |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| CORE 1 | 20/20 | 20/20 | 20/20 | 20/20 | 20/20 | 20/20 | 18/20 | n/a | n/a | PASS | none |
+| CORE 2 | 20/20 | 19/20 | 19/20 | 19/20 | 19/20 | 19/20 | 18/20 | n/a | n/a | PASS | `SEM5-H-06` |
+| AUGMENT 1 | 20/20 | 20/20 | 20/20 | 19/20 | 20/20 | 20/20 | 18/20 | 5/5 | 5/5 | PASS | `SEM5-H-16` Board transition only |
+| AUGMENT 2 | 20/20 | 20/20 | 20/20 | 20/20 | 20/20 | 20/20 | 19/20 | 5/5 | 5/5 | PASS | none |
+
+All four runs had zero accepted autonomous CORRECT/INITIATE, invalid provenance, invented Cue, Cue AUGMENT, incorrect subject matter, answer leakage, unsupported AUGMENT, corrected error visibility, premature Cue resolution, checkpoint loss, duplicate consumption, replay mismatch, event-schema incompatibility, and normal transcript mount. Complete JSON, Markdown, failure JSONL, and replay artifacts are stored under `resources/semantics/v5/results/`.
+
+### V5 decision and remaining live gate
+
+`CORE_ALPHA_PASS = true` on both locked core runs. Both locked candidate runs also passed every core gate, achieved 100% AUGMENT precision and 100% must-augment recall across five positives, and had zero safety violations. `AUGMENT_ENABLED = true`; `ACTIVE_ALPHA_SEMANTIC_PROFILE` therefore points to the exact frozen `ALPHA_AUGMENT_CANDIDATE_P4` (`alpha-augment-p4-v7`).
+
+This is an offline semantics pass, not a live-product pass. The real `/session` page loaded and rendered correctly in Chrome and Firefox on September 5, and the server successfully obtained a Speechmatics realtime token without exposing it. `LIVE_SEMANTICS_PASS` remains unclaimed until authorized microphone audio traverses Speechmatics and the production provider in both browsers, including accepted state, Cue persistence/resolution, replay after reload, safety checks, and trace-volume evidence.

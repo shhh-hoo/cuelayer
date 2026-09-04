@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LESSON_POLICY_VERSION, type TeachingInterpretationRequest } from "../../src/lesson-stream/contracts";
 import { createInitialTeachingState } from "../../src/lesson-stream/teaching-state";
-import { ACTIVE_ALPHA_SEMANTIC_PROFILE, ALPHA_AUGMENT_CANDIDATE_P4 } from "../../src/lesson-stream/semantic-profile";
+import { ACTIVE_ALPHA_SEMANTIC_PROFILE, ALPHA_AUGMENT_CANDIDATE_P4, ALPHA_CORE_P4 } from "../../src/lesson-stream/semantic-profile";
 
 const mocks = vi.hoisted(() => ({ constructor: vi.fn(), create: vi.fn() }));
 vi.mock("openai", () => ({
@@ -12,7 +12,7 @@ vi.mock("openai", () => ({
 }));
 
 import { estimateTeachingCost, requestOpenAITeachingInterpretation } from "./openai-interpreter";
-import { createTeachingInterpretationSchema, normalizeTeachingProposal, teachingInterpretationSchema } from "./provider-contract";
+import { createTeachingInterpretationSchema, normalizeTeachingProposal } from "./provider-contract";
 import { validateAndNormalizeProposal } from "../../src/lesson-stream/accepted-interpretations";
 import { persistedAuditDigest } from "../../src/trace/audit";
 
@@ -70,7 +70,7 @@ describe("OpenAI Teaching State interpreter", () => {
     expect(request.input[1].content).not.toContain("providerEvidence");
     expect(mocks.create.mock.calls[0]![1]).toEqual({ signal: controller.signal });
     expect(result.audit).toMatchObject({ providerRequestDigest: expect.any(String), providerResponse: { providerResponseId: "response-1", providerModel: "gpt-5.6-luna-actual", outputText: expect.any(String), rawStructuredOutput: { requestId: "request-1" }, providerResponseDigest: expect.any(String) } });
-    expect(result.audit.providerContract).toMatchObject({ semanticProfileId: "alpha-core-p4-v7", policyVersion: LESSON_POLICY_VERSION, systemPolicyDigest: expect.any(String), structuredOutputSchemaDigest: expect.any(String) });
+    expect(result.audit.providerContract).toMatchObject({ semanticProfileId: "alpha-augment-p4-v7", policyVersion: LESSON_POLICY_VERSION, systemPolicyDigest: expect.any(String), structuredOutputSchemaDigest: expect.any(String) });
     const { providerResponseDigest, ...providerResponseFact } = result.audit.providerResponse;
     expect(providerResponseDigest).toBe(persistedAuditDigest(providerResponseFact));
   });
@@ -155,7 +155,7 @@ describe("OpenAI Teaching State interpreter", () => {
     const board = (mode: string, provenance: TestProvenance = speechProvenance) => ({ mode, content: { kind: "TEXT", text: "Bounded board content" }, provenance });
     const text = (mode: string, provenance: TestProvenance = speechProvenance) => ({ mode, content: "Bounded cue content", provenance });
     const raw = (boardDelta: unknown, cueDelta: unknown) => ({ requestId: "request-1", baseBoardRevision: 0, baseCueRevision: 0, steps: [{ consumesCheckpointIds: ["checkpoint-1"], boardDelta, cueDelta, evidenceRefs: [{ checkpointId: "checkpoint-1" }], warnings: null }], warnings: null });
-    const validate = (candidate: unknown, profile = ACTIVE_ALPHA_SEMANTIC_PROFILE) => {
+    const validate = (candidate: unknown, profile = ALPHA_CORE_P4) => {
       const parsed = createTeachingInterpretationSchema(profile).parse(candidate);
       const request = { ...input, policyVersion: profile.policyVersion, semanticProfileId: profile.id };
       const proposal = normalizeTeachingProposal(parsed, request);
@@ -164,7 +164,7 @@ describe("OpenAI Teaching State interpreter", () => {
 
     for (const mode of ["RECONSTRUCT", "REPRESENT"]) expect(validate(raw({ action: "SET_ACTIVE", contribution: board(mode), continuity: "same_thread", retainPrevious: false, support: null, invalidatesBoardItemIds: null }, { action: "KEEP" })).ok).toBe(true);
     const augment = raw({ action: "SET_ACTIVE", contribution: board("AUGMENT", domainProvenance), continuity: "same_thread", retainPrevious: false, support: null, invalidatesBoardItemIds: null }, { action: "KEEP" });
-    expect(teachingInterpretationSchema.safeParse(augment).success).toBe(false);
+    expect(createTeachingInterpretationSchema(ALPHA_CORE_P4).safeParse(augment).success).toBe(false);
     expect(validate(augment, ALPHA_AUGMENT_CANDIDATE_P4).ok).toBe(true);
     for (const kind of ["NOTE", "QUESTION", "TASK", "HINT"] as const) expect(validate(raw({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: kind, contribution: text("REPRESENT"), targetBoardItemId: null })).ok).toBe(true);
 
@@ -174,6 +174,6 @@ describe("OpenAI Teaching State interpreter", () => {
       raw({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "NOTE", contribution: text("INITIATE"), targetBoardItemId: null }),
       raw({ action: "KEEP", reason: "no_board_value" }, { action: "SET", cueKind: "HINT", contribution: text("AUGMENT", domainProvenance), targetBoardItemId: null }),
     ];
-    for (const candidate of invalid) expect(teachingInterpretationSchema.safeParse(candidate).success).toBe(false);
+    for (const candidate of invalid) expect(createTeachingInterpretationSchema(ALPHA_CORE_P4).safeParse(candidate).success).toBe(false);
   });
 });

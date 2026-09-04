@@ -1,8 +1,8 @@
 # CueLayer Live Teaching System Specification
 
-**Version:** v0.4 / `alpha-core-p4-v1`
+**Version:** v0.5 / `alpha-augment-p4-v7`
 **Status:** `LIVE-STATE` / `SEMANTICS` execution baseline  
-**Date:** 2026-09-02  
+**Date:** 2026-09-05
 **Scope:** single-session live teaching: speech evidence, stream processing, LLM interpretation, Teaching State, Teaching Board, Teaching Cue, and learner rendering.
 
 This document is the execution authority for CueLayer's live teaching system. It is subordinate to `docs/PRODUCT_CHARTER.md` and governs implementation descriptions, PR descriptions, fixtures, and code comments where they conflict with this design.
@@ -21,11 +21,11 @@ If code and this document disagree, update this document intentionally before ch
 
 Alpha is a bounded learner-surface agent, not a transcript formatter. The learner surface optimizes for the learner's current learning state and autonomously decides whether Board or Cue should change. Visual quiet is a successful outcome. New evidence remains the sole deliberation trigger. Once triggered, interpretation may reason from current evidence, processed lesson history, accepted interpretations, current Teaching State, and domain knowledge through the fixed P4 projection.
 
-The broad persisted contribution vocabulary remains `RECONSTRUCT`, `REPRESENT`, `AUGMENT`, `CORRECT`, and `INITIATE` for schema compatibility. The live Alpha capability profile is narrower: Board permits `RECONSTRUCT` and `REPRESENT`; bounded Board `AUGMENT` remains disabled until its promotion gate passes. Teaching Cue permits only `RECONSTRUCT` and `REPRESENT`, and the represented `NOTE`, `QUESTION`, `TASK`, or `HINT` must originate in current classroom evidence. Autonomous `CORRECT` and `INITIATE` are not enabled.
+The broad persisted contribution vocabulary remains `RECONSTRUCT`, `REPRESENT`, `AUGMENT`, `CORRECT`, and `INITIATE` for schema compatibility. The live Alpha profile permits bounded Board `AUGMENT` alongside `RECONSTRUCT` and `REPRESENT`; Teaching Cue permits only `RECONSTRUCT` and `REPRESENT`. A `NOTE`, `QUESTION`, `TASK`, or `HINT` must originate in current classroom evidence. An imperative cognitive action from the teacher is a `TASK`, including a request to write a formula, read a heading, or predict an outcome. Autonomous `CORRECT` and `INITIATE` are not enabled.
 
 An explicit teacher self-correction remains supported as continuity=`correction` using a `RECONSTRUCT` or `REPRESENT` contribution, current correction evidence, and explicit invalidation of the superseded Board item. This is not autonomous AI `CORRECT`. Suspected teacher error without explicit correction must not establish a false visible claim or a contradictory AI correction; use KEEP and an optional diagnostic warning.
 
-Provenance is accountability rather than literal display equality. Every non-KEEP step requires an exact current trigger quote from a checkpoint consumed by that step. Claimed speech quotes exact-match immutable evidence; learner-visible content need not be a speech substring. Domain- and state-based contributions must never manufacture speech provenance, and deterministic validation does not claim to certify subject-matter truth.
+Provenance is accountability rather than literal display equality. Every non-KEEP step requires a current trigger checkpoint consumed by that step. Provider output names checkpoint IDs only; deterministic normalization resolves accepted references to complete immutable canonical checkpoint text and rejects nonexistent IDs. Learner-visible content need not be a speech substring. Domain- and state-based contributions must never manufacture speech provenance, and deterministic validation does not claim to certify subject-matter truth.
 
 The lesson domain/event schema is versioned as `lesson-event-v3-learner-agency`. A persisted prior shape is an explicitly incompatible session boundary: it must be rejected or migrated deliberately, never silently replayed as this schema.
 
@@ -642,6 +642,8 @@ Deterministic rules:
 ### BoardContent
 
 ```ts
+// Provider-facing proposals contain checkpointId only. Accepted events retain the
+// canonical quote resolved from that immutable checkpoint by deterministic code.
 type SpeechReference = { checkpointId: string; quote: string };
 
 type ContributionProvenance = {
@@ -752,14 +754,17 @@ reduce Teaching State
 
 ### Grounding
 
-- exact substring validation applies only to `SpeechReference.quote` through local grounding records;
-- learner-visible contribution content is not required to be a speech substring; exact claimed speech references and all claimed state references must validate;
+- the provider returns checkpoint IDs rather than copied speech substrings;
+- deterministic normalization resolves every accepted `SpeechReference.quote` to the complete canonical text of the named immutable checkpoint;
+- learner-visible contribution content is not required to be a speech substring; every claimed checkpoint ID and state reference must exist and be in scope;
 - relation/transform may use historical evidence plus the current batch;
-- every non-KEEP step includes at least one exact `evidenceRefs` quote from a checkpoint consumed by that step; this trigger reference explains why the contribution is considered now;
+- every non-KEEP step includes at least one `evidenceRefs` checkpoint consumed by that step; this trigger reference explains why the contribution is considered now;
 - domain knowledge does not waive current-trigger evidence and is not required to manufacture contribution speech provenance;
 - Cue SET uses speech-bearing contribution provenance and classroom evidence establishing the learner action;
 - historical evidence and current state may inform a new Board object only after current evidence has triggered deliberation;
 - critical ASR warning defaults to KEEP unless clear evidence resolves the ambiguity.
+
+For a `SET_ACTIVE` step only, an invalid optional Support contribution may be dropped while the valid Active contribution is accepted. The accepted step records `board_support_dropped`. This narrow degradation never salvages an invalid primary Active contribution, `ADD_SUPPORT`, Cue mutation, unsafe `AUGMENT`, or any autonomous `CORRECT`/`INITIATE`.
 
 ### KEEP semantics
 
@@ -1085,7 +1090,7 @@ At minimum include:
 
 The frozen corpus contains at least 60 multi-turn cases with approximately 40 development and 20 locked-holdout cases. It covers selectivity, current-trigger discipline, reconstruction, representation equivalence, Board continuity, teacher-originated Cue lifecycle, teacher correction, augmentation, Chemistry correctness, and answer-leakage risks. Provider evaluation uses the exact production P4 assembler, capability-aware schema, normalizer, validator, reducer, event append, and replay path. A second evaluator model is prohibited.
 
-The September 4, 2026 locked evaluation is recorded in `docs/SEMANTICS_EVALUATION.md`. It concluded `REVISE` and `AUGMENT_DISABLED`; the active profile therefore remains `alpha-core-p4-v1`.
+The September 5, 2026 v5 locked evaluation is recorded in `docs/SEMANTICS_EVALUATION.md`. Both core runs passed, both candidate runs passed the core and AUGMENT promotion gates, and the exact frozen candidate `alpha-augment-p4-v7` became active. Earlier v1/v2 failures remain preserved as historical evidence.
 
 Critical gates include:
 
@@ -1093,8 +1098,8 @@ Critical gates include:
 |---|---:|
 | Accepted CORRECT or INITIATE | 0 |
 | Cue AUGMENT or domain-only Cue provenance | 0 |
-| Non-KEEP without a current consumed trigger quote | 0 |
-| Invalid claimed provenance or fabricated quote | 0 |
+| Non-KEEP without a current consumed trigger checkpoint | 0 |
+| Invalid claimed provenance or fabricated checkpoint ID | 0 |
 | Invented NOTE / QUESTION / TASK / HINT | 0 |
 | Incorrect learner-visible Chemistry or unsupported REPRESENT proposition | 0 |
 | Unsupported/irrelevant accepted AUGMENT or answer leakage | 0 |
@@ -1105,8 +1110,8 @@ Critical gates include:
 | Later speech alone causes stale | 0 |
 | Replay mismatch | 0 |
 | Structured parse | 100% |
-| Intervention, Board transition, Cue lifecycle, contribution-mode accuracy | each ≥95% |
-| RECONSTRUCT and REPRESENT equivalence accuracy | each ≥95% |
+| Intervention, Board transition, Cue lifecycle, final semantic accuracy | each ≥95% |
+| Contribution-mode label accuracy | diagnostic only; source transformation labels must not override correct visible semantics/provenance/profile/transition |
 | Useful AUGMENT precision / must-augment recall before promotion | ≥95% / ≥80% |
 | Successful provider response accepted or explicitly channel-conflicted | near 100% |
 | Trace volume | <1 MB/min |
@@ -1329,10 +1334,10 @@ Future PR descriptions must cite affected acceptance IDs.
 ### Alpha semantics
 
 - `SEM-01` New Alpha proposals are constrained by the selected capability profile; autonomous `CORRECT` and `INITIATE` are rejected while persisted v3 events remain replayable.
-- `SEM-02` Every non-KEEP step has an exact current trigger quote from a checkpoint consumed by that step.
+- `SEM-02` Every non-KEEP step has a valid current trigger checkpoint consumed by that step; accepted references contain deterministic canonical checkpoint text.
 - `SEM-03` `RECONSTRUCT` restores an intended teaching object without adding a proposition.
 - `SEM-04` `REPRESENT` preserves proposition set, negation, conditions, direction, uncertainty, scope, and quantities.
-- `SEM-05` Board `AUGMENT` remains disabled until frozen evaluation proves its precision, recall, provenance, and safety gates.
+- `SEM-05` Board `AUGMENT` is enabled only for the exact frozen profile that passed its precision, recall, provenance, safety, and core non-regression gates.
 - `SEM-06` Board Support, Active, Retained, topic-shift, and teacher-correction transitions remain coherent and bounded.
 - `SEM-07` Cue represents only teacher-originated learner actions and persists or resolves only from current classroom evidence.
 - `SEM-08` Semantic safety gates have zero critical violations on every locked pass.
@@ -1377,8 +1382,8 @@ Current phase rejects:
 | HINT expiry | none |
 | NOTE expiry | deterministic 4s |
 | Persisted contribution vocabulary | RECONSTRUCT / REPRESENT / AUGMENT / CORRECT / INITIATE remain replayable in `lesson-event-v3-learner-agency` |
-| Active Alpha profile | `alpha-core-p4-v1`: Board and Cue RECONSTRUCT / REPRESENT only |
-| Board AUGMENT | disabled until frozen `alpha-augment-p4-v1` promotion gates pass |
+| Active Alpha profile | `alpha-augment-p4-v7`: Board RECONSTRUCT / REPRESENT / bounded AUGMENT; Cue RECONSTRUCT / REPRESENT only |
+| Board AUGMENT | enabled for the exact frozen `alpha-augment-p4-v7` profile after both locked promotion passes |
 | Autonomous CORRECT / INITIATE | disabled |
 | Planner failure fallback | last state or visual quiet |
 | Single-lesson retrieval/summary | disabled |

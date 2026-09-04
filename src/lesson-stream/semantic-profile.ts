@@ -37,7 +37,7 @@ export const ALPHA_AUGMENT_CANDIDATE_P4: AlphaSemanticProfile = Object.freeze({
 });
 
 /** The only profile used by the normal endpoint. Promotion is a reviewed code change. */
-export const ACTIVE_ALPHA_SEMANTIC_PROFILE = ALPHA_CORE_P4;
+export const ACTIVE_ALPHA_SEMANTIC_PROFILE = ALPHA_AUGMENT_CANDIDATE_P4;
 
 export function contributionModeAllowed(
   profile: AlphaSemanticProfile,

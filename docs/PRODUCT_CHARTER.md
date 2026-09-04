@@ -20,7 +20,7 @@ Alpha is a bounded learner-surface agent, not a transcript formatter. It autonom
 
 Alpha may reconstruct damaged teaching expressions, reorganize an established proposition without changing its meaning, and use narrowly validated domain knowledge for Board augmentation. It does not autonomously correct the teacher or initiate learner actions. Teaching Cue represents only learner actions established by current classroom evidence, including teacher-originated notes, questions, tasks, and hints.
 
-Contributions carry attributable provenance: exact speech quotes are required when speech is claimed, while domain- and state-based contributions must not manufacture speech provenance. Broader correction and initiation authority, teacher approval and override controls, intervention-level controls, personality, avatar, voice, and proactive triggers remain later work. `teacher_override.applied` remains contract-only in Alpha.
+Contributions carry attributable provenance. The model names immutable speech checkpoints; deterministic code resolves accepted references to the complete canonical checkpoint text, so punctuation or formatting differences cannot fabricate or detach evidence. Domain- and state-based contributions must not manufacture speech provenance. Broader correction and initiation authority, teacher approval and override controls, intervention-level controls, personality, avatar, voice, and proactive triggers remain later work. `teacher_override.applied` remains contract-only in Alpha.
 
 ## Primary experience
 
@@ -67,7 +67,7 @@ The runtime preserves continuity through immutable checkpoints, accepted contrib
 
 CueLayer treats representation as a policy decision rather than assuming every spoken word should remain visible. The interpreter proposes bounded Board and Teaching Cue deltas; the deterministic reducer controls their lifecycle, retention, and visual hierarchy. Visual quiet is a successful outcome.
 
-Every learner-visible representation remains attributable to speech evidence, Teaching State, domain knowledge, or their combination. Grounding proves provenance, not literal display equality or subject-matter truth: exact claimed speech quotes support a contribution, while bounded reconstructions, representations, augmentations, and corrections may use the appropriate non-speech provenance. Symbolic or spatial compression may make meaning easier to follow while preserving evidence history, corrections, uncertainty, and reversible classroom control.
+Every learner-visible representation remains attributable to speech evidence, Teaching State, domain knowledge, or their combination. Grounding proves provenance, not literal display equality or subject-matter truth: accepted speech references resolve to immutable canonical checkpoints, while bounded reconstructions, representations, augmentations, and corrections may use the appropriate provenance. Symbolic or spatial compression may make meaning easier to follow while preserving evidence history, corrections, uncertainty, and reversible classroom control.
 
 ## Learning cues
 
