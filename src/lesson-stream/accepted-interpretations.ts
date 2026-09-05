@@ -81,6 +81,7 @@ const broadCueModeAllowed = (cueKind: TeachingCueKind, mode: ContributionMode) =
 function validBoardDelta(value: unknown): value is BoardDelta {
   if (!object(value) || typeof value.action !== "string") return false;
   if (value.action === "KEEP") return ["filler", "transition", "repetition", "unfinished", "insufficient_evidence", "ambiguous_reference", "classroom_management", "no_board_value"].includes(String(value.reason));
+  if (value.action === "RETIRE_ACTIVE") return typeof value.targetBoardItemId === "string" && ["retain", "discard"].includes(String(value.disposition)) && ["teacher_moved_on", "completed", "no_longer_current"].includes(String(value.reason));
   if (value.action === "ADD_SUPPORT") return textContribution(value.support) && broadBoardSupportModeAllowed(value.support.mode) && typeof value.targetBoardItemId === "string";
   if (value.action !== "SET_ACTIVE" || !contribution(value.contribution, validBoardContent) || !broadBoardActiveModeAllowed(value.contribution.mode)) return false;
   return ["same_thread", "topic_shift", "correction"].includes(String(value.continuity))
@@ -92,6 +93,11 @@ function validBoardDelta(value: unknown): value is BoardDelta {
 function validCueDelta(value: unknown): value is TeachingCueDelta {
   if (!object(value) || typeof value.action !== "string") return false;
   if (value.action === "KEEP") return true;
+  if (value.action === "ATTACH_HINT") return typeof value.targetCueId === "string" && textContribution(value.contribution) && broadCueModeAllowed("HINT", value.contribution.mode);
+  if (value.action === "REPLACE_CURRENT") {
+    if (typeof value.targetCueId !== "string" || !["answered", "completed", "teacher_moved_on", "replaced"].includes(String(value.reason)) || !reference(value.evidence)) return false;
+    return validCueDelta({ action: "SET", cueKind: value.cueKind, contribution: value.contribution, ...(value.targetBoardItemId !== undefined ? { targetBoardItemId: value.targetBoardItemId } : {}) });
+  }
   if (value.action === "SET") {
     if (!["NOTE", "QUESTION", "TASK", "HINT"].includes(String(value.cueKind)) || !textContribution(value.contribution)) return false;
     return broadCueModeAllowed(value.cueKind as TeachingCueKind, value.contribution.mode)
@@ -101,19 +107,20 @@ function validCueDelta(value: unknown): value is TeachingCueDelta {
 }
 
 function boardReferences(delta: BoardDelta): SpeechReference[] {
-  if (delta.action === "KEEP") return [];
+  if (delta.action === "KEEP" || delta.action === "RETIRE_ACTIVE") return [];
   if (delta.action === "ADD_SUPPORT") return delta.support.provenance.speechRefs ?? [];
   return [...(delta.contribution.provenance.speechRefs ?? []), ...(delta.support ?? []).flatMap((support) => support.provenance.speechRefs ?? [])];
 }
 
 function cueReferences(delta: TeachingCueDelta): SpeechReference[] {
-  if (delta.action === "SET") return delta.contribution.provenance.speechRefs ?? [];
+  if (delta.action === "REPLACE_CURRENT") return [delta.evidence, ...(delta.contribution.provenance.speechRefs ?? [])];
+  if (delta.action === "SET" || delta.action === "ATTACH_HINT") return delta.contribution.provenance.speechRefs ?? [];
   if (delta.action === "RESOLVE_CURRENT") return [delta.evidence];
   return [];
 }
 
 function stateReferences(delta: BoardDelta | TeachingCueDelta): StateReference[] {
-  if (delta.action === "SET") return delta.contribution.provenance.stateRefs ?? [];
+  if (delta.action === "SET" || delta.action === "REPLACE_CURRENT" || delta.action === "ATTACH_HINT") return delta.contribution.provenance.stateRefs ?? [];
   if (delta.action === "SET_ACTIVE") return [...(delta.contribution.provenance.stateRefs ?? []), ...(delta.support ?? []).flatMap((support) => support.provenance.stateRefs ?? [])];
   if (delta.action === "ADD_SUPPORT") return delta.support.provenance.stateRefs ?? [];
   return [];
@@ -140,7 +147,7 @@ function contributionModesAllowed(board: BoardDelta, cue: TeachingCueDelta, prof
     if (!contributionModeAllowed(profile, "BOARD_ACTIVE", board.contribution.mode)) return false;
     if (board.support?.some((item) => !contributionModeAllowed(profile, "BOARD_SUPPORT", item.mode))) return false;
   }
-  return cue.action !== "SET" || contributionModeAllowed(profile, cue.cueKind, cue.contribution.mode);
+  return !("contribution" in cue) || contributionModeAllowed(profile, cue.action === "ATTACH_HINT" ? "HINT" : cue.cueKind, cue.contribution.mode);
 }
 
 function contributions(board: BoardDelta, cue: TeachingCueDelta): TeachingContribution<unknown>[] {
@@ -149,7 +156,7 @@ function contributions(board: BoardDelta, cue: TeachingCueDelta): TeachingContri
     : board.action === "SET_ACTIVE"
       ? [board.contribution, ...(board.support ?? [])]
       : [];
-  return [...boardContributions, ...(cue.action === "SET" ? [cue.contribution] : [])];
+  return [...boardContributions, ...("contribution" in cue ? [cue.contribution] : [])];
 }
 
 function canonicalProvenance(provenance: ContributionProvenance, checkpoints: readonly CompactEvidenceCheckpoint[]) {
@@ -167,7 +174,7 @@ function canonicalContribution<T>(item: TeachingContribution<T>, checkpoints: re
 }
 
 function canonicalPrimaryBoardDelta(delta: BoardDelta, checkpoints: readonly CompactEvidenceCheckpoint[]): BoardDelta | undefined {
-  if (delta.action === "KEEP") return delta;
+  if (delta.action === "KEEP" || delta.action === "RETIRE_ACTIVE") return delta;
   if (delta.action === "ADD_SUPPORT") {
     const support = canonicalContribution(delta.support, checkpoints);
     return support ? { ...delta, support } : undefined;
@@ -183,6 +190,10 @@ function canonicalCueDelta(delta: TeachingCueDelta, checkpoints: readonly Compac
     return evidence ? { ...delta, evidence } : undefined;
   }
   const contribution = canonicalContribution(delta.contribution, checkpoints);
+  if (delta.action === "REPLACE_CURRENT") {
+    const evidence = canonicalSpeechReference(delta.evidence.checkpointId, checkpoints);
+    return contribution && evidence ? { ...delta, contribution, evidence } : undefined;
+  }
   return contribution ? { ...delta, contribution } : undefined;
 }
 
@@ -208,8 +219,12 @@ export function validateAndNormalizeProposal({
   if (request.semanticProfileId !== profile.id || request.policyVersion !== profile.policyVersion) return { ok: false, error: "proposal-capability-profile-mismatch" };
 
   const proposal = raw as unknown as TeachingInterpretationProposal;
-  const boardConflict = proposal.baseBoardRevision !== state.board.revision && proposal.steps.some((step) => step.boardDelta.action !== "KEEP");
-  const cueConflict = proposal.baseCueRevision !== state.cue.revision && proposal.steps.some((step) => step.cueDelta.action !== "KEEP");
+  if (proposal.baseBoardRevision !== request.currentState.board.revision || proposal.baseCueRevision !== request.currentState.cue.revision) return { ok: false, error: "proposal-base-revision-mismatch" };
+  const boardConflict = request.currentState.board.revision !== state.board.revision;
+  const cueConflict = request.currentState.cue.revision !== state.cue.revision;
+  if (boardConflict || cueConflict) return { ok: false, error: "interpretation-state-conflict" };
+  const suppliedIds = new Set([...request.processedTimeline.flatMap((item) => item.type === "evidence" ? [item.checkpointId] : []), ...request.newEvidence.map((item) => item.checkpointId)]);
+  const suppliedCheckpoints = allCheckpoints.filter((item) => suppliedIds.has(item.checkpointId));
   const checkpointSequences = new Map(allCheckpoints.map((checkpoint) => [checkpoint.checkpointId, checkpoint.lessonSequence]));
   let coverageOffset = 0;
   let rollingState = state;
@@ -221,16 +236,18 @@ export function validateAndNormalizeProposal({
     if (expected.length !== step.consumesCheckpointIds.length || expected.some((id, index) => id !== step.consumesCheckpointIds[index])) return { ok: false, error: "proposal-batch-coverage-invalid" };
     coverageOffset += step.consumesCheckpointIds.length;
 
-    const canonicalEvidenceRefs = step.evidenceRefs.map((ref) => canonicalSpeechReference(ref.checkpointId, allCheckpoints));
-    const primaryBoardDelta = canonicalPrimaryBoardDelta(step.boardDelta, allCheckpoints);
-    const primaryCueDelta = canonicalCueDelta(step.cueDelta, allCheckpoints);
+    const availableIds = new Set([...request.processedTimeline.flatMap((item) => item.type === "evidence" ? [item.checkpointId] : []), ...request.newEvidence.slice(0, coverageOffset).map((item) => item.checkpointId)]);
+    const availableCheckpoints = suppliedCheckpoints.filter((item) => availableIds.has(item.checkpointId));
+    const canonicalEvidenceRefs = step.evidenceRefs.map((ref) => canonicalSpeechReference(ref.checkpointId, availableCheckpoints));
+    const primaryBoardDelta = canonicalPrimaryBoardDelta(step.boardDelta, availableCheckpoints);
+    const primaryCueDelta = canonicalCueDelta(step.cueDelta, availableCheckpoints);
     if (!primaryBoardDelta || !primaryCueDelta || canonicalEvidenceRefs.some((ref) => ref === undefined)) return { ok: false, error: "proposal-provenance-checkpoint-invalid" };
 
     let boardSupportDropped = false;
     let normalizedBoardDelta = primaryBoardDelta;
     if (primaryBoardDelta.action === "SET_ACTIVE" && primaryBoardDelta.support?.length) {
       const safeSupport = primaryBoardDelta.support.flatMap((item) => {
-        const normalized = canonicalContribution(item, allCheckpoints);
+        const normalized = canonicalContribution(item, availableCheckpoints);
         const valid = normalized
           && contributionModeAllowed(profile, "BOARD_SUPPORT", normalized.mode)
           && contributionProvenanceAllowed(normalized)
@@ -244,24 +261,28 @@ export function validateAndNormalizeProposal({
 
     if (!contributionModesAllowed(normalizedBoardDelta, primaryCueDelta, profile)) return { ok: false, error: "proposal-mode-not-allowed" };
     if (contributions(normalizedBoardDelta, primaryCueDelta).some((item) => !contributionProvenanceAllowed(item))) return { ok: false, error: "proposal-contribution-provenance-invalid" };
-    if (primaryCueDelta.action === "SET" && !["SPEECH", "SPEECH_AND_STATE"].includes(primaryCueDelta.contribution.provenance.basis)) return { ok: false, error: "proposal-cue-origin-invalid" };
+    if ("contribution" in primaryCueDelta && !["SPEECH", "SPEECH_AND_STATE"].includes(primaryCueDelta.contribution.provenance.basis)) return { ok: false, error: "proposal-cue-origin-invalid" };
 
     const currentCheckpointIds = new Set(step.consumesCheckpointIds);
     const changesSurface = normalizedBoardDelta.action !== "KEEP" || primaryCueDelta.action !== "KEEP";
     if (changesSurface && !canonicalEvidenceRefs.some((ref) => ref && currentCheckpointIds.has(ref.checkpointId))) return { ok: false, error: "proposal-current-trigger-missing" };
-    if (primaryCueDelta.action === "RESOLVE_CURRENT" && !currentCheckpointIds.has(primaryCueDelta.evidence.checkpointId)) return { ok: false, error: "proposal-cue-resolution-trigger-invalid" };
+    if ((primaryCueDelta.action === "RESOLVE_CURRENT" || primaryCueDelta.action === "REPLACE_CURRENT") && !currentCheckpointIds.has(primaryCueDelta.evidence.checkpointId)) return { ok: false, error: "proposal-cue-resolution-trigger-invalid" };
 
+    if ("contribution" in primaryCueDelta && !(primaryCueDelta.contribution.provenance.speechRefs ?? []).some((ref) => currentCheckpointIds.has(ref.checkpointId))) return { ok: false, error: "proposal-cue-current-origin-missing" };
     const refs = [...canonicalEvidenceRefs as SpeechReference[], ...boardReferences(normalizedBoardDelta), ...cueReferences(primaryCueDelta)];
     if (!stateReferencesExist([...stateReferences(normalizedBoardDelta), ...stateReferences(primaryCueDelta)], rollingState)) return { ok: false, error: "proposal-state-reference-missing" };
     if (normalizedBoardDelta.action === "SET_ACTIVE" && normalizedBoardDelta.continuity === "correction" && (normalizedBoardDelta.retainPrevious || !normalizedBoardDelta.invalidatesBoardItemIds?.length)) return { ok: false, error: "proposal-correction-invalid" };
     if (normalizedBoardDelta.action === "SET_ACTIVE" && normalizedBoardDelta.contribution.mode === "CORRECT" && normalizedBoardDelta.continuity !== "correction") return { ok: false, error: "proposal-correction-invalid" };
 
-    const effectiveBoardDelta = boardConflict ? { action: "KEEP" as const, reason: "insufficient_evidence" as const } : normalizedBoardDelta;
-    const effectiveCueDelta = cueConflict ? { action: "KEEP" as const } : primaryCueDelta;
+    const effectiveBoardDelta = normalizedBoardDelta;
+    const effectiveCueDelta = primaryCueDelta;
     const boardItemIds = new Set([
       ...(rollingState.board.active ? [rollingState.board.active.id] : []),
       ...rollingState.board.retained.map((item) => item.id),
     ]);
+    if (effectiveBoardDelta.action === "RETIRE_ACTIVE" && rollingState.board.active?.id !== effectiveBoardDelta.targetBoardItemId) return { ok: false, error: "proposal-retire-target-not-active" };
+    if ((effectiveCueDelta.action === "REPLACE_CURRENT" || effectiveCueDelta.action === "ATTACH_HINT") && rollingState.cue.active?.id !== effectiveCueDelta.targetCueId) return { ok: false, error: "proposal-cue-target-not-active" };
+    if (effectiveCueDelta.action === "ATTACH_HINT" && !["TASK", "QUESTION"].includes(rollingState.cue.active?.kind ?? "")) return { ok: false, error: "proposal-hint-needs-primary-action" };
     if (effectiveBoardDelta.action === "ADD_SUPPORT" && !boardItemIds.has(effectiveBoardDelta.targetBoardItemId)) return { ok: false, error: "proposal-support-target-missing" };
     if (effectiveBoardDelta.action === "SET_ACTIVE" && effectiveBoardDelta.continuity === "correction" && effectiveBoardDelta.invalidatesBoardItemIds!.some((id) => !boardItemIds.has(id))) return { ok: false, error: "proposal-correction-target-missing" };
     if (effectiveCueDelta.action === "RESOLVE_CURRENT" && !rollingState.cue.active) return { ok: false, error: "proposal-cue-resolution-without-active-cue" };
@@ -271,7 +292,7 @@ export function validateAndNormalizeProposal({
     // never discards an otherwise grounded, safe cue.
     const cueTargetIds = new Set(boardItemIds);
     if (effectiveBoardDelta.action === "SET_ACTIVE") cueTargetIds.add(`board-${request.requestId}-accepted-${stepIndex}`);
-    const cueTargetDropped = effectiveCueDelta.action === "SET"
+    const cueTargetDropped = (effectiveCueDelta.action === "SET" || effectiveCueDelta.action === "REPLACE_CURRENT")
       && effectiveCueDelta.targetBoardItemId !== undefined
       && !cueTargetIds.has(effectiveCueDelta.targetBoardItemId);
     const normalizedCueDelta = cueTargetDropped

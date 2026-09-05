@@ -35,11 +35,16 @@ export type AcceptedContributionAudit = {
     contribution?: { mode: string; content: string; provenance: { basis: string; speechRefs: Array<{ checkpointId: string; quote: string }>; stateRefs: Array<{ kind: string; id: string }> } };
     support: Array<{ mode: string; content: string; provenance: { basis: string; speechRefs: Array<{ checkpointId: string; quote: string }>; stateRefs: Array<{ kind: string; id: string }> } }>;
     invalidatesBoardItemIds: string[];
+    targetBoardItemId?: string;
+    disposition?: string;
+    reason?: string;
   };
   cue: {
     action: string;
     kind?: string;
     contribution?: { mode: string; content: string; provenance: { basis: string; speechRefs: Array<{ checkpointId: string; quote: string }>; stateRefs: Array<{ kind: string; id: string }> } };
+    targetCueId?: string;
+    resolutionReason?: string;
     resolutionEvidence?: { checkpointId: string; quote: string };
   };
   warnings: Array<{ code: string; detail?: string }>;
@@ -130,7 +135,7 @@ export type SessionTracePayloads = {
   "provider.request_snapshot": { requestId: string; providerRequest: ProviderRequestEnvelope; providerRequestDigest: string; providerContractDigest: string; domainRequestDigest: string; providerSnapshotUnavailable?: "client_abort" | "provider_error" };
   "provider.response_snapshot": { requestId: string; providerResponse: ProviderResponseSnapshot; providerResponseDigest: string };
   "interpretation.proposal_normalized": { requestId: string; rawStructuredOutputDigest: string; normalizedProposal: TeachingInterpretationProposal; normalizedProposalDigest: string };
-  "interpretation.validation_result": { requestId: string; status: "accepted" | "rejected" | "provider_error" | "structured_parse_error" | "normalization_error"; reason?: string; normalizedProposal?: TeachingInterpretationProposal; normalizedProposalDigest?: string; boardConflict?: boolean; cueConflict?: boolean; acceptedStepCount?: number; requestBaseState: TeachingStateSnapshot; validationState: TeachingStateSnapshot; currentBoardRevision: number; currentCueRevision: number; validationDigest: string };
+  "interpretation.validation_result": { requestId: string; status: "accepted" | "rejected" | "provider_error" | "structured_parse_error" | "normalization_error" | "timeout" | "cancelled" | "conflict" | "budget"; reason?: string; normalizedProposal?: TeachingInterpretationProposal; normalizedProposalDigest?: string; boardConflict?: boolean; cueConflict?: boolean; acceptedStepCount?: number; requestBaseState: TeachingStateSnapshot; validationState: TeachingStateSnapshot; currentBoardRevision: number; currentCueRevision: number; validationDigest: string };
   "audit.unavailable": { requestId: string; stage: "provider_contract" | "provider_response"; reason: "client_abort" | "network_error" | "server_audit_unavailable" };
   "interpretation.request_completed": { requestId: string; latencyMs: number; inputTokens?: number; cachedInputTokens?: number; outputTokens?: number; estimatedCostUsd?: number; costStatus: "estimated" | "rates_unconfigured" };
   "interpretation.request_timeout": { requestId: string; latencyMs: number; pendingCount: number };
@@ -146,6 +151,7 @@ export type SessionTracePayloads = {
   "teaching_cue.keep": Record<string, never>;
   "teaching_cue.set": { cueId: string; kind: string };
   "teaching_cue.resolved": { cueId: string; reason: string };
+  "teaching_cue.hint_attached": { cueId: string };
   "teaching_cue.expired": { cueId: string };
   "teaching_surface.rendered": { renderId: string; boardRevision: number; cueRevision: number; presentationMode: string; density?: string; state?: TeachingStateSnapshot; stateDigest?: string; activeBoardItemId?: string; activeCueId?: string; origin?: { requestId: string; interpretationId: string; lessonEventId: string; stepIndex: number } };
   "teaching_surface.layout_changed": { presentationMode: string; density: string };

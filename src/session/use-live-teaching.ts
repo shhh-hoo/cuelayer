@@ -12,7 +12,9 @@ import type { CanonicalSpeechState, SpeechRunId, SpeechStatus } from "./speech-t
 import type { SessionStatus } from "./session-types";
 import { RetryBackoff } from "./retry-backoff";
 
-const HARD_DEADLINE_MS = 6_000;
+import { classifyInterpretationFailure, interpretationDeadlines, MAX_PROJECTED_INPUT_TOKENS, PROVIDER_ENVELOPE_RESERVE_TOKENS, OUTPUT_RESERVE_TOKENS, type InterpretationFailure } from "../lesson-stream/runtime-policy";
+import { interpretWithAbort } from "../lesson-stream/planner";
+const HARD_DEADLINE_MS = interpretationDeadlines(import.meta.env.VITE_TEACHING_DIAGNOSTIC_DEADLINE_MS, import.meta.env.DEV).clientMs;
 const FINALIZATION_DRAIN_TIMEOUT_MS = 12_000;
 const MODEL_NAME = "gpt-5.6-luna";
 
@@ -43,8 +45,12 @@ function acceptedContributionAudit(step: AcceptedInterpretationStep): AcceptedCo
     ? { action: step.boardDelta.action, contribution: auditContribution(step.boardDelta.contribution), support: (step.boardDelta.support ?? []).map(auditContribution), invalidatesBoardItemIds: step.boardDelta.invalidatesBoardItemIds ?? [] }
     : step.boardDelta.action === "ADD_SUPPORT"
       ? { action: step.boardDelta.action, support: [auditContribution(step.boardDelta.support)], invalidatesBoardItemIds: [] }
+    : step.boardDelta.action === "RETIRE_ACTIVE" ? { ...step.boardDelta, support: [], invalidatesBoardItemIds: [] }
     : { action: step.boardDelta.action, support: [], invalidatesBoardItemIds: [] };
-  const cue = step.cueDelta.action === "SET"
+  const cue = step.cueDelta.action === "REPLACE_CURRENT"
+    ? { action: step.cueDelta.action, kind: step.cueDelta.cueKind, targetCueId: step.cueDelta.targetCueId, resolutionReason: step.cueDelta.reason, resolutionEvidence: step.cueDelta.evidence, contribution: auditContribution(step.cueDelta.contribution) }
+    : step.cueDelta.action === "ATTACH_HINT" ? { action: step.cueDelta.action, targetCueId: step.cueDelta.targetCueId, kind: "HINT", contribution: auditContribution(step.cueDelta.contribution) }
+    : step.cueDelta.action === "SET"
     ? { action: step.cueDelta.action, kind: step.cueDelta.cueKind, contribution: auditContribution(step.cueDelta.contribution) }
     : step.cueDelta.action === "RESOLVE_CURRENT"
     ? { action: step.cueDelta.action, resolutionEvidence: { checkpointId: step.cueDelta.evidence.checkpointId, quote: step.cueDelta.evidence.quote } }
@@ -91,13 +97,15 @@ export function emitAcceptedStepTrace({
     if (step.boardDelta.continuity !== "same_thread") emit(traceDraft("board.context_retired", { boardItemIds: [stateBefore.board.active, ...stateBefore.board.retained].flatMap((item) => item ? [item.id] : []) }, { correlation }));
     if (step.boardDelta.invalidatesBoardItemIds?.length) emit(traceDraft("board.content_invalidated", { boardItemIds: step.boardDelta.invalidatesBoardItemIds }, { correlation }));
   }
+  if (step.boardDelta.action === "RETIRE_ACTIVE") emit(traceDraft(step.boardDelta.disposition === "retain" ? "board.context_retained" : "board.context_retired", { boardItemIds: [step.boardDelta.targetBoardItemId] }, { correlation }));
+  if (step.cueDelta.action === "ATTACH_HINT") emit(traceDraft("teaching_cue.hint_attached", { cueId: step.cueDelta.targetCueId }, { correlation: { ...correlation, cueId: step.cueDelta.targetCueId } }));
   if (step.boardDelta.action === "ADD_SUPPORT") emit(traceDraft("board.support_added", { boardItemId: step.boardDelta.targetBoardItemId, supportId: `support-${step.interpretationId}-${step.stepIndex}` }, { correlation: { ...correlation, boardItemId: step.boardDelta.targetBoardItemId } }));
   if (step.cueDelta.action === "KEEP") emit(traceDraft("teaching_cue.keep", {}, { correlation }));
-  if (step.cueDelta.action === "SET") {
+  if (step.cueDelta.action === "SET" || step.cueDelta.action === "REPLACE_CURRENT") {
     const cueId = `cue-${step.interpretationId}-${step.stepIndex}`;
     emit(traceDraft("teaching_cue.set", { cueId, kind: step.cueDelta.cueKind }, { correlation: { ...correlation, cueId } }));
   }
-  if (step.cueDelta.action === "RESOLVE_CURRENT" && stateBefore.cue.active) emit(traceDraft("teaching_cue.resolved", { cueId: stateBefore.cue.active.id, reason: step.cueDelta.reason }, { correlation: { ...correlation, cueId: stateBefore.cue.active.id } }));
+  if ((step.cueDelta.action === "RESOLVE_CURRENT" || step.cueDelta.action === "REPLACE_CURRENT") && stateBefore.cue.active) emit(traceDraft("teaching_cue.resolved", { cueId: stateBefore.cue.active.id, reason: step.cueDelta.reason }, { correlation: { ...correlation, cueId: stateBefore.cue.active.id } }));
 }
 
 export type LiveTeachingStatus = "restoring" | "ready" | "interpreting" | "degraded";
@@ -124,6 +132,9 @@ export function useLiveTeaching({
   const onTrace = useCallback<TraceEmitter>((draft) => {
     try { unsafeTrace?.(draft); } catch { /* Diagnostic trace never controls lesson state. */ }
   }, [unsafeTrace]);
+  const generationRef = useRef(0);
+  const identityRef = useRef("");
+  identityRef.current = `${sessionId}:${speechRunId}`;
   const runtimeRef = useRef<LessonStreamRuntime | undefined>(undefined);
   const schedulerRef = useRef(new LosslessInterpretationScheduler());
   const pumpRef = useRef<() => void>(() => undefined);
@@ -145,6 +156,14 @@ export function useLiveTeaching({
   }, []);
 
   useEffect(() => {
+    generationRef.current += 1;
+    schedulerRef.current = new LosslessInterpretationScheduler();
+    retryBackoffRef.current = new RetryBackoff();
+    finalizingRef.current = false;
+    openedCheckpointTraceRef.current.clear();
+    setState(createInitialTeachingState());
+    setPendingCount(0);
+    setRenderOrigin(undefined);
     let cancelled = false;
     let openedRuntime: LessonStreamRuntime | undefined;
     let unsubscribe: () => void = () => undefined;
@@ -168,6 +187,7 @@ export function useLiveTeaching({
     });
     return () => {
       cancelled = true;
+      generationRef.current += 1;
       unsubscribe();
       if (runtimeRef.current === openedRuntime) {
         openedRuntime?.close();
@@ -180,28 +200,46 @@ export function useLiveTeaching({
 
   useEffect(() => {
     if (activeRunRef.current === speechRunId) return;
+    generationRef.current += 1;
     activeRunRef.current = speechRunId;
     activeControllerRef.current?.abort("speech_run_changed");
+    retryBackoffRef.current.clear();
+    retryBackoffRef.current = new RetryBackoff();
+    schedulerRef.current = new LosslessInterpretationScheduler();
+    schedulerRef.current.restore(runtimeRef.current?.pending ?? []);
+    setError(undefined);
+    setStatus(runtimeRef.current ? "ready" : "restoring");
+    pumpRef.current();
   }, [speechRunId]);
 
   useEffect(() => {
     if (sessionStatus !== "active") return;
-    void runtimeRef.current?.start().catch((reason: unknown) => {
+    const runtime = runtimeRef.current;
+    const generation = generationRef.current;
+    void runtime?.start().catch((reason: unknown) => {
+      if (runtime !== runtimeRef.current || generation !== generationRef.current) return;
       setStatus("degraded");
       setError(reason instanceof Error ? reason.message : "lesson-start-failed");
     });
   }, [runtimeEpoch, sessionStatus]);
 
-  const scheduleRetry = useCallback(() => {
-    retryBackoffRef.current.fail(() => pumpRef.current());
-  }, []);
-
   const pump = useCallback(() => {
     const runtime = runtimeRef.current;
-    if (!runtime || sessionStatus !== "active" || (speechStatus !== "ready" && !finalizingRef.current)) return;
+    if (!runtime || sessionStatus !== "active") return;
     if (retryBackoffRef.current.active) return;
-    const scheduled = schedulerRef.current.next(speechRunId);
-    if (!scheduled) return;
+    const generation = generationRef.current;
+    const identity = `${sessionId}:${speechRunId}`;
+    const scheduler = schedulerRef.current;
+    const retry = retryBackoffRef.current;
+    const isCurrent = () => generationRef.current === generation && identityRef.current === identity && runtimeRef.current === runtime;
+    const scheduled = scheduler.next(speechRunId, 3_500, Date.now(), (batch) => {
+      const projected = buildTeachingInterpretationRequest({ requestId: "budget-preview", sessionId, events: runtime.events, currentState: runtime.state, newEvidence: batch });
+      return projected.diagnostics.projectedInputTokens + PROVIDER_ENVELOPE_RESERVE_TOKENS + OUTPUT_RESERVE_TOKENS <= MAX_PROJECTED_INPUT_TOKENS;
+    });
+    if (!scheduled) {
+      if (scheduler.isBudgetBlocked) { retry.fail(() => undefined, "budget"); setError("interpretation-request-budget-exceeded"); setStatus("degraded"); }
+      return;
+    }
     const { work, checkpoints } = scheduled;
     const { request, diagnostics } = buildTeachingInterpretationRequest({ requestId: work.requestId, sessionId, events: runtime.events, currentState: runtime.state, newEvidence: checkpoints });
     const committedTimes = checkpoints.flatMap((checkpoint) => {
@@ -231,7 +269,9 @@ export function useLiveTeaching({
     let timedOut = false;
     const timeout = window.setTimeout(() => { timedOut = true; controller.abort("hard_deadline"); }, HARD_DEADLINE_MS);
 
-    void interpreter.interpret(request, { signal: controller.signal }).then(async (response) => {
+    void interpretWithAbort(interpreter, request, controller.signal).then(async (response) => {
+      if (!isCurrent() || controller.signal.aborted) return;
+      window.clearTimeout(timeout); // Provider deadline never races durable event persistence.
       if (response.audit) {
         const audit = response.audit;
         onTrace?.(traceDraft("provider.contract_snapshot", {
@@ -256,21 +296,23 @@ export function useLiveTeaching({
       const acceptance = await runtime.acceptProposal({
         proposal: response.proposal,
         request,
+        signal: controller.signal,
         model: response.audit?.providerResponse.providerModel ?? response.audit?.providerContract.requestedModel ?? MODEL_NAME,
-        isCurrent: () => activeRunRef.current === work.speechRunId && runtimeRef.current === runtime,
+        isCurrent: () => isCurrent() && !controller.signal.aborted,
       });
+      if (!isCurrent() || controller.signal.aborted) return;
       if (!acceptance.ok) {
         onTrace?.(traceDraft("interpretation.validation_result", {
           requestId: work.requestId,
-          status: "rejected",
+          status: acceptance.error === "interpretation-state-conflict" ? "conflict" : "rejected",
           reason: acceptance.error,
           normalizedProposal: response.proposal,
           normalizedProposalDigest: response.audit?.normalizedProposalDigest ?? persistedAuditDigest(response.proposal),
           requestBaseState: request.currentState,
           validationState: acceptance.validationState,
-          currentBoardRevision: request.currentState.board.revision,
-          currentCueRevision: request.currentState.cue.revision,
-          validationDigest: persistedAuditDigest({ requestId: work.requestId, status: "rejected", reason: acceptance.error, normalizedProposal: response.proposal, normalizedProposalDigest: response.audit?.normalizedProposalDigest ?? persistedAuditDigest(response.proposal), requestBaseState: request.currentState, validationState: acceptance.validationState, currentBoardRevision: request.currentState.board.revision, currentCueRevision: request.currentState.cue.revision }),
+          currentBoardRevision: acceptance.validationState.board.revision,
+          currentCueRevision: acceptance.validationState.cue.revision,
+          validationDigest: persistedAuditDigest({ requestId: work.requestId, status: acceptance.error === "interpretation-state-conflict" ? "conflict" : "rejected", reason: acceptance.error, normalizedProposal: response.proposal, normalizedProposalDigest: response.audit?.normalizedProposalDigest ?? persistedAuditDigest(response.proposal), requestBaseState: request.currentState, validationState: acceptance.validationState, currentBoardRevision: acceptance.validationState.board.revision, currentCueRevision: acceptance.validationState.cue.revision }),
         }, { correlation: traceCorrelation }));
         onTrace?.(traceDraft("interpretation.output_rejected", { requestId: work.requestId, reason: acceptance.error, pendingCount: schedulerRef.current.pendingCount }, { correlation: { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId } }));
         throw Object.assign(new Error(acceptance.error), { validationClassified: true });
@@ -300,8 +342,9 @@ export function useLiveTeaching({
       acceptance.transitions.forEach((transition) => emitAcceptedStepTrace({ transition, speechRunId, plannerRequestId: work.requestId, emit: onTrace }));
       const finalTransition = acceptance.transitions.at(-1);
       if (finalTransition) setRenderOrigin({ requestId: work.requestId, interpretationId: finalTransition.step.interpretationId, lessonEventId: finalTransition.lessonEventId, stepIndex: finalTransition.step.stepIndex });
-      queueMicrotask(() => pumpRef.current());
+      queueMicrotask(() => { if (isCurrent()) pumpRef.current(); });
     }).catch((reason: unknown) => {
+      if (!isCurrent()) return;
       const validationAlreadyClassified = reason instanceof Error && (reason as Error & { validationClassified?: boolean }).validationClassified === true;
       const failureAudit = reason instanceof TeachingInterpreterError ? reason.audit : undefined;
       if (failureAudit) {
@@ -316,8 +359,9 @@ export function useLiveTeaching({
       }
       if (!validationAlreadyClassified) {
         const validationState = runtime.state;
-        const stage = failureAudit?.failureStage ?? "provider_error";
         const message = reason instanceof Error ? reason.message : "teaching-provider-unavailable";
+        const category = classifyInterpretationFailure(message, controller.signal.aborted && !timedOut, timedOut);
+        const stage = category === "provider" || category === "validation" ? failureAudit?.failureStage ?? "provider_error" : category;
         onTrace?.(traceDraft("interpretation.validation_result", {
           requestId: work.requestId, status: stage, reason: message, requestBaseState: request.currentState, validationState,
           currentBoardRevision: validationState.board.revision, currentCueRevision: validationState.cue.revision,
@@ -330,14 +374,17 @@ export function useLiveTeaching({
       setStatus("degraded");
       const latencyMs = Math.max(0, Date.now() - work.startedAtMs);
       if (timedOut) onTrace?.(traceDraft("interpretation.request_timeout", { requestId: work.requestId, latencyMs, pendingCount: schedulerRef.current.pendingCount }, { correlation: { rootId: `interpretation:${work.requestId}`, runId: speechRunId, plannerRequestId: work.requestId } }));
-      scheduleRetry();
+      const category: InterpretationFailure = classifyInterpretationFailure(message, controller.signal.aborted && !timedOut, timedOut);
+      retry.fail(() => { if (isCurrent()) pumpRef.current(); }, category);
     }).finally(() => {
       window.clearTimeout(timeout);
+      if (!isCurrent()) return;
       if (activeControllerRef.current === controller) activeControllerRef.current = undefined;
       setPendingCount(schedulerRef.current.pendingCount);
     });
-  }, [interpreter, onTrace, scheduleRetry, sessionId, sessionStatus, speechRunId, speechStatus]);
+  }, [interpreter, onTrace, sessionId, sessionStatus, speechRunId, speechStatus]);
   pumpRef.current = pump;
+  useEffect(() => { pumpRef.current(); }, [runtimeEpoch, speechStatus, sessionStatus]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;
@@ -348,13 +395,17 @@ export function useLiveTeaching({
       openedCheckpointTraceRef.current.add(traceIdentity);
       onTrace?.(traceDraft("evidence.checkpoint_opened", { runId: speechRunId, spanId: span.id, spanRevision: span.revision }, { correlation: { rootId: `speech:${speechRunId}:span:${span.id}`, runId: speechRunId, spanId: span.id, spanRevision: span.revision } }));
     }
+    const generation = generationRef.current;
+    const isCurrent = () => generation === generationRef.current && runtimeRef.current === runtime;
     const closed = canonicalSpeech.spans.filter((span) => span.status === "closed");
     if (!closed.length) return;
     void (async () => {
       await runtime.start();
       let committedAny = false;
       for (const span of closed) {
+        if (!isCurrent()) return;
         const committed = await runtime.commitClosedSpan(span, speechRunId);
+        if (!isCurrent()) return;
         if (!committed) continue;
         schedulerRef.current.enqueue([committed]);
         committedAny = true;
@@ -364,6 +415,7 @@ export function useLiveTeaching({
       }
       if (committedAny) pumpRef.current();
     })().catch((reason: unknown) => {
+      if (!isCurrent()) return;
       setStatus("degraded");
       setError(reason instanceof Error ? reason.message : "checkpoint-commit-failed");
     });
@@ -387,12 +439,17 @@ export function useLiveTeaching({
   const endLesson = useCallback(async ({ canonicalSpeech, speechRunId }: { canonicalSpeech?: CanonicalSpeechState; speechRunId?: SpeechRunId } = {}) => {
     const runtime = runtimeRef.current;
     if (!runtime) return false;
+    const generation = generationRef.current;
+    const isCurrent = () => generationRef.current === generation && runtimeRef.current === runtime;
     finalizingRef.current = true;
-    await runtime.start();
     try {
+      await runtime.start();
+      if (!isCurrent()) return false;
       if (canonicalSpeech && speechRunId !== undefined) {
         for (const span of canonicalSpeech.spans.filter((item) => item.status === "closed")) {
+          if (!isCurrent()) return false;
           const committed = await runtime.commitClosedSpan(span, speechRunId);
+          if (!isCurrent()) return false;
           if (!committed) continue;
           schedulerRef.current.enqueue([committed]);
           setPendingCount(schedulerRef.current.pendingCount);
@@ -403,6 +460,7 @@ export function useLiveTeaching({
       pumpRef.current();
       const deadline = Date.now() + FINALIZATION_DRAIN_TIMEOUT_MS;
       while (schedulerRef.current.currentWork || schedulerRef.current.pendingCount) {
+        if (!isCurrent()) return false;
         if (Date.now() >= deadline) {
           const message = "lesson-finalization-incomplete";
           setStatus("degraded");
@@ -411,15 +469,25 @@ export function useLiveTeaching({
           return false;
         }
         await new Promise<void>((resolve) => window.setTimeout(resolve, 25));
+        if (!isCurrent()) return false;
         pumpRef.current();
       }
       await runtime.end();
+      if (!isCurrent()) return false;
       setPendingCount(0);
       return true;
     } finally {
-      finalizingRef.current = false;
+      if (isCurrent()) finalizingRef.current = false;
     }
   }, [onTrace]);
 
-  return { state, renderOrigin, status, pendingCount, error, expireCue, allocateSpeechRunId, endLesson };
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1_000); return () => window.clearInterval(timer); }, []);
+  const pendingIds = new Set(runtimeRef.current?.pending.map((item) => item.checkpointId));
+  const pendingTimes = runtimeRef.current?.events.flatMap((event) => event.type === "evidence.checkpoint_committed" && pendingIds.has(event.checkpoint.checkpointId) ? [Date.parse(event.timestamp)] : []) ?? [];
+  const oldestPendingAgeMs = pendingTimes.length ? Math.max(0, now - Math.min(...pendingTimes)) : 0;
+  const inFlightAgeMs = schedulerRef.current.currentWork ? Math.max(0, now - schedulerRef.current.currentWork.startedAtMs) : 0;
+  const health = { pendingCount, oldestPendingAgeMs, inFlightAgeMs, consecutiveFailures: retryBackoffRef.current.consecutiveFailures, paused: retryBackoffRef.current.isPaused, lagging: oldestPendingAgeMs >= 10_000 || retryBackoffRef.current.consecutiveFailures > 0 };
+  const resumeInterpretation = useCallback(() => { retryBackoffRef.current.accept(); setError(undefined); setStatus("ready"); pumpRef.current(); }, []);
+  return { state, renderOrigin, status, pendingCount, error, health, resumeInterpretation, expireCue, allocateSpeechRunId, endLesson };
 }

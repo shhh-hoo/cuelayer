@@ -1,8 +1,8 @@
 import type { ContributionMode, TeachingCueKind } from "./contracts.ts";
 
 export type AlphaSemanticProfile = {
-  id: "alpha-core-p4-v7" | "alpha-augment-p4-v7";
-  policyVersion: "bounded-agent-p4-semantics-v7";
+  id: "alpha-core-p4-v7" | "alpha-augment-p4-v7" | "alpha-continuous-p4-v8";
+  policyVersion: "bounded-agent-p4-semantics-v7" | "bounded-agent-p4-continuous-v8";
   contextProjection: "P4";
   boardActiveModes: readonly ContributionMode[];
   boardSupportModes: readonly ContributionMode[];
@@ -37,7 +37,12 @@ export const ALPHA_AUGMENT_CANDIDATE_P4: AlphaSemanticProfile = Object.freeze({
 });
 
 /** The only profile used by the normal endpoint. Promotion is a reviewed code change. */
-export const ACTIVE_ALPHA_SEMANTIC_PROFILE = ALPHA_AUGMENT_CANDIDATE_P4;
+export const ALPHA_CONTINUOUS_P4: AlphaSemanticProfile = Object.freeze({
+  ...ALPHA_AUGMENT_CANDIDATE_P4,
+  id: "alpha-continuous-p4-v8",
+  policyVersion: "bounded-agent-p4-continuous-v8",
+});
+export const ACTIVE_ALPHA_SEMANTIC_PROFILE = ALPHA_CONTINUOUS_P4;
 
 export function contributionModeAllowed(
   profile: AlphaSemanticProfile,

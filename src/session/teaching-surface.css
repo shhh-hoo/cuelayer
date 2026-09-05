@@ -23,3 +23,10 @@
   .teaching-board-active { font-size: clamp(26px, 8vw, 44px); }
   .teaching-board-relation.relation-contrast { grid-template-columns: 1fr; }
 }
+
+.teaching-runtime-health { position: fixed; top: 1rem; right: 1rem; z-index: 30; display: flex; gap: .6rem; align-items: center; max-width: calc(100vw - 2rem); padding: .5rem .75rem; border-radius: .5rem; background: #282c33; color: #eee; font-size: .8rem; }
+.teaching-runtime-health button { color: inherit; background: transparent; border: 1px solid #888; border-radius: .3rem; padding: .3rem .5rem; }
+.teaching-cue-hint { border-top: 1px solid currentColor; margin-top: .8rem; padding-top: .6rem; font-size: .85em; opacity: .85; }
+
+/* Keep teacher controls clear of learner Cue text on narrow dogfood windows. */
+.teaching-surface-layer > .board-layout { bottom: 5.5rem; }

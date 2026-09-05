@@ -26,7 +26,8 @@
     "eval:semantics:v5:freeze": "node --experimental-strip-types scripts/build-semantics-corpus-v5.ts",
     "eval:semantics:v5:validate": "node --experimental-strip-types scripts/evaluate-semantics-v5.ts --validate",
     "eval:semantics:v5:live": "node --experimental-strip-types scripts/evaluate-semantics-v5.ts --live",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:live-state": "vitest run src/lesson-stream/continuous-state.test.tsx src/session/continuous-runtime.test.tsx"
   },
   "dependencies": {
     "@speechmatics/auth": "^0.1.0",
@@ -46,6 +47,7 @@
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "6.1.1",
     "fake-indexeddb": "^6.2.5",
+    "jsdom": "^30.0.1",
     "typescript": "5.9.3",
     "vite": "8.2.2",
     "vitest": "4.1.11"

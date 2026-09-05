@@ -1,10 +1,11 @@
+import { MAX_PROJECTED_INPUT_TOKENS, OUTPUT_RESERVE_TOKENS } from "../../src/lesson-stream/runtime-policy.ts";
 import OpenAI from "openai";
 import type { TeachingInterpretationProposal, TeachingInterpretationRequest } from "../../src/lesson-stream/contracts.ts";
 import type { JsonValue } from "../../src/trace/audit.ts";
 import { persistedAuditDigest } from "../../src/trace/audit.ts";
 import type { TeachingProviderAudit, TeachingProviderFailureAudit, TeachingProviderUsage, ProviderRequestEnvelope, ProviderResponseSnapshot } from "../../src/lesson-stream/audit-contracts.ts";
 import { ACTIVE_ALPHA_SEMANTIC_PROFILE, type AlphaSemanticProfile } from "../../src/lesson-stream/semantic-profile.ts";
-import { createTeachingInterpretationSchema, normalizeTeachingProposal, teachingProviderContract, teachingResponseRequest } from "./provider-contract.ts";
+import { createTeachingInterpretationSchema, suppliedSpeechCheckpointIds, normalizeTeachingProposal, teachingProviderContract, teachingResponseRequest } from "./provider-contract.ts";
 
 export type { TeachingProviderAudit, TeachingProviderFailureAudit, TeachingProviderUsage } from "../../src/lesson-stream/audit-contracts.ts";
 export type TeachingProviderResult = { proposal: TeachingInterpretationProposal; usage?: TeachingProviderUsage; serviceTier?: string; audit: TeachingProviderAudit };
@@ -55,8 +56,9 @@ export async function requestOpenAITeachingInterpretation(
   options?: { signal?: AbortSignal; serviceTier?: "default" | "priority"; profile?: AlphaSemanticProfile },
 ): Promise<TeachingProviderResult> {
   const profile = options?.profile ?? ACTIVE_ALPHA_SEMANTIC_PROFILE;
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey, maxRetries: 0 });
   const request = { model, ...teachingResponseRequest(input, profile), ...(options?.serviceTier ? { service_tier: options.serviceTier } : {}) };
+  if (Math.ceil(JSON.stringify(request).length / 4) + OUTPUT_RESERVE_TOKENS > MAX_PROJECTED_INPUT_TOKENS) throw new Error("interpretation-request-budget-exceeded");
   const providerRequest: ProviderRequestEnvelope = {
     model: request.model,
     ...(request.service_tier ? { service_tier: request.service_tier } : {}),
@@ -96,7 +98,7 @@ export async function requestOpenAITeachingInterpretation(
   } catch (error) {
     throw Object.assign(error instanceof Error ? error : new Error("teaching-interpretation-structured-parse-failed"), { audit: { ...knownAudit, providerResponse: responseAudit, failureStage: "structured_parse_error" } satisfies TeachingProviderFailureAudit });
   }
-  const parsed = createTeachingInterpretationSchema(profile, input.newEvidence.map((item) => item.checkpointId)).safeParse(rawStructuredOutput);
+  const parsed = createTeachingInterpretationSchema(profile, input.newEvidence.map((item) => item.checkpointId), profile.id === "alpha-continuous-p4-v8" ? suppliedSpeechCheckpointIds(input) : undefined).safeParse(rawStructuredOutput);
   if (!parsed.success) {
     const rawStructuredOutputDigest = persistedAuditDigest(rawStructuredOutput);
     throw Object.assign(new Error("teaching-interpretation-structured-parse-failed"), { audit: { ...knownAudit, providerResponse: providerResponseSnapshot({ ...responseFact, rawStructuredOutput, rawStructuredOutputDigest }), failureStage: "structured_parse_error" } satisfies TeachingProviderFailureAudit });

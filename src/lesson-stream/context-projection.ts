@@ -1,3 +1,4 @@
+import { reduceLessonEvent as reduceV3Event } from "./teaching-state-v3.ts";
 import type { ContextProjectionDiagnostics, LessonEvent, ProcessedTimelineEntry, TeachingInterpretationRequest, TeachingStateSnapshot, CompactEvidenceCheckpoint } from "./contracts.ts";
 import { LESSON_POLICY_VERSION } from "./contracts.ts";
 import { ACTIVE_ALPHA_SEMANTIC_PROFILE, type AlphaSemanticProfile } from "./semantic-profile.ts";
@@ -17,14 +18,15 @@ export function projectProcessedTimeline(events: readonly LessonEvent[]): Proces
         timeline.push({ type: "evidence", checkpointId: event.checkpoint.checkpointId, sequence: event.checkpoint.lessonSequence, text: event.checkpoint.text, warnings: event.checkpoint.warnings });
       }
     }
+    if (event.type === "teaching_cue.expired") state = event.schemaVersion === "lesson-event-v3-learner-agency" ? reduceV3Event(state, event, checkpointSequences) : reduceLessonEvent(state, event, checkpointSequences);
     if (event.type === "interpretation.step_accepted") {
-      state = reduceLessonEvent(state, event, checkpointSequences);
+      state = event.schemaVersion === "lesson-event-v3-learner-agency" ? reduceV3Event(state, event, checkpointSequences) : reduceLessonEvent(state, event, checkpointSequences);
       timeline.push({
         type: "accepted_interpretation",
         interpretationId: event.step.interpretationId,
         contributionIds: {
           ...(event.step.boardDelta.action === "SET_ACTIVE" ? { board: `board-${event.step.interpretationId}-${event.step.stepIndex}` } : {}),
-          ...(event.step.cueDelta.action === "SET" ? { cue: `cue-${event.step.interpretationId}-${event.step.stepIndex}` } : {}),
+          ...((event.step.cueDelta.action === "SET" || event.step.cueDelta.action === "REPLACE_CURRENT") ? { cue: `cue-${event.step.interpretationId}-${event.step.stepIndex}` } : {}),
         },
         consumesCheckpointIds: event.step.consumesCheckpointIds,
         boardDelta: event.step.boardDelta,

@@ -46,12 +46,15 @@ export class LocalLessonEventStore {
   static async open() { return new LocalLessonEventStore(await openDatabase()); }
   close() { this.database.close(); }
 
-  async append(events: readonly LessonEvent[]) {
+  async append(events: readonly LessonEvent[], signal?: AbortSignal) {
+    signal?.throwIfAborted();
     if (!events.length) return;
     const transaction = this.database.transaction(EVENTS_STORE, "readwrite");
     const store = transaction.objectStore(EVENTS_STORE);
     for (const event of events) store.put(event);
-    await transactionDone(transaction);
+    const abort = () => { try { transaction.abort(); } catch { /* Already committed. */ } };
+    signal?.addEventListener("abort", abort, { once: true });
+    try { await transactionDone(transaction); } finally { signal?.removeEventListener("abort", abort); }
   }
 
   async readSession(sessionId: string) {

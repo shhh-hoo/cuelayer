@@ -2,7 +2,7 @@ import type { SpeechRunId, SpeechWord } from "../session/speech-types";
 import { ACTIVE_ALPHA_SEMANTIC_PROFILE } from "./semantic-profile.ts";
 
 export const LESSON_POLICY_VERSION = ACTIVE_ALPHA_SEMANTIC_PROFILE.policyVersion;
-export const LESSON_EVENT_SCHEMA_VERSION = "lesson-event-v3-learner-agency";
+export const LESSON_EVENT_SCHEMA_VERSION = "lesson-event-v4-continuous";
 export const NOTE_EXPIRY_MS = 4_000;
 
 export type SpeechEvidenceWarning = {
@@ -73,13 +73,18 @@ export type BoardDelta =
       support?: TeachingContribution<string>[];
       invalidatesBoardItemIds?: string[];
     }
+  | { action: "RETIRE_ACTIVE"; targetBoardItemId: string; disposition: "retain" | "discard"; reason: "teacher_moved_on" | "completed" | "no_longer_current" }
   | { action: "ADD_SUPPORT"; support: TeachingContribution<string>; targetBoardItemId: string };
 
 export type TeachingCueKind = "NOTE" | "QUESTION" | "TASK" | "HINT";
 
+export type CueResolutionReason = "answered" | "completed" | "teacher_moved_on" | "replaced";
+
 export type TeachingCueDelta =
   | { action: "KEEP" }
   | { action: "SET"; cueKind: TeachingCueKind; contribution: TeachingContribution<string>; targetBoardItemId?: string }
+  | { action: "ATTACH_HINT"; targetCueId: string; contribution: TeachingContribution<string> }
+  | { action: "REPLACE_CURRENT"; targetCueId: string; reason: CueResolutionReason; evidence: SpeechReference; cueKind: TeachingCueKind; contribution: TeachingContribution<string>; targetBoardItemId?: string }
   | { action: "RESOLVE_CURRENT"; reason: "answered" | "completed" | "teacher_moved_on" | "replaced"; evidence: SpeechReference };
 
 export type InterpretationWarning = {
@@ -124,6 +129,7 @@ export type ActiveLessonCue = {
   activatedAt: number;
   targetBoardItemId?: string;
   expiresAt?: number;
+  hint?: { contribution: TeachingContribution<string>; sourceCheckpointIds: string[] };
 };
 
 export type TeachingStateSnapshot = {
@@ -141,7 +147,7 @@ export type TeachingStateSnapshot = {
   };
 };
 
-type EventIdentity = { schemaVersion: typeof LESSON_EVENT_SCHEMA_VERSION; eventId: string; sessionId: string; sequence: number };
+type EventIdentity = { schemaVersion: typeof LESSON_EVENT_SCHEMA_VERSION | "lesson-event-v3-learner-agency"; eventId: string; sessionId: string; sequence: number };
 export type LessonEvent =
   | (EventIdentity & { type: "lesson.started"; timestamp: string })
   | (EventIdentity & { type: "speech.run_allocated"; timestamp: string; runId: SpeechRunId })

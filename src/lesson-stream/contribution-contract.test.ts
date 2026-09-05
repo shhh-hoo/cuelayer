@@ -37,7 +37,7 @@ describe("Alpha contribution profile and provenance", () => {
     expect(interventionRiskFor("AUGMENT")).toBe("MEDIUM");
     expect(interventionRiskFor("CORRECT")).toBe("HIGH");
     expect(interventionRiskFor("INITIATE", "TASK")).toBe("HIGH");
-    expect(LESSON_EVENT_SCHEMA_VERSION).toBe("lesson-event-v3-learner-agency");
+    expect(LESSON_EVENT_SCHEMA_VERSION).toBe("lesson-event-v4-continuous");
   });
 
   it("accepts grounded RECONSTRUCT and REPRESENT under the core profile", () => {

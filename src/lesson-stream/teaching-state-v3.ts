@@ -1,3 +1,4 @@
+/** Frozen v3 reducer: replay historical events under their original semantics. */
 import { NOTE_EXPIRY_MS, type AcceptedInterpretationStep, type BoardItem, type BoardSupport, type LessonEvent, type TeachingStateSnapshot } from "./contracts.ts";
 
 export function createInitialTeachingState(): TeachingStateSnapshot {
@@ -21,13 +22,8 @@ function boardItemFor(step: AcceptedInterpretationStep, revision: number): Board
 
 function reduceBoard(state: TeachingStateSnapshot["board"], step: AcceptedInterpretationStep): TeachingStateSnapshot["board"] {
   const delta = step.boardDelta;
+  if (delta.action === "RETIRE_ACTIVE") throw new Error("v4-operation-in-v3-event");
   if (delta.action === "KEEP") return state;
-  if (delta.action === "RETIRE_ACTIVE") {
-    if (state.active?.id !== delta.targetBoardItemId) return state;
-    const retained = delta.disposition === "retain" ? [state.active, ...state.retained].slice(0, 2) : state.retained;
-    const owners = new Set(retained.map((item) => item.id));
-    return { revision: state.revision + 1, retained, support: state.support.filter((item) => owners.has(item.targetBoardItemId)) };
-  }
   if (delta.action === "ADD_SUPPORT") {
     const targetExists = state.active?.id === delta.targetBoardItemId || state.retained.some((item) => item.id === delta.targetBoardItemId);
     if (!targetExists) return state;
@@ -50,19 +46,14 @@ function reduceBoard(state: TeachingStateSnapshot["board"], step: AcceptedInterp
   const previous = [state.active, ...state.retained].filter((item): item is BoardItem => item !== undefined && !invalidated.has(item.id));
   const retainPrevious = delta.continuity === "same_thread" && delta.retainPrevious;
   const retained = retainPrevious ? previous.slice(0, 2) : [];
-  const owners = new Set(retained.map((item) => item.id));
-  const retainedSupport = state.support.filter((item) => owners.has(item.targetBoardItemId));
-  return { revision, active, support: [...retainedSupport, ...support].slice(-2), retained };
+  return { revision, active, support, retained };
 }
 
 function reduceCue(state: TeachingStateSnapshot["cue"], step: AcceptedInterpretationStep): TeachingStateSnapshot["cue"] {
   const delta = step.cueDelta;
+  if (delta.action === "ATTACH_HINT" || delta.action === "REPLACE_CURRENT") throw new Error("v4-operation-in-v3-event");
   if (delta.action === "KEEP") return state;
   if (delta.action === "RESOLVE_CURRENT") return state.active ? { revision: state.revision + 1 } : state;
-  if (delta.action === "ATTACH_HINT") {
-    if (state.active?.id !== delta.targetCueId || !["TASK", "QUESTION"].includes(state.active.kind)) return state;
-    return { revision: state.revision + 1, active: { ...state.active, hint: { contribution: delta.contribution, sourceCheckpointIds: (delta.contribution.provenance.speechRefs ?? []).map((ref) => ref.checkpointId) } } };
-  }
   const activatedAt = Date.parse(step.acceptedAt);
   const revision = state.revision + 1;
   return {

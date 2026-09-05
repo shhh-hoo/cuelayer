@@ -1,8 +1,8 @@
 # CueLayer Live Teaching System Specification
 
-**Version:** v0.5 / `alpha-augment-p4-v7`
+**Version:** v0.6 / `alpha-continuous-p4-v8`
 **Status:** `LIVE-STATE` / `SEMANTICS` execution baseline  
-**Date:** 2026-09-05
+**Date:** 2026-09-06
 **Scope:** single-session live teaching: speech evidence, stream processing, LLM interpretation, Teaching State, Teaching Board, Teaching Cue, and learner rendering.
 
 This document is the execution authority for CueLayer's live teaching system. It is subordinate to `docs/PRODUCT_CHARTER.md` and governs implementation descriptions, PR descriptions, fixtures, and code comments where they conflict with this design.
@@ -30,6 +30,24 @@ Provenance is accountability rather than literal display equality. Every non-KEE
 The lesson domain/event schema is versioned as `lesson-event-v3-learner-agency`. A persisted prior shape is an explicitly incompatible session boundary: it must be rejected or migrated deliberately, never silently replayed as this schema.
 
 ---
+
+## 0.1 Continuous-state repair — supersedes conflicting v0.5 rules below
+
+The first September 6 continuous run recovered after several pairs of six-second timeouts, then paused after three failures. To remove request-specific schema compilation pressure, v8.1 uses a stable provider schema with bounded string IDs. Exact supplied-ID membership, causal ordering and canonical provenance remain mandatory at deterministic validation; no arbitrary IDs can be accepted. The follow-up run retained one schema digest but still timed out on eight of twenty requests; schema stability has not established adequate live throughput. Frozen v7 schemas keep their exact request enums.
+
+September 5 microphone evidence exposed missing state operations, not a need for more generation. KEEP remains success. Frozen v5 corpus, gold, results, hashes, v7 policy and schema stay historical authority for v0.5 only. Live profile: `alpha-continuous-p4-v8`; policy: `bounded-agent-p4-continuous-v8`; provider schema: `teaching_interpretation_v8_1` (stable structure; request ID sets enforced at validation); event schema: `lesson-event-v4-continuous`. Historical v3 events dispatch explicitly to the preserved v3 reducer and remain byte-identical. New accepted operations append as v4; the additive snapshot migration preserves existing Board/Cue and adds only optional hint state. Unsupported schema versions are rejected. This is deliberate versioned replay, never reinterpretation of historical authority.
+
+Consumption names ordered unconsumed newEvidence exactly once on whole-request acceptance. Trigger evidence belongs to the current step. Contribution speechRefs may name supplied processed P4 evidence plus newEvidence through this step, never future batch evidence or arbitrary lesson IDs. Resolve each reference to immutable canonical text. This allows reconstruction across consumed unfinished fragments. History alone cannot trigger visible change. Structural future-reference rejection complements semantic answer-leakage policy; it does not prove subject-matter truth.
+
+Board adds RETIRE_ACTIVE(targetBoardItemId, disposition=retain|discard, reason=teacher_moved_on|completed|no_longer_current). Target must be actual Active and current evidence is required. Retain moves it to the front of at most two Retained items; discard removes it. Support survives only while its actual owner remains visible and renders under that owner. Retained-only Board stays visible. Silence, filler and elapsed time never expire Board. Same focal object plus subordinate detail uses ADD_SUPPORT; new focal object in the same topic uses SET_ACTIVE/same_thread; topic change uses topic_shift; explicit closure without replacement uses RETIRE_ACTIVE. Truth-critical conditions, negation, scope and quantities belong in the proposition, never disposable Support. Support is optional, detachable detail, bounded to two globally. A changed truth condition requires the full qualified proposition.
+
+Cue adds ATTACH_HINT(targetCueId, contribution), one subordinate teacher-originated hint on TASK/QUESTION, preserving primary ID, action and activation. Standalone HINT uses SET. REPLACE_CURRENT(targetCueId, reason, evidence, cueKind, contribution, optional targetBoardItemId) resolves the existing Cue and establishes a teacher-originated replacement atomically, with one revision and checkpoint consumption. Resolution and new action require current speech. Resolving or replacing the primary removes its hint. SET cannot overwrite unresolved TASK/QUESTION. Cue AUGMENT, autonomous CORRECT and INITIATE remain disabled.
+
+Proposal revisions must first equal the request snapshot; request Board/Cue revisions must then equal authoritative state. Mismatch rejects the whole request without consumption, including KEEP/otherwise valid channels. Rebuild from current state; never fabricate KEEP for an unapplied update. Trace reports actual validation revisions. This replaces per-channel conflict salvage until partial-completion bookkeeping exists.
+
+Scheduler: one flight, ordered lossless pending evidence, maximum two checkpoints per production request, additionally bounded by serialized full P4 request plus provider policy/schema estimate, 2048 output-token reserve, and the 6000ms provider deadline. Failed prefixes are pinned and may shrink, never grow with arrivals. No silent P4 truncation: an oversized single-checkpoint request pauses with evidence intact. Network/provider failure and timeout permit at most two automatic retries; validation rejection pauses immediately; state conflict rebuilds with bounded retries; cancellation does not degrade a replacement runtime. Exhaustion waits for explicit Resume interpretation. Last valid Teaching State remains visible.
+
+Server owns the 6000ms provider deadline. Browser allows a separate 2000ms transport/audit grace. SDK retries are disabled. Development-only diagnostic configuration can extend both coherently to observe one complete provider attempt; production remains six seconds pending measured evidence. Saved microphone disclosure retains its separate approval requirement. Teacher controls/debug expose pending count, oldest pending age, consecutive failures and in-flight age. Lag is runtime health, never Board TTL or learner truth. Every asynchronous success, failure, finally and retry is scoped to its session/runtime/run generation; close/replacement invalidates it. Accepted v4 events replay without provider calls.
 
 ## 1. Execution model
 

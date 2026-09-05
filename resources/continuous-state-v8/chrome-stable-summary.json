@@ -1,0 +1,42 @@
+{
+  "sessionId": "session-39865c06-b661-4612-a102-1327d736fed1",
+  "stage": "continuous v8 policy / stable v8.1 schema, 6000ms provider deadline",
+  "traceSha256": "c628c81a834092cbef95779d45d7e98ffa33ecfaa6c038e741b3d1cebcc4afe7",
+  "traceBytes": 3917698,
+  "requests": 20,
+  "validationStatuses": {
+    "accepted": 12,
+    "timeout": 8
+  },
+  "maxNewCheckpoints": 2,
+  "acceptedSteps": 18,
+  "committedCheckpoints": 38,
+  "uniqueConsumed": 19,
+  "duplicateConsumption": 0,
+  "pending": 19,
+  "acceptedLatencyMs": {
+    "median": 4991.0,
+    "max": 5794
+  },
+  "boardActions": {
+    "KEEP": 12,
+    "SET_ACTIVE": 2,
+    "ADD_SUPPORT": 3,
+    "RETIRE_ACTIVE": 1
+  },
+  "cueActions": {
+    "KEEP": 13,
+    "SET": 3,
+    "RESOLVE_CURRENT": 2
+  },
+  "historicalCanonicalReferences": 0,
+  "provenanceErrors": 0,
+  "restoredStateMatchesAccepted": true,
+  "requestsAfterFirstReload": 0,
+  "finalRevisions": {
+    "board": 6,
+    "cue": 5
+  },
+  "explicitRecoveryAttempts": 1,
+  "livePass": false
+}
