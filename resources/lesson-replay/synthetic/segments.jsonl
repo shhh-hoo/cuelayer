@@ -1,0 +1,3 @@
+{"segmentId": "s1", "startMs": 10000, "endMs": 10020, "text": "A catalyst lowers", "originalSegmentIds": ["raw-1"]}
+{"segmentId": "s2", "startMs": 10020, "endMs": 10060, "text": "the activation energy. The catalyst is not consumed.", "originalSegmentIds": ["raw-2"]}
+{"segmentId": "s3", "startMs": 10060, "endMs": 10100, "text": "Well, well, keep both observations.", "originalSegmentIds": ["raw-3"]}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { buildTeachingInterpretationRequest } from "../lesson-stream/context-projection";
+import { nextTeachingRequest } from "../lesson-stream/scheduled-request";
 import { LosslessInterpretationScheduler } from "../lesson-stream/pending-evidence";
 import { createHttpTeachingInterpreter, TeachingInterpreterError, type TeachingInterpreter } from "../lesson-stream/planner";
 import { LessonStreamRuntime } from "../lesson-stream/runtime";
@@ -12,7 +12,7 @@ import type { CanonicalSpeechState, SpeechRunId, SpeechStatus } from "./speech-t
 import type { SessionStatus } from "./session-types";
 import { RetryBackoff } from "./retry-backoff";
 
-import { classifyInterpretationFailure, interpretationDeadlines, MAX_PROJECTED_INPUT_TOKENS, PROVIDER_ENVELOPE_RESERVE_TOKENS, OUTPUT_RESERVE_TOKENS, type InterpretationFailure } from "../lesson-stream/runtime-policy";
+import { classifyInterpretationFailure, interpretationDeadlines, type InterpretationFailure } from "../lesson-stream/runtime-policy";
 import { interpretWithAbort } from "../lesson-stream/planner";
 const HARD_DEADLINE_MS = interpretationDeadlines(import.meta.env.VITE_TEACHING_DIAGNOSTIC_DEADLINE_MS, import.meta.env.DEV).clientMs;
 const FINALIZATION_DRAIN_TIMEOUT_MS = 12_000;
@@ -232,16 +232,12 @@ export function useLiveTeaching({
     const scheduler = schedulerRef.current;
     const retry = retryBackoffRef.current;
     const isCurrent = () => generationRef.current === generation && identityRef.current === identity && runtimeRef.current === runtime;
-    const scheduled = scheduler.next(speechRunId, 3_500, Date.now(), (batch) => {
-      const projected = buildTeachingInterpretationRequest({ requestId: "budget-preview", sessionId, events: runtime.events, currentState: runtime.state, newEvidence: batch });
-      return projected.diagnostics.projectedInputTokens + PROVIDER_ENVELOPE_RESERVE_TOKENS + OUTPUT_RESERVE_TOKENS <= MAX_PROJECTED_INPUT_TOKENS;
-    });
+    const scheduled = nextTeachingRequest(runtime, scheduler, speechRunId, sessionId);
     if (!scheduled) {
       if (scheduler.isBudgetBlocked) { retry.fail(() => undefined, "budget"); setError("interpretation-request-budget-exceeded"); setStatus("degraded"); }
       return;
     }
-    const { work, checkpoints } = scheduled;
-    const { request, diagnostics } = buildTeachingInterpretationRequest({ requestId: work.requestId, sessionId, events: runtime.events, currentState: runtime.state, newEvidence: checkpoints });
+    const { work, checkpoints, request, diagnostics } = scheduled;
     const committedTimes = checkpoints.flatMap((checkpoint) => {
       const event = runtime.events.find((item) => item.type === "evidence.checkpoint_committed" && item.checkpoint.checkpointId === checkpoint.checkpointId);
       return event?.type === "evidence.checkpoint_committed" ? [Date.parse(event.timestamp)] : [];
