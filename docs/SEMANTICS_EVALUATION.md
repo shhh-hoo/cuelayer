@@ -229,3 +229,18 @@ All four runs had zero accepted autonomous CORRECT/INITIATE, invalid provenance,
 `CORE_ALPHA_PASS = true` on both locked core runs. Both locked candidate runs also passed every core gate, achieved 100% AUGMENT precision and 100% must-augment recall across five positives, and had zero safety violations. `AUGMENT_ENABLED = true`; `ACTIVE_ALPHA_SEMANTIC_PROFILE` therefore points to the exact frozen `ALPHA_AUGMENT_CANDIDATE_P4` (`alpha-augment-p4-v7`).
 
 This is an offline semantics pass, not a live-product pass. The real `/session` page loaded and rendered correctly in Chrome and Firefox on September 5, and the server successfully obtained a Speechmatics realtime token without exposing it. An authorized Chrome microphone run connected to Speechmatics and entered the recording state, but unavoidable environmental noise prevented a usable spoken semantic script; the capture was stopped and is not counted as semantic evidence. Firefox microphone execution was not attempted under the same unsuitable audio conditions. `LIVE_SEMANTICS_PASS` remains unclaimed until usable microphone audio traverses Speechmatics and the production provider in both browsers, including accepted state, Cue persistence/resolution, replay after reload, safety checks, and trace-volume evidence.
+
+
+---
+
+## Live acceptance — September 5, 2026, 12:23–12:37 UTC
+
+`LIVE_SEMANTICS_PASS = false`. The real fixed Chrome speaker-to-microphone script ran, followed by the shorter Firefox run and a pre-PR15 Firefox baseline comparison. Frozen offline authority and exact `alpha-augment-p4-v7` promotion remain unchanged.
+
+Chrome accepted 14 requests, rejected two HINT replacements over an unresolved TASK, then hit 16 consecutive six-second timeouts; 36 of 51 committed checkpoints remained pending. It rendered NH₄⁺, catalyst Active/Support, and a teacher TASK, but did not complete the required Cue lifecycle, answer, AUGMENT, or correction sequence. All accepted contributions had valid canonical provenance, matching evaluated policy/request-scoped schemas, and correlated request-to-render traces. Normal-route reload reconstructed the same state without provider re-invocation; the full reload gate still lacks a completed live Cue lifecycle.
+
+Firefox accepted one Board update but no Cue; ASR severely distorted the fixed script. The same physical setup also distorted speech on the pre-PR15 baseline. Both Firefox runs had continuous acknowledgements, no sequence gaps, and no observed UI freeze; no PR15 performance regression was demonstrated, but Firefox acceptance remains incomplete.
+
+Measured capture trace volume: Chrome 3,728,244 bytes / 323.100 seconds = 0.692 MB/min; Firefox 1,665,572 / 148.968 = 0.671 MB/min; baseline Firefox 1,393,172 / 174.389 = 0.479 MB/min. Snapshot counts were bounded per attempt; Chrome timeout retries amplified request volume. No checkpoint loss or duplicate consumption was found.
+
+See the [complete setup, 18-step outcomes, hashes, correlation checks, baseline comparison, and remaining limitations](../resources/semantics/live-acceptance-2026-09-05/README.md). Raw traces are preserved locally, with hashes in the report package. No semantic configuration or runtime changes were made. A longer-timeout diagnostic resend of one captured request to OpenAI awaits specific approval after automatic approval review blocked renewed disclosure. Typecheck, 158 tests, build, v5 validation, and diff checks passed. Keep PR15 open, Draft, and unmerged.

@@ -1,0 +1,9 @@
+{
+  "recordedContracts": 16,
+  "allRecordedPolicyAndRequestScopedSchemaDigestsMatch": true,
+  "acceptedSteps": 14,
+  "allAcceptedStateTransitionsReplayExactly": true,
+  "allAcceptedRequestThroughRenderChainsPresent": true,
+  "canonicalSpeechProvenanceMatchesImmutableCheckpoints": true,
+  "acceptedAutonomousCorrectOrInitiate": 0
+}
