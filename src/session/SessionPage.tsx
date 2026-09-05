@@ -221,6 +221,11 @@ export function SessionPage() {
       <p>Live session</p>
     </header>
     <PresentationStage ref={stageRef} stream={state.presentation.stream} presentationStatus={state.presentation.status} sessionStatus={state.status} speech={state.speech.canonical} speechStatus={state.speech.status} showSpeechDebug={showSpeechDebug} teachingState={liveTeaching.state} teachingRenderOrigin={liveTeaching.renderOrigin} onTeachingSurfaceRendered={onTeachingSurfaceRendered} onTeachingCueExpire={(cueId) => void liveTeaching.expireCue(cueId)}>
+      {(liveTeaching.health.lagging || liveTeaching.health.paused) ? <div className="teaching-runtime-health" role="status" aria-label="Interpretation health">
+        <span>{liveTeaching.health.paused ? "Interpretation paused" : "Interpretation is behind"} · {liveTeaching.pendingCount} pending · oldest {Math.floor(liveTeaching.health.oldestPendingAgeMs / 1000)}s</span>
+        {liveTeaching.health.paused ? <button type="button" onClick={liveTeaching.resumeInterpretation}>Resume interpretation</button> : null}
+        {showSpeechDebug ? <small>Failures: {liveTeaching.health.consecutiveFailures} · Request age: {Math.floor(liveTeaching.health.inFlightAgeMs / 1000)}s</small> : null}
+      </div> : null}
       <SessionControls sessionStatus={state.status} isFullscreen={isFullscreen} onPauseToggle={toggleSessionPause} onFullscreen={toggleFullscreen} onEnd={() => void endSession()} speechStatus={state.speech.status} onSpeechToggle={() => void toggleSpeech()} onSpeechPrepare={prepareSpeechmaticsAudioContext} />
     </PresentationStage>
     <section className="session-panel" aria-live="polite">

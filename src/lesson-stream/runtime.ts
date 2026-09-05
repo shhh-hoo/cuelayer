@@ -1,15 +1,16 @@
-import type { CanonicalSpeechSpan } from "../session/speech-types";
-import { checkpointFromClosedSpan } from "./evidence-checkpoints";
-import { validateAndNormalizeProposal } from "./accepted-interpretations";
-import { checkpointCommittedEvent, cueExpiredEvent, interpretationAcceptedEvent, lessonEndedEvent, lessonStartedEvent, speechRunAllocatedEvent } from "./events";
-import { pendingEvidence, replayLessonEvents, type LessonReplay } from "./replay";
-import { LocalLessonEventStore } from "./store";
-import { reduceAcceptedStep } from "./teaching-state";
-import type { AcceptedInterpretationStep, LessonEvent, TeachingInterpretationRequest, TeachingStateSnapshot } from "./contracts";
-import type { SpeechRunId } from "../session/speech-types";
+import type { CanonicalSpeechSpan } from "../session/speech-types.ts";
+import { checkpointFromClosedSpan } from "./evidence-checkpoints.ts";
+import { validateAndNormalizeProposal } from "./accepted-interpretations.ts";
+import { checkpointCommittedEvent, cueExpiredEvent, interpretationAcceptedEvent, lessonEndedEvent, lessonStartedEvent, speechRunAllocatedEvent } from "./events.ts";
+import { pendingEvidence, replayLessonEvents, type LessonReplay } from "./replay.ts";
+import { LocalLessonEventStore } from "./store.ts";
+import { reduceAcceptedStep } from "./teaching-state.ts";
+import type { AcceptedInterpretationStep, LessonEvent, TeachingInterpretationRequest, TeachingStateSnapshot } from "./contracts.ts";
+import type { SpeechRunId } from "../session/speech-types.ts";
+import type { AlphaSemanticProfile } from "./semantic-profile.ts";
 
 export type LessonEventStore = {
-  append(events: readonly LessonEvent[]): Promise<void>;
+  append(events: readonly LessonEvent[], signal?: AbortSignal): Promise<void>;
   readSession(sessionId: string): Promise<LessonEvent[]>;
   close?(): void;
 };
@@ -19,14 +20,23 @@ export type ProposalAcceptance =
   | { ok: false; error: string; validationState: TeachingStateSnapshot };
 
 export class LessonStreamRuntime {
+  private closed = false;
+  private lifetime = new AbortController();
   private writeChain: Promise<unknown> = Promise.resolve();
   private listeners = new Set<() => void>();
+  readonly sessionId: string;
+  private readonly store: LessonEventStore;
+  private replayValue: LessonReplay;
 
   private constructor(
-    readonly sessionId: string,
-    private readonly store: LessonEventStore,
-    private replayValue: LessonReplay,
-  ) {}
+    sessionId: string,
+    store: LessonEventStore,
+    replayValue: LessonReplay,
+  ) {
+    this.sessionId = sessionId;
+    this.store = store;
+    this.replayValue = replayValue;
+  }
 
   static async open(sessionId: string, providedStore?: LessonEventStore) {
     const store = providedStore ?? await LocalLessonEventStore.open();
@@ -39,7 +49,7 @@ export class LessonStreamRuntime {
     return () => { this.listeners.delete(listener); };
   }
 
-  close() { this.store.close?.(); }
+  close() { this.closed = true; this.lifetime.abort("lesson-runtime-closed"); this.listeners.clear(); this.store.close?.(); }
   get replay() { return this.replayValue; }
   get state() { return this.replayValue.state; }
   get events() { return this.replayValue.events; }
@@ -47,7 +57,7 @@ export class LessonStreamRuntime {
   get pending() { return pendingEvidence(this.replayValue); }
 
   private serialize<T>(operation: () => Promise<T>) {
-    const queued = this.writeChain.then(operation);
+    const queued = this.writeChain.then(() => { if (this.closed) throw new Error("lesson-runtime-closed"); return operation(); });
     this.writeChain = queued.catch(() => undefined);
     return queued;
   }
@@ -80,9 +90,12 @@ export class LessonStreamRuntime {
     return Math.max(0, ...this.replayValue.checkpoints.map((checkpoint) => checkpoint.lessonSequence)) + 1;
   }
 
-  private async appendNow(events: LessonEvent[]) {
+  private async appendNow(events: LessonEvent[], attemptSignal?: AbortSignal) {
+    const signal = attemptSignal ? AbortSignal.any([attemptSignal, this.lifetime.signal]) : this.lifetime.signal;
+    signal.throwIfAborted();
     const replay = replayLessonEvents([...this.replayValue.events, ...events]);
-    await this.store.append(events);
+    await this.store.append(events, signal);
+    signal.throwIfAborted();
     this.replayValue = replay;
     this.listeners.forEach((listener) => listener());
   }
@@ -113,16 +126,21 @@ export class LessonStreamRuntime {
     request,
     model,
     isCurrent = () => true,
+    profile,
+    signal,
   }: {
     proposal: unknown;
     request: TeachingInterpretationRequest;
     model: string;
     isCurrent?: () => boolean;
+    profile?: AlphaSemanticProfile;
+    signal?: AbortSignal;
   }): Promise<ProposalAcceptance> {
     return this.serialize(async () => {
-      if (!isCurrent()) return { ok: false, error: "interpretation-stale-speech-run", validationState: this.replayValue.state };
+      if (this.closed || request.sessionId !== this.sessionId || !isCurrent()) return { ok: false, error: "interpretation-stale-speech-run", validationState: this.replayValue.state };
+      if (request.newEvidence.some((item, index) => this.pending[index]?.checkpointId !== item.checkpointId)) return { ok: false, error: "proposal-pending-prefix-mismatch", validationState: this.state };
       const stateBefore = this.replayValue.state;
-      const validation = validateAndNormalizeProposal({ proposal, request, allCheckpoints: this.replayValue.checkpoints, state: stateBefore, model });
+      const validation = validateAndNormalizeProposal({ proposal, request, allCheckpoints: this.replayValue.checkpoints, state: stateBefore, model, profile });
       if (!validation.ok) return { ...validation, validationState: stateBefore };
       const checkpointSequences = new Map(this.replayValue.checkpoints.map((checkpoint) => [checkpoint.checkpointId, checkpoint.lessonSequence]));
       let rollingState = stateBefore;
@@ -133,7 +151,8 @@ export class LessonStreamRuntime {
       });
       const firstSequence = this.nextEventSequence();
       const events = validation.steps.map((step, index) => interpretationAcceptedEvent(this.sessionId, firstSequence + index, step) as Extract<LessonEvent, { type: "interpretation.step_accepted" }>);
-      await this.appendNow(events);
+      if (!isCurrent()) return { ok: false, error: "interpretation-stale-speech-run", validationState: this.state };
+      await this.appendNow(events, signal);
       return {
         ok: true,
         steps: validation.steps,

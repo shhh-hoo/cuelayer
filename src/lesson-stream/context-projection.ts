@@ -1,6 +1,8 @@
-import type { ContextProjectionDiagnostics, LessonEvent, ProcessedTimelineEntry, TeachingInterpretationRequest, TeachingStateSnapshot, CompactEvidenceCheckpoint } from "./contracts";
-import { LESSON_POLICY_VERSION } from "./contracts";
-import { createInitialTeachingState, reduceLessonEvent } from "./teaching-state";
+import { reduceLessonEvent as reduceV3Event } from "./teaching-state-v3.ts";
+import type { ContextProjectionDiagnostics, LessonEvent, ProcessedTimelineEntry, TeachingInterpretationRequest, TeachingStateSnapshot, CompactEvidenceCheckpoint } from "./contracts.ts";
+import { LESSON_POLICY_VERSION } from "./contracts.ts";
+import { ACTIVE_ALPHA_SEMANTIC_PROFILE, type AlphaSemanticProfile } from "./semantic-profile.ts";
+import { createInitialTeachingState, reduceLessonEvent } from "./teaching-state.ts";
 
 const estimatedTokens = (value: unknown) => Math.ceil(JSON.stringify(value).length / 4);
 
@@ -16,14 +18,15 @@ export function projectProcessedTimeline(events: readonly LessonEvent[]): Proces
         timeline.push({ type: "evidence", checkpointId: event.checkpoint.checkpointId, sequence: event.checkpoint.lessonSequence, text: event.checkpoint.text, warnings: event.checkpoint.warnings });
       }
     }
+    if (event.type === "teaching_cue.expired") state = event.schemaVersion === "lesson-event-v3-learner-agency" ? reduceV3Event(state, event, checkpointSequences) : reduceLessonEvent(state, event, checkpointSequences);
     if (event.type === "interpretation.step_accepted") {
-      state = reduceLessonEvent(state, event, checkpointSequences);
+      state = event.schemaVersion === "lesson-event-v3-learner-agency" ? reduceV3Event(state, event, checkpointSequences) : reduceLessonEvent(state, event, checkpointSequences);
       timeline.push({
         type: "accepted_interpretation",
         interpretationId: event.step.interpretationId,
         contributionIds: {
           ...(event.step.boardDelta.action === "SET_ACTIVE" ? { board: `board-${event.step.interpretationId}-${event.step.stepIndex}` } : {}),
-          ...(event.step.cueDelta.action === "SET" ? { cue: `cue-${event.step.interpretationId}-${event.step.stepIndex}` } : {}),
+          ...((event.step.cueDelta.action === "SET" || event.step.cueDelta.action === "REPLACE_CURRENT") ? { cue: `cue-${event.step.interpretationId}-${event.step.stepIndex}` } : {}),
         },
         consumesCheckpointIds: event.step.consumesCheckpointIds,
         boardDelta: event.step.boardDelta,
@@ -42,19 +45,22 @@ export function buildTeachingInterpretationRequest({
   events,
   currentState,
   newEvidence,
+  profile = ACTIVE_ALPHA_SEMANTIC_PROFILE,
 }: {
   requestId: string;
   sessionId: string;
   events: readonly LessonEvent[];
   currentState: TeachingStateSnapshot;
   newEvidence: CompactEvidenceCheckpoint[];
+  profile?: AlphaSemanticProfile;
 }): { request: TeachingInterpretationRequest; diagnostics: ContextProjectionDiagnostics } {
   if (!newEvidence.length) throw new Error("interpretation-request-needs-evidence");
   const processedTimeline = projectProcessedTimeline(events);
   const request: TeachingInterpretationRequest = {
     requestId,
     sessionId,
-    policyVersion: LESSON_POLICY_VERSION,
+    policyVersion: profile.policyVersion ?? LESSON_POLICY_VERSION,
+    semanticProfileId: profile.id,
     processedTimeline,
     currentState,
     newEvidence,

@@ -14,11 +14,13 @@ The canonical speech representation is a grounding layer. Learner-visible output
 
 ### Alpha learner-surface authority
 
-CueLayer Alpha optimizes for the quality of the learner's current learning state, not fidelity to the teacher transcript. New lesson evidence is the only deliberation trigger: it controls when the model deliberates, not what the learner surface is permitted to contain. Once triggered, Alpha reasons from new evidence, processed lesson history, current Teaching State, and domain knowledge.
+CueLayer's longer-term direction is a learner-surface agent with broader, reversible teaching support. The current Alpha deliberately proves a narrower authority boundary first.
 
-Teacher speech is primary classroom evidence and context, rather than an authorization boundary. Alpha may reconstruct, reorganize, supplement, connect, correct, and initiate bounded learner actions. Contributions carry attributable provenance: exact speech quotes are required when speech is claimed, while domain- and state-based contributions must not manufacture speech provenance. Interventions are governed by epistemic correctness, contextual relevance, pedagogical timing, attention value, and reversible classroom control.
+Alpha is a bounded learner-surface agent, not a transcript formatter. It autonomously decides whether the Board or Teaching Cue should change and treats `QUIET`/`KEEP` as successful outcomes. New lesson evidence is the only deliberation trigger. Once triggered, Alpha may reason from new evidence, processed lesson history, current Teaching State, and domain knowledge; teacher speech is grounding and context, not a literal display boundary.
 
-Teacher override remains a contract-only event, with no Alpha UI. Personality, avatar, intervention-level controls, and proactive timers remain future work.
+Alpha may reconstruct damaged teaching expressions, reorganize an established proposition without changing its meaning, and use narrowly validated domain knowledge for Board augmentation. It does not autonomously correct the teacher or initiate learner actions. Teaching Cue represents only learner actions established by current classroom evidence, including teacher-originated notes, questions, tasks, and hints.
+
+Contributions carry attributable provenance. The model names immutable speech checkpoints; deterministic code resolves accepted references to the complete canonical checkpoint text, so punctuation or formatting differences cannot fabricate or detach evidence. Domain- and state-based contributions must not manufacture speech provenance. Broader correction and initiation authority, teacher approval and override controls, intervention-level controls, personality, avatar, voice, and proactive triggers remain later work. `teacher_override.applied` remains contract-only in Alpha.
 
 ## Primary experience
 
@@ -65,13 +67,13 @@ The runtime preserves continuity through immutable checkpoints, accepted contrib
 
 CueLayer treats representation as a policy decision rather than assuming every spoken word should remain visible. The interpreter proposes bounded Board and Teaching Cue deltas; the deterministic reducer controls their lifecycle, retention, and visual hierarchy. Visual quiet is a successful outcome.
 
-Every learner-visible representation remains attributable to speech evidence, Teaching State, domain knowledge, or their combination. Grounding proves provenance, not literal display equality or subject-matter truth: exact claimed speech quotes support a contribution, while bounded reconstructions, representations, augmentations, and corrections may use the appropriate non-speech provenance. Symbolic or spatial compression may make meaning easier to follow while preserving evidence history, corrections, uncertainty, and reversible classroom control.
+Every learner-visible representation remains attributable to speech evidence, Teaching State, domain knowledge, or their combination. Grounding proves provenance, not literal display equality or subject-matter truth: accepted speech references resolve to immutable canonical checkpoints, while bounded reconstructions, representations, augmentations, and corrections may use the appropriate provenance. Symbolic or spatial compression may make meaning easier to follow while preserving evidence history, corrections, uncertainty, and reversible classroom control.
 
 ## Learning cues
 
 Content representation and learner-action timing are separate channels.
 
-The Alpha learner-action grammar is:
+The Alpha learner-action representation grammar is:
 
 - `NONE`: the learner continues naturally without an additional cue.
 - `NOTE`: the teaching content has formed a stable, worthwhile recording point.
@@ -79,9 +81,9 @@ The Alpha learner-action grammar is:
 - `TASK`: a bounded cognitive action should remain active.
 - `HINT`: a bounded nudge supports progress without supplying the complete answer.
 
-Learning cues are intentionally sparse. Their role is to clarify timing of attention, note-taking, review, and reflection while preserving the learner's responsibility to think and organise.
+Learning cues are intentionally sparse. Their role is to preserve the timing of teacher-originated attention, note-taking, questions, tasks, and hints while preserving the learner's responsibility to think and organise.
 
-AI determines pedagogical eligibility and may originate a learner action; deterministic code owns validation, lifecycle, timing, and bounds. A new action must not gratuitously replace an unresolved high-priority task or question, and the surface must not reveal a complete answer while productive learner work remains unresolved. Visual completion alone does not establish note-worthiness.
+AI determines whether current classroom evidence establishes a learner action and may reconstruct or represent that action; it may not originate one in Alpha. Deterministic code owns validation, lifecycle, timing, and bounds. A represented action must not gratuitously replace an unresolved task or question, and the surface must not reveal a complete answer while productive learner work remains unresolved. Visual completion alone does not establish note-worthiness.
 
 ## Product invariants
 

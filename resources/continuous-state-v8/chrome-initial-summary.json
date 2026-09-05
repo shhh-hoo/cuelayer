@@ -1,0 +1,34 @@
+{
+  "sessionId": "session-80770a89-4452-4b8f-a23a-9e921980486d",
+  "stage": "v8 request-specific schema, before stable v8.1 repair",
+  "traceSha256": "4c80f30348284b1c70a71fd0520662ef2c24bbc266c4e5d6b564bb7e956e8849",
+  "traceBytes": 5074884,
+  "requests": 21,
+  "validationStatuses": {
+    "accepted": 12,
+    "timeout": 9
+  },
+  "maxNewCheckpoints": 2,
+  "acceptedSteps": 16,
+  "committedCheckpoints": 50,
+  "uniqueConsumed": 21,
+  "duplicateConsumption": 0,
+  "pending": 29,
+  "acceptedLatencyMs": {
+    "median": 5265.5,
+    "max": 5952
+  },
+  "boardActions": {
+    "KEEP": 10,
+    "SET_ACTIVE": 2,
+    "ADD_SUPPORT": 3,
+    "RETIRE_ACTIVE": 1
+  },
+  "cueActions": {
+    "KEEP": 10,
+    "SET": 3,
+    "ATTACH_HINT": 1,
+    "RESOLVE_CURRENT": 2
+  },
+  "livePass": false
+}

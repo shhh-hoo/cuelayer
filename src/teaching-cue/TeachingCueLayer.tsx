@@ -35,5 +35,6 @@ export function TeachingCueLayer({ cue, presentationMode, placement = "overlay",
       <span>{LABEL[cue.kind]}</span>
     </div>
     <p>{cue.contribution.content}</p>
+    {cue.hint ? <div className="teaching-cue-hint" aria-label="Teacher hint"><strong>Hint</strong><p>{cue.hint.contribution.content}</p></div> : null}
   </aside>;
 }

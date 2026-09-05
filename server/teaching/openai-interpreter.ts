@@ -1,9 +1,11 @@
+import { MAX_PROJECTED_INPUT_TOKENS, OUTPUT_RESERVE_TOKENS } from "../../src/lesson-stream/runtime-policy.ts";
 import OpenAI from "openai";
 import type { TeachingInterpretationProposal, TeachingInterpretationRequest } from "../../src/lesson-stream/contracts.ts";
 import type { JsonValue } from "../../src/trace/audit.ts";
 import { persistedAuditDigest } from "../../src/trace/audit.ts";
 import type { TeachingProviderAudit, TeachingProviderFailureAudit, TeachingProviderUsage, ProviderRequestEnvelope, ProviderResponseSnapshot } from "../../src/lesson-stream/audit-contracts.ts";
-import { normalizeTeachingProposal, teachingInterpretationSchema, teachingProviderContract, teachingResponseRequest } from "./provider-contract.ts";
+import { ACTIVE_ALPHA_SEMANTIC_PROFILE, type AlphaSemanticProfile } from "../../src/lesson-stream/semantic-profile.ts";
+import { createTeachingInterpretationSchema, suppliedSpeechCheckpointIds, normalizeTeachingProposal, teachingProviderContract, teachingResponseRequest } from "./provider-contract.ts";
 
 export type { TeachingProviderAudit, TeachingProviderFailureAudit, TeachingProviderUsage } from "../../src/lesson-stream/audit-contracts.ts";
 export type TeachingProviderResult = { proposal: TeachingInterpretationProposal; usage?: TeachingProviderUsage; serviceTier?: string; audit: TeachingProviderAudit };
@@ -30,7 +32,7 @@ function jsonValue(value: unknown): JsonValue {
   return JSON.parse(JSON.stringify(value)) as JsonValue;
 }
 
-function safeResponseFact(response: { id?: string; model?: string; service_tier?: string; usage?: unknown; output_text?: string; status?: string; incomplete_details?: { reason?: string | null } | null }): Omit<ProviderResponseSnapshot, "providerResponseDigest"> {
+function safeResponseFact(response: { id?: string; model?: string; service_tier?: string | null; usage?: unknown; output_text?: string; status?: string; incomplete_details?: { reason?: string | null } | null }): Omit<ProviderResponseSnapshot, "providerResponseDigest"> {
   const snapshot = {
     ...(response.id ? { providerResponseId: response.id } : {}),
     ...(response.model ? { providerModel: response.model } : {}),
@@ -51,29 +53,30 @@ export async function requestOpenAITeachingInterpretation(
   input: TeachingInterpretationRequest,
   apiKey: string,
   model: string,
-  options?: { signal?: AbortSignal; serviceTier?: "default" | "priority" },
+  options?: { signal?: AbortSignal; serviceTier?: "default" | "priority"; profile?: AlphaSemanticProfile },
 ): Promise<TeachingProviderResult> {
-  const client = new OpenAI({ apiKey });
-  const request = { model, ...teachingResponseRequest(input), ...(options?.serviceTier ? { service_tier: options.serviceTier } : {}) };
+  const profile = options?.profile ?? ACTIVE_ALPHA_SEMANTIC_PROFILE;
+  const client = new OpenAI({ apiKey, maxRetries: 0 });
+  const request = { model, ...teachingResponseRequest(input, profile), ...(options?.serviceTier ? { service_tier: options.serviceTier } : {}) };
+  if (Math.ceil(JSON.stringify(request).length / 4) + OUTPUT_RESERVE_TOKENS > MAX_PROJECTED_INPUT_TOKENS) throw new Error("interpretation-request-budget-exceeded");
   const providerRequest: ProviderRequestEnvelope = {
     model: request.model,
     ...(request.service_tier ? { service_tier: request.service_tier } : {}),
     reasoning: request.reasoning,
-    temperature: request.temperature,
     max_output_tokens: request.max_output_tokens,
     input: request.input.map((item) => ({ role: item.role, content: item.content })),
     text: { format: jsonValue(request.text.format) },
   };
-  const contract = teachingProviderContract();
+  const contract = teachingProviderContract(profile);
   const structuredOutputSchema = providerRequest.text.format;
-  const contractFact = { model, ...(options?.serviceTier ? { serviceTier: options.serviceTier } : {}), reasoning: contract.reasoning, temperature: contract.temperature, maxOutputTokens: contract.max_output_tokens, systemPolicy: contract.systemPolicy, structuredOutputSchema };
+  const contractFact = { model, ...(options?.serviceTier ? { serviceTier: options.serviceTier } : {}), semanticProfileId: profile.id, policyVersion: profile.policyVersion, reasoning: contract.reasoning, maxOutputTokens: contract.max_output_tokens, systemPolicy: contract.systemPolicy, structuredOutputSchema };
   const providerContract = {
     requestedModel: model,
     ...(options?.serviceTier ? { serviceTier: options.serviceTier } : {}),
-    temperature: contract.temperature,
     reasoningEffort: contract.reasoning.effort,
     maxOutputTokens: contract.max_output_tokens,
     policyVersion: input.policyVersion,
+    semanticProfileId: profile.id,
     systemPolicy: contract.systemPolicy,
     systemPolicyDigest: persistedAuditDigest(contract.systemPolicy),
     structuredOutputSchema,
@@ -95,13 +98,13 @@ export async function requestOpenAITeachingInterpretation(
   } catch (error) {
     throw Object.assign(error instanceof Error ? error : new Error("teaching-interpretation-structured-parse-failed"), { audit: { ...knownAudit, providerResponse: responseAudit, failureStage: "structured_parse_error" } satisfies TeachingProviderFailureAudit });
   }
-  const parsed = teachingInterpretationSchema.safeParse(rawStructuredOutput);
+  const parsed = createTeachingInterpretationSchema(profile, input.newEvidence.map((item) => item.checkpointId), profile.id === "alpha-continuous-p4-v8" ? suppliedSpeechCheckpointIds(input) : undefined).safeParse(rawStructuredOutput);
   if (!parsed.success) {
     const rawStructuredOutputDigest = persistedAuditDigest(rawStructuredOutput);
     throw Object.assign(new Error("teaching-interpretation-structured-parse-failed"), { audit: { ...knownAudit, providerResponse: providerResponseSnapshot({ ...responseFact, rawStructuredOutput, rawStructuredOutputDigest }), failureStage: "structured_parse_error" } satisfies TeachingProviderFailureAudit });
   }
   let proposal: TeachingInterpretationProposal;
-  try { proposal = normalizeTeachingProposal(parsed.data); } catch (error) {
+  try { proposal = normalizeTeachingProposal(parsed.data, input); } catch (error) {
     const responseWithRaw = { ...responseFact, rawStructuredOutput, rawStructuredOutputDigest: persistedAuditDigest(rawStructuredOutput) };
     throw Object.assign(error instanceof Error ? error : new Error("teaching-normalization-failed"), { audit: { ...knownAudit, providerResponse: providerResponseSnapshot(responseWithRaw), failureStage: "normalization_error" } satisfies TeachingProviderFailureAudit });
   }

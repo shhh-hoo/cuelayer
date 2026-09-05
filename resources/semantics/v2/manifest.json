@@ -1,0 +1,305 @@
+{
+  "corpusVersion": "alpha-semantics-corpus-v2",
+  "evaluatorVersion": "alpha-semantics-evaluator-v2",
+  "caseCount": 60,
+  "splitMembership": {
+    "development": [
+      "SEM2-D1-01",
+      "SEM2-D2-01",
+      "SEM2-D1-02",
+      "SEM2-D2-02",
+      "SEM2-D1-03",
+      "SEM2-D2-03",
+      "SEM2-D1-04",
+      "SEM2-D2-04",
+      "SEM2-D1-05",
+      "SEM2-D2-05",
+      "SEM2-D1-06",
+      "SEM2-D2-06",
+      "SEM2-D1-07",
+      "SEM2-D2-07",
+      "SEM2-D1-08",
+      "SEM2-D2-08",
+      "SEM2-D1-09",
+      "SEM2-D2-09",
+      "SEM2-D1-10",
+      "SEM2-D2-10",
+      "SEM2-D1-11",
+      "SEM2-D2-11",
+      "SEM2-D1-12",
+      "SEM2-D2-12",
+      "SEM2-D1-13",
+      "SEM2-D2-13",
+      "SEM2-D1-14",
+      "SEM2-D2-14",
+      "SEM2-D1-15",
+      "SEM2-D2-15",
+      "SEM2-D1-16",
+      "SEM2-D2-16",
+      "SEM2-D1-17",
+      "SEM2-D2-17",
+      "SEM2-D1-18",
+      "SEM2-D2-18",
+      "SEM2-D1-19",
+      "SEM2-D2-19",
+      "SEM2-D1-20",
+      "SEM2-D2-20"
+    ],
+    "holdout": [
+      "SEM2-H-01",
+      "SEM2-H-02",
+      "SEM2-H-03",
+      "SEM2-H-04",
+      "SEM2-H-05",
+      "SEM2-H-06",
+      "SEM2-H-07",
+      "SEM2-H-08",
+      "SEM2-H-09",
+      "SEM2-H-10",
+      "SEM2-H-11",
+      "SEM2-H-12",
+      "SEM2-H-13",
+      "SEM2-H-14",
+      "SEM2-H-15",
+      "SEM2-H-16",
+      "SEM2-H-17",
+      "SEM2-H-18",
+      "SEM2-H-19",
+      "SEM2-H-20"
+    ]
+  },
+  "scenarioPairs": {
+    "reconstruct-ammonium-formula": {
+      "development": [
+        "SEM2-D1-01",
+        "SEM2-D2-01"
+      ],
+      "holdout": [
+        "SEM2-H-01"
+      ]
+    },
+    "reconstruct-fragmented-mechanism": {
+      "development": [
+        "SEM2-D1-02",
+        "SEM2-D2-02"
+      ],
+      "holdout": [
+        "SEM2-H-02"
+      ]
+    },
+    "conditional-equilibrium-direction": {
+      "development": [
+        "SEM2-D1-03",
+        "SEM2-D2-03"
+      ],
+      "holdout": [
+        "SEM2-H-03"
+      ]
+    },
+    "ordered-active-support": {
+      "development": [
+        "SEM2-D1-04",
+        "SEM2-D2-04"
+      ],
+      "holdout": [
+        "SEM2-H-04"
+      ]
+    },
+    "task-persistence-resolution": {
+      "development": [
+        "SEM2-D1-05",
+        "SEM2-D2-05"
+      ],
+      "holdout": [
+        "SEM2-H-05"
+      ]
+    },
+    "question-persistence-answer-resolution": {
+      "development": [
+        "SEM2-D1-06",
+        "SEM2-D2-06"
+      ],
+      "holdout": [
+        "SEM2-H-06"
+      ]
+    },
+    "hint-with-support": {
+      "development": [
+        "SEM2-D1-07",
+        "SEM2-D2-07"
+      ],
+      "holdout": [
+        "SEM2-H-07"
+      ]
+    },
+    "note-with-active": {
+      "development": [
+        "SEM2-D1-08",
+        "SEM2-D2-08"
+      ],
+      "holdout": [
+        "SEM2-H-08"
+      ]
+    },
+    "correction-active": {
+      "development": [
+        "SEM2-D1-09",
+        "SEM2-D2-09"
+      ],
+      "holdout": [
+        "SEM2-H-09"
+      ]
+    },
+    "correction-retained": {
+      "development": [
+        "SEM2-D1-10",
+        "SEM2-D2-10"
+      ],
+      "holdout": [
+        "SEM2-H-10"
+      ]
+    },
+    "topic-shift-later-keep": {
+      "development": [
+        "SEM2-D1-11",
+        "SEM2-D2-11"
+      ],
+      "holdout": [
+        "SEM2-H-11"
+      ]
+    },
+    "topic-shift-note": {
+      "development": [
+        "SEM2-D1-12",
+        "SEM2-D2-12"
+      ],
+      "holdout": [
+        "SEM2-H-12"
+      ]
+    },
+    "augment-aluminium-dimer": {
+      "development": [
+        "SEM2-D1-13",
+        "SEM2-D2-13"
+      ],
+      "holdout": [
+        "SEM2-H-13"
+      ]
+    },
+    "augment-ammonium-charge": {
+      "development": [
+        "SEM2-D1-14",
+        "SEM2-D2-14"
+      ],
+      "holdout": [
+        "SEM2-H-14"
+      ]
+    },
+    "augment-carbonate-charge": {
+      "development": [
+        "SEM2-D1-15",
+        "SEM2-D2-15"
+      ],
+      "holdout": [
+        "SEM2-H-15"
+      ]
+    },
+    "augment-activation-energy-symbol": {
+      "development": [
+        "SEM2-D1-16",
+        "SEM2-D2-16"
+      ],
+      "holdout": [
+        "SEM2-H-16"
+      ]
+    },
+    "augment-enthalpy-symbol": {
+      "development": [
+        "SEM2-D1-17",
+        "SEM2-D2-17"
+      ],
+      "holdout": [
+        "SEM2-H-17"
+      ]
+    },
+    "negative-augment-duplicate": {
+      "development": [
+        "SEM2-D1-18",
+        "SEM2-D2-18"
+      ],
+      "holdout": [
+        "SEM2-H-18"
+      ]
+    },
+    "negative-augment-question-leakage": {
+      "development": [
+        "SEM2-D1-19",
+        "SEM2-D2-19"
+      ],
+      "holdout": [
+        "SEM2-H-19"
+      ]
+    },
+    "negative-augment-teacher-error-task": {
+      "development": [
+        "SEM2-D1-20",
+        "SEM2-D2-20"
+      ],
+      "holdout": [
+        "SEM2-H-20"
+      ]
+    }
+  },
+  "categoryCounts": {
+    "add-support": 12,
+    "answer-leakage": 3,
+    "augment": 18,
+    "autonomous-correct": 3,
+    "backlog": 3,
+    "checkpoint-loss": 3,
+    "chemistry": 27,
+    "condition": 3,
+    "correction": 6,
+    "cue-persistence": 6,
+    "cue-resolution": 6,
+    "direction": 3,
+    "duplicate-consumption": 3,
+    "formula": 12,
+    "hint": 6,
+    "history-reactivation": 3,
+    "later-speech-valid": 3,
+    "must-augment": 15,
+    "negative-augment-trap": 9,
+    "note": 6,
+    "polarity": 3,
+    "question": 6,
+    "quiet": 3,
+    "reconstruct": 6,
+    "replay": 3,
+    "represent": 33,
+    "retained-invalidation": 3,
+    "runtime": 3,
+    "schema-compatibility": 3,
+    "set-active": 45,
+    "symbol": 6,
+    "task": 6,
+    "teacher-correction": 6,
+    "teacher-originated": 18,
+    "topic-shift": 6,
+    "transformation": 3
+  },
+  "fileSha256": "22d1456f1195dec9bf86023ab1d503ab0be025176bcf9d716ab940e028f52565",
+  "core": {
+    "profileVersion": "alpha-core-p4-v2",
+    "policyVersion": "bounded-agent-p4-semantics-v2",
+    "policyDigest": "2eeb6878ba2d8effaf8de3c19c6e0a70f00ebbfa3c4cee4fdf180439c20e5a3a",
+    "schemaDigest": "0f28469be469b9bdbcd60094e6215725c1f22cfecbe8a01f2364dcd6a9d622ed"
+  },
+  "augment": {
+    "profileVersion": "alpha-augment-p4-v2",
+    "policyVersion": "bounded-agent-p4-semantics-v2",
+    "policyDigest": "9df45be4631de23a59473a36de5e0bd4eafcc186e4a39a8d4f3b83a31743d7a6",
+    "schemaDigest": "018a8a9d613ddb5eaf03b14b0d04333d6892e7575cf862674c4eea5e7df88af7"
+  },
+  "creationTimestamp": "2026-09-04T00:00:00.000Z"
+}

@@ -1,7 +1,7 @@
 # CueLayer Live Teaching Roadmap
 
 **Status:** active execution index  
-**Updated:** 2026-09-03
+**Updated:** 2026-09-05
 
 This document maps stable work-package identifiers to GitHub pull requests. The identifiers are durable; pull-request numbers are operational metadata and may change when a draft is replaced, a hotfix is inserted, or a merge wrapper is required.
 
@@ -12,8 +12,8 @@ This document maps stable work-package identifiers to GitHub pull requests. The 
 | Work package | Scope | Dependency | Current GitHub mapping |
 |---|---|---|---|
 | `TRACE-V2` | Durable local diagnostic trace outside the live audio hot path | none | Completed by PR #12; deployment packaging corrected by PR #13. PR #10 is the closed draft predecessor. |
-| `LIVE-STATE` | Lossless Lesson Event Log, immutable evidence checkpoints, ordered interpretation deltas, one-in-flight scheduler, replayable Teaching State, and live Board/Teaching Cue `/session` surface | `TRACE-V2` | In progress in Draft PR #14. |
-| `SEMANTICS` | Bounded learner-surface agency, state, Cue lifecycle, reconstruction, augmentation, correction, and intervention quality | `LIVE-STATE` | Unassigned. Do not reserve a PR number in durable documents. |
+| `LIVE-STATE` | Lossless Lesson Event Log, immutable evidence checkpoints, ordered interpretation deltas, one-in-flight scheduler, replayable Teaching State, and live Board/Teaching Cue `/session` surface | `TRACE-V2` | Completed by merged PR #14 on September 4, 2026 (`b790b550`). |
+| `SEMANTICS` | Constrained Alpha capability profile, current-trigger discipline, reconstruction, representation, bounded augmentation evaluation, Board continuity, teacher-originated Cue lifecycle, and semantic safety | `LIVE-STATE` | Draft PR #15 on `feat/alpha-teaching-semantics`; offline v5 gates passed and `alpha-augment-p4-v7` is promoted. Live acceptance ran September 5 but remains failed: Chrome deadline backlog and incomplete Cue lifecycle; Firefox/baseline ASR fidelity. Frozen offline promotion unchanged. |
 | `CONTEXT-POLICY` | Controlled P0–P4 context projection ablation after `SEMANTICS` freezes the policy, corpus, and gates | `SEMANTICS` | Unassigned. Do not reserve a PR number in durable documents. |
 | `SPEECH-QUALITY` | ASR language/configuration evaluation, domain vocabulary, critical-term errors, ambiguity signals, and checkpoint evidence quality | `SEMANTICS` | Unassigned. Do not reserve a PR number in durable documents. |
 | `STRUCTURED-OBJECTS` | Grounded EquationSpec/ReactionSpec generation and deterministic Board rendering through packaged KaTeX/mhchem | `SEMANTICS`, normally after `SPEECH-QUALITY` evidence | Unassigned. Do not reserve a PR number in durable documents. |
@@ -23,9 +23,9 @@ This document maps stable work-package identifiers to GitHub pull requests. The 
 ```text
 TRACE-V2                         complete
    ↓
-LIVE-STATE                       in progress; Draft PR #14
+LIVE-STATE                       complete; merged PR #14 (`b790b550`)
    ↓
-SEMANTICS                        after LIVE-STATE
+SEMANTICS                        current; fixed P4
    ↓
 CONTEXT-POLICY                   after SEMANTICS policy/corpus/gates freeze
    ↓

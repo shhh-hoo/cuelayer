@@ -19,8 +19,8 @@ function Content({ content }: { content: BoardContent }) {
   </div>;
 }
 
-function RetainedItem({ item }: { item: BoardItem }) {
-  return <div className="teaching-board-retained-item" data-board-item-id={item.id}><Content content={item.contribution.content} /></div>;
+function RetainedItem({ item, support }: { item: BoardItem; support: TeachingStateSnapshot["board"]["support"] }) {
+  return <div className="teaching-board-retained-item" data-board-item-id={item.id}><Content content={item.contribution.content} />{support.filter((entry) => entry.targetBoardItemId === item.id).map((entry) => <p key={entry.id} data-support-target={item.id}>{entry.contribution.content}</p>)}</div>;
 }
 
 export function teachingSurfaceRenderDetails({ state, presentationMode, origin }: { state: TeachingStateSnapshot; presentationMode: PresentationMode; origin?: TeachingRenderOrigin }) {
@@ -42,13 +42,13 @@ export function TeachingSurfaceLayer({ state, presentationMode, origin, onCueExp
     onRendered?.(details);
   }, [details, onRendered]);
 
-  if (!state.board.active && !state.cue.active) return null;
+  if (!state.board.active && !state.board.retained.length && !state.cue.active) return null;
   return <section className="teaching-surface-layer" data-render-id={renderId} data-board-revision={state.board.revision} data-cue-revision={state.cue.revision} aria-label="Live teaching surface">
     <BoardLayout
       presentationMode={presentationMode}
       active={state.board.active ? <div className="teaching-board-active" data-board-item-id={state.board.active.id}><Content content={state.board.active.contribution.content} /></div> : null}
-      support={state.board.support.length ? <div className="teaching-board-support-list">{state.board.support.map((support) => <p key={support.id}>{support.contribution.content}</p>)}</div> : undefined}
-      retained={state.board.retained.map((item) => <RetainedItem key={item.id} item={item} />)}
+      support={state.board.support.length ? <div className="teaching-board-support-list">{state.board.support.filter((support) => support.targetBoardItemId === state.board.active?.id).map((support) => <p key={support.id} data-support-target={support.targetBoardItemId}>{support.contribution.content}</p>)}</div> : undefined}
+      retained={state.board.retained.map((item) => <RetainedItem key={item.id} item={item} support={state.board.support} />)}
       cue={state.cue.active}
       onCueExpire={onCueExpire}
     />

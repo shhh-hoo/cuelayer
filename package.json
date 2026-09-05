@@ -8,7 +8,27 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "preview": "vite preview"
+    "eval:semantics:freeze": "node --experimental-strip-types scripts/build-semantics-corpus-v5.ts",
+    "eval:semantics:validate": "node --experimental-strip-types scripts/evaluate-semantics-v5.ts --validate",
+    "eval:semantics:live": "node --experimental-strip-types scripts/evaluate-semantics-v5.ts --live",
+    "eval:semantics:v1:freeze": "node --experimental-strip-types scripts/build-semantics-corpus.ts",
+    "eval:semantics:v1:validate": "node --experimental-strip-types scripts/evaluate-semantics.ts --validate",
+    "eval:semantics:v1:live": "node --experimental-strip-types scripts/evaluate-semantics.ts --live",
+    "eval:semantics:v2:freeze": "node --experimental-strip-types scripts/build-semantics-corpus-v2.ts",
+    "eval:semantics:v2:validate": "node --experimental-strip-types scripts/evaluate-semantics-v2.ts --validate",
+    "eval:semantics:v2:live": "node --experimental-strip-types scripts/evaluate-semantics-v2.ts --live",
+    "eval:semantics:v3:freeze": "node --experimental-strip-types scripts/build-semantics-corpus-v3.ts",
+    "eval:semantics:v3:validate": "node --experimental-strip-types scripts/evaluate-semantics-v3.ts --validate",
+    "eval:semantics:v3:live": "node --experimental-strip-types scripts/evaluate-semantics-v3.ts --live",
+    "eval:semantics:v4:freeze": "node --experimental-strip-types scripts/build-semantics-corpus-v4.ts",
+    "eval:semantics:v4:validate": "node --experimental-strip-types scripts/evaluate-semantics-v4.ts --validate",
+    "eval:semantics:v4:live": "node --experimental-strip-types scripts/evaluate-semantics-v4.ts --live",
+    "eval:semantics:v5:freeze": "node --experimental-strip-types scripts/build-semantics-corpus-v5.ts",
+    "eval:semantics:v5:validate": "node --experimental-strip-types scripts/evaluate-semantics-v5.ts --validate",
+    "eval:semantics:v5:live": "node --experimental-strip-types scripts/evaluate-semantics-v5.ts --live",
+    "preview": "vite preview",
+    "test:live-state": "vitest run src/lesson-stream/continuous-state.test.tsx src/session/continuous-runtime.test.tsx",
+    "eval:lesson-replay": "node --import tsx scripts/evaluate-lesson-replay.ts"
   },
   "dependencies": {
     "@speechmatics/auth": "^0.1.0",
@@ -23,10 +43,13 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@types/node": "^26.4.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "6.1.1",
     "fake-indexeddb": "^6.2.5",
+    "jsdom": "^30.0.1",
+    "tsx": "^4.23.13",
     "typescript": "5.9.3",
     "vite": "8.2.2",
     "vitest": "4.1.11"

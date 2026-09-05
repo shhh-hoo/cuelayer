@@ -1,5 +1,5 @@
-import type { CanonicalSpeechSpan, SpeechRunId } from "../session/speech-types";
-import type { CompactEvidenceCheckpoint, GroundingRecord, SpeechEvidenceWarning } from "./contracts";
+import type { CanonicalSpeechSpan, SpeechRunId } from "../session/speech-types.ts";
+import type { CompactEvidenceCheckpoint, GroundingRecord, SpeechEvidenceWarning } from "./contracts.ts";
 
 const LEXICAL = /[\p{L}\p{N}]/u;
 
@@ -43,4 +43,10 @@ export function checkpointFromClosedSpan(
 export function exactSpeechReferenceIsGrounded(reference: { checkpointId: string; quote: string }, checkpoints: readonly CompactEvidenceCheckpoint[]) {
   const checkpoint = checkpoints.find((item) => item.checkpointId === reference.checkpointId);
   return Boolean(checkpoint && reference.quote.trim() && checkpoint.text.includes(reference.quote));
+}
+
+/** Resolves model-supplied evidence identity to immutable canonical text. */
+export function canonicalSpeechReference(checkpointId: string, checkpoints: readonly CompactEvidenceCheckpoint[]) {
+  const checkpoint = checkpoints.find((item) => item.checkpointId === checkpointId);
+  return checkpoint ? { checkpointId, quote: checkpoint.text } : undefined;
 }
