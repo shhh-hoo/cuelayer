@@ -1,49 +1,21 @@
-# CueLayer Live Teaching Roadmap
+# Live teaching roadmap
 
-**Status:** active execution index  
-**Updated:** 2026-09-03
+The [System Spec](LIVE_TEACHING_SYSTEM_SPEC.md) defines current behavior. This page owns work-package status and PR mapping; the [baseline](SEMANTICS_BASELINE.md) owns evidence and unresolved gates.
 
-This document maps stable work-package identifiers to GitHub pull requests. The identifiers are durable; pull-request numbers are operational metadata and may change when a draft is replaced, a hotfix is inserted, or a merge wrapper is required.
+| Work package | Status / scope | PR mapping |
+| --- | --- | --- |
+| TRACE-V2 | Durable diagnostic trace foundation | Completed in #12/#13 |
+| LIVE-STATE | Lossless domain events and replayable teaching surface | Foundation merged in #14 |
+| SEMANTICS | Continuous teaching, bounded context, compact references, attribution contract, replay and browser latency instrumentation | Draft #15, `feat/alpha-teaching-semantics`; not live accepted |
+| CONTEXT-POLICY | Further controlled projection evaluation only after current baseline review | Unassigned |
+| SPEECH-QUALITY | Real audio/ASR fidelity and ambiguity investigation | Unassigned |
+| STRUCTURED-OBJECTS | Grounded structured equations/reactions and deterministic rendering | Unassigned |
 
-`docs/LIVE_TEACHING_SYSTEM_SPEC.md` uses only the stable identifiers below. Product contracts, schemas, acceptance IDs, and semantic decisions must never depend on a GitHub PR number.
+## Current order
 
-## Stable work packages
+1. Keep PR15 limited to a reviewable implementation, canonical evaluator/current fixtures and current documentation. Generated run evidence stays outside tracked source.
+2. Review the cleaned final code/configuration and known baseline limitations.
+3. Conduct the controlled manual MIT diagnostic procedure to measure browser/audio/ASR → state → DOM latency. No paid run or playback is authorized merely by this roadmap.
+4. Review classification-definition persistence and model attribution compliance as separate scoped decisions. Do not increase Support capacity or alter deadlines to mask defects.
 
-| Work package | Scope | Dependency | Current GitHub mapping |
-|---|---|---|---|
-| `TRACE-V2` | Durable local diagnostic trace outside the live audio hot path | none | Completed by PR #12; deployment packaging corrected by PR #13. PR #10 is the closed draft predecessor. |
-| `LIVE-STATE` | Lossless Lesson Event Log, immutable evidence checkpoints, ordered interpretation deltas, one-in-flight scheduler, replayable Teaching State, and live Board/Teaching Cue `/session` surface | `TRACE-V2` | In progress in Draft PR #14. |
-| `SEMANTICS` | Bounded learner-surface agency, state, Cue lifecycle, reconstruction, augmentation, correction, and intervention quality | `LIVE-STATE` | Unassigned. Do not reserve a PR number in durable documents. |
-| `CONTEXT-POLICY` | Controlled P0–P4 context projection ablation after `SEMANTICS` freezes the policy, corpus, and gates | `SEMANTICS` | Unassigned. Do not reserve a PR number in durable documents. |
-| `SPEECH-QUALITY` | ASR language/configuration evaluation, domain vocabulary, critical-term errors, ambiguity signals, and checkpoint evidence quality | `SEMANTICS` | Unassigned. Do not reserve a PR number in durable documents. |
-| `STRUCTURED-OBJECTS` | Grounded EquationSpec/ReactionSpec generation and deterministic Board rendering through packaged KaTeX/mhchem | `SEMANTICS`, normally after `SPEECH-QUALITY` evidence | Unassigned. Do not reserve a PR number in durable documents. |
-
-## Current execution order
-
-```text
-TRACE-V2                         complete
-   ↓
-LIVE-STATE                       in progress; Draft PR #14
-   ↓
-SEMANTICS                        after LIVE-STATE
-   ↓
-CONTEXT-POLICY                   after SEMANTICS policy/corpus/gates freeze
-   ↓
-SPEECH-QUALITY                   future; PR number assigned only when opened
-   ↓
-STRUCTURED-OBJECTS               future; PR number assigned only when opened
-```
-
-## Development rule
-
-Every implementation PR must identify its work package in its title or description and cite the relevant acceptance IDs from `LIVE_TEACHING_SYSTEM_SPEC.md`.
-
-A PR number does not define scope. The work-package contract does.
-
-Examples:
-
-```text
-Work package: LIVE-STATE
-GitHub PR: #14
-Acceptance IDs: LOG-*, WIN-*, CTX-*, SCH-*, STA-*, SUR-*, E2E-*
-```
+Do not add functionality while closing the repository hygiene/review gate. No automatic merge, deployment or live/product PASS follows from engineering checks. Use stable work-package and acceptance IDs in reviews; PR numbers are operational metadata, not semantic identifiers.

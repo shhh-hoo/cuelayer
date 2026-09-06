@@ -30,3 +30,12 @@ Open `/session` for the learner surface. Use `/session?debug=speech` for canonic
 - [Live Teaching Roadmap](docs/LIVE_TEACHING_ROADMAP.md)
 - [TRACE-V2 architecture](docs/TRACE_ARCHITECTURE_V2.md)
 - [Speechmatics live grounding](docs/SPEECHMATICS_LIVE_GROUNDING.md)
+
+## Evaluation and evidence
+
+- [Current semantics baseline](docs/SEMANTICS_BASELINE.md): frozen corpus identity, evaluator, recorded gates and unresolved findings.
+- [Transcript replay / manual playback runbook](docs/LESSON_TRANSCRIPT_REPLAY.md).
+- `npm run eval:semantics:validate` is offline; outputs go to ignored `.cuelayer/evals/semantics/`.
+- `npm run check:repo -- --clean` verifies no generated evidence or retired evaluators are tracked and checks left the working tree clean.
+
+Track source, reviewed synthetic fixtures and the current frozen corpus. Keep run reports, model outputs, session traces, captions and experiment notebooks in `.cuelayer/` or `artifacts/`. Do not append execution history to authority documents; update their current contract. See [repository instructions](AGENTS.md).

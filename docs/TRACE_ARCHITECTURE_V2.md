@@ -70,3 +70,39 @@ The trace records the exact teaching-domain request, credential-free OpenAI requ
 Provider transport and structured parsing are distinct observable stages. A safe response DTO (including response ID/model/status/usage and raw text) is captured immediately after transport succeeds. JSON/schema parsing and normalization then run against that captured response; their failures retain every response fact that was already available. Each request has exactly one terminal validation classification: accepted, rejected, provider error, structured parse error, or normalization error.
 
 The Lesson Event Log and audit trace have different jobs. The Lesson Event Log is domain truth and replay authority. The audit trace is the observable AI decision lifecycle, never the domain source of truth.
+
+## Browser latency instrumentation
+
+The browser path emits additive trace v3 events through the existing bounded, asynchronous IndexedDB trace system. It neither awaits trace persistence nor drives scheduling/state. Correlation uses existing sessionId → speechRunId/speechEventId → canonical finalId → checkpointId → requestId → accepted step and Board/Cue revisions → affected DOM item IDs/renderId. No CLI path emits a DOM latency claim.
+
+| Field | Recorded boundary / clock |
+| --- | --- |
+| `speechEndMs` | ASR word-end offset in the run's audio timeline; null without word timing. |
+| `speechObservedAt` | Audio offset mapped to the browser's observation of PCM delivery, after the official transport listener. This is a proxy, **not physical speech capture time**. |
+| `asrFinalAt` | Browser provider-final callback; checkpoint uses the latest final arrival among its source finals. |
+| `checkpointClosedAt` | Browser hook observes the closed canonical span before durable commit; not a new segmentation decision or original reducer close timestamp. |
+| `checkpointCommittedAt` | Durable checkpoint commit returns. |
+| `plannerEligibleAt` | Committed checkpoint enters pending; admission does not imply immediate dispatch while single-flight/recovery/budget gates apply. |
+| `plannerStartedAt` | Existing scheduler work dispatch begins. |
+| `providerFinishedAt` / `timeoutAt` | Browser receives successful interpreter response / observes timeout. Server audit separately supplies SDK start/end epochs and monotonic duration. |
+| `validationAt` | Production validator returns (or existing early acceptance guard rejects). |
+| `proposalAcceptedAt`, `stateReducedAt` | Durable accepted event(s) have been persisted and reduced state published, before notifying subscribers. They do not mean speculative reduction or DOM display. |
+| `rendererCommittedAt` | Actual TeachingSurfaceLayer layout effect after React commit. |
+| `domVisibleAt` | Post-two-frame CSS/viewport observation of the specific changed items, or observed removal. Not merely presence of the surface root. |
+| `pendingCount`, `oldestPendingAgeMs`, `batchSize` | Observations of existing pending work at admission/dispatch/reduction/failure; age uses the existing durable commit wall-clock basis. |
+| `retryAttempt` | One-based count of this checkpoint's observed dispatches in this page, including the first attempt. `attemptCountScope` explicitly excludes unobserved attempts before restore or correlation eviction. |
+
+Browser phase timestamps use `performance.timeOrigin + performance.now()`. Server SDK duration uses its own `performance.now()` difference; server epochs are never subtracted from browser epochs. `providerTimingScope` distinguishes server SDK duration from browser round-trip fallback. Provider → state uses browser response observation → durable state publication, so HTTP time is not silently assigned to state reduction.
+
+Each `latency.checkpoint` snapshot includes nullable derived fields: `speechToAsrMs`, `asrToCommitMs`, `commitToPlannerStartMs`, `providerMs`, `providerToStateMs`, `stateToDomMs`, `speechToDomMs`. Missing or negative/invalid intervals stay null. Speech-based values are PCM-delivery-referenced proxies: chunk duration is recorded as mapping granularity, **not a bound on device/driver/worklet buffering or total acoustic latency**. No waveform is scanned, stored or exported. The official `usePCMAudioListener(sendAudio)` remains direct and registered before the separate metadata observer.
+
+`latency.stage` retains each attempt/failure; snapshots must not be counted as independent requests. `provider.request_snapshot.timing` retains server timing alongside existing safe audit/usage. Existing request output, validation and accepted-event records remain the evidence for semantic review. A timeout is incomplete execution, not semantic failure; validation success followed by storage failure has no durable acceptance timestamp.
+
+Visibility is bounded best-effort observation: CSS-hidden Support/Retained nodes do not prevent an unrelated visible Active update from being measured. A hidden affected Support, background document, offscreen item, missing node, KEEP, superseded intermediate revision, or unavailable frames produces no invented DOM completion. Intermediate steps reduced in one atomic request may never render. A removal can be observed even when the final surface is empty. Hints have their own DOM identity. The observer samples once per render (two frames, 1-second fallback); it does not poll until a hidden item eventually becomes visible. Occlusion, physical pixels, human attention and display hardware latency remain **unverified**; pointer-events:none makes hit testing unsuitable. `measurementBasis` is `post-frame-css-geometry`.
+
+Memory is bounded to 256 checkpoint/final correlations and 512 PCM metadata chunks. Correlation eviction emits `latency.gap`; the existing trace queue still emits `trace.gap` on dropped events. Missing joins remain unavailable. Observer failures are isolated, no diagnostic operation awaits I/O in the transport/planner/renderer path, and no credentials/audio are added to traces.
+
+Coverage: mocked SDK success/failure durations; browser hook phase ordering; a throwing trace sink leaves acceptance unchanged; post-frame React DOM tests with explicitly synthetic geometry; per-item hidden Support; timeout/retry, restore/run identity, no durable acceptance on failed persistence, KEEP/superseded/missing clocks, bounded correlation, PCM metadata and safe serialization. These are offline tests, not measured live latency.
+
+
+Manual playback and export: [replay runbook](LESSON_TRANSCRIPT_REPLAY.md).
