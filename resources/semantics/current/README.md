@@ -4,4 +4,4 @@
 
 Validate with `npm run eval:semantics:validate`. The single evaluator is `server/teaching/semantic-evaluation.ts`. Generated results go to unique directories under `.cuelayer/evals/semantics/`, never here. Corpus/gold changes require separate review; there is no command that silently rebuilds gold from a prior version.
 
-See [current baseline and limitations](../../../docs/SEMANTICS_BASELINE.md). Historical execution evidence belongs in ignored local storage or a separately managed archive, not this source tree.
+See [the evaluation contract](../../../docs/EVALUATION.md) for current compatibility limits and migration rules. Historical execution evidence belongs in ignored local storage or a separately managed archive, not this source tree.
