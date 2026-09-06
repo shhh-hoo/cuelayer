@@ -301,7 +301,7 @@ export function notationDensity(compiled: CompiledNotation): NotationDensity {
   return length <= 46 ? "compact" : "dense";
 }
 
-function renderNotation(expression: string, displayMode: boolean) {
+export function renderNotation(expression: string, displayMode: boolean) {
   return katex.renderToString(expression, {
     displayMode,
     throwOnError: true,
