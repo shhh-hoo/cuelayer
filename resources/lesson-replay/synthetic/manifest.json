@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "lesson-replay-input-v1",
+  "lessonId": "synthetic-catalyst",
+  "source": {
+    "title": "Synthetic engineering fixture, not a real lesson",
+    "url": null
+  },
+  "language": "en",
+  "playbackRange": {
+    "startMs": 10000,
+    "endMs": 10100
+  },
+  "timelineOriginMs": 10000,
+  "transcriptType": "synthetic-fixture",
+  "raw": {
+    "file": "raw.jsonl",
+    "sha256": "4a5bd0b6a4d4cc2f4470f1d66ee53e6b896f763d359e8cc13635f056e4182ccd"
+  },
+  "normalized": {
+    "file": "segments.jsonl",
+    "sha256": "228384b7b3edf62c0e406522e5f4bc1af0adc1e1fdcf132484a6eb3a696ba749",
+    "rules": [
+      "Text and source times unchanged, including repetitions; normalized IDs map explicitly to originalSegmentIds. No content corrections."
+    ]
+  },
+  "timestampPrecision": {
+    "resolutionMs": 1,
+    "synthetic": true
+  },
+  "availabilityRule": "whole-segment-at-end-or-later",
+  "visualInputProvided": false
+}

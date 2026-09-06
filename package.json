@@ -9,7 +9,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "preview": "vite preview",
-    "test:live-state": "vitest run src/lesson-stream/continuous-state.test.tsx src/session/continuous-runtime.test.tsx"
+    "test:live-state": "vitest run src/lesson-stream/continuous-state.test.tsx src/session/continuous-runtime.test.tsx",
+    "eval:lesson-replay": "node --import tsx scripts/evaluate-lesson-replay.ts",
+    "eval:semantics:validate": "node --experimental-strip-types scripts/evaluate-semantics.ts --validate",
+    "eval:semantics:live": "node --experimental-strip-types scripts/evaluate-semantics.ts --live",
+    "check:repo": "node --experimental-strip-types scripts/check-repository-hygiene.ts"
   },
   "dependencies": {
     "@speechmatics/auth": "^0.1.0",
