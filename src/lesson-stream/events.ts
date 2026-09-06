@@ -1,5 +1,5 @@
-import { LESSON_EVENT_SCHEMA_VERSION, type AcceptedInterpretationStep, type GroundingRecord, type LessonEvent, type CompactEvidenceCheckpoint } from "./contracts";
-import type { SpeechRunId } from "../session/speech-types";
+import { LESSON_EVENT_SCHEMA_VERSION, type AcceptedInterpretationStep, type GroundingRecord, type LessonEvent, type CompactEvidenceCheckpoint } from "./contracts.ts";
+import type { SpeechRunId } from "../session/speech-types.ts";
 
 function randomId(prefix: string) {
   const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;

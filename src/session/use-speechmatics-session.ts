@@ -1,3 +1,5 @@
+import { latencyNow } from "../trace/learner-latency";
+import { PcmLatencyClock } from "./pcm-latency-clock";
 import { useCallback, useEffect, useRef } from "react";
 import type { RealtimeTranscriptionConfig } from "@speechmatics/real-time-client-react";
 import { useRealtimeEventListener, useRealtimeTranscription } from "@speechmatics/real-time-client-react";
@@ -128,6 +130,7 @@ function wordBounds(event: Exclude<SpeechEvent, { kind: "error" }>) {
  * forwarding and cleanup; CueLayer supplies run identity and canonical events.
  */
 export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: SpeechmaticsSessionCallbacks) {
+  const pcmClockRef = useRef(new PcmLatencyClock());
   const activeRunIdRef = useRef<SpeechRunId | null>(null);
   const stoppingRef = useRef(false);
   const drainBarrierRef = useRef<SpeechmaticsDrainBarrier | undefined>(undefined);
@@ -141,11 +144,16 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
   const { startRecording, stopRecording, mute, unmute, isRecording, audioContext } = usePCMAudioRecorderContext();
   const audioDevices = useAudioDevices();
 
-  const emitTrace = useCallback((draft: SessionTraceDraft) => onTraceRef.current?.(draft), []);
+  const emitTrace = useCallback((draft: SessionTraceDraft) => { try { onTraceRef.current?.(draft); } catch { /* Diagnostic trace cannot interrupt audio. */ } }, []);
 
   // Deliberate invariant: no measurement, persistence, allocation, or React update
   // may run in front of the official live PCM transport callback.
   usePCMAudioListener(sendAudio);
+  const observePcm = useCallback((samples: Float32Array) => {
+    try { if (activeRunIdRef.current !== null && audioContext) pcmClockRef.current.observe(samples.length, audioContext.sampleRate, latencyNow()); } catch { /* Diagnostic only. */ }
+  // Re-register after the transport listener whenever its identity changes.
+  }, [audioContext, sendAudio]);
+  usePCMAudioListener(observePcm);
 
   const stopDeliveryMonitor = useCallback((final = false) => {
     if (deliveryTimerRef.current !== undefined) {
@@ -200,6 +208,7 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
   }, [lifecycle, onEvent, stopDeliveryMonitor, stopRecording, stopTranscription]);
 
   const onProviderMessage = useCallback(({ data }: { data: Parameters<typeof speechEventFromSpeechmatics>[0] }) => {
+    const asrFinalAt = latencyNow();
     const runId = activeRunIdRef.current;
     if (runId === null) return;
     if (data.message === "EndOfTranscript") {
@@ -223,7 +232,9 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
     if (event.kind === "provisional") {
       emitTrace(traceDraft("speech.partial", { runId, transcript: event.text, wordCount: event.words.length }, { priority: "raw", correlation }));
     } else {
-      emitTrace(traceDraft("speech.final_received", { runId, transcript: event.text, wordCount: event.words.length, ...wordBounds(event) }, { priority: "critical", correlation }));
+      const speechEndMs = event.words.length ? Math.max(...event.words.map(word => word.endMs)) : null;
+      const latency = { asrFinalAt, speechEndMs, ...(speechEndMs === null ? { speechObservedAt: null, speechMappingUncertaintyMs: null, speechClockBasis: "unavailable" as const } : pcmClockRef.current.resolve(speechEndMs)) };
+      emitTrace(traceDraft("speech.final_received", { latency, runId, transcript: event.text, wordCount: event.words.length, ...wordBounds(event) }, { priority: "critical", correlation }));
     }
     onEvent(runId, event.kind === "committed" ? { ...event, speechEventId } : event);
   }, [emitTrace, failRun, onEvent]);
@@ -250,6 +261,7 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
 
   const start = useCallback(async (runId: SpeechRunId) => {
     activeRunIdRef.current = runId;
+    pcmClockRef.current = new PcmLatencyClock();
     stoppingRef.current = false;
     drainBarrierRef.current = undefined;
     sawRecordingRef.current = false;

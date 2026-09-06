@@ -1,3 +1,4 @@
+import { interpretationDeadlines } from "../../src/lesson-stream/runtime-policy.ts";
 import type { TeachingInterpretationRequest } from "../../src/lesson-stream/contracts.ts";
 import { estimateTeachingCost, requestOpenAITeachingInterpretation } from "../../server/teaching/openai-interpreter.ts";
 
@@ -6,11 +7,15 @@ declare const process: { env: Record<string, string | undefined> };
 type Request = { method?: string; body?: unknown; signal?: AbortSignal };
 type Response = { setHeader(name: string, value: string): void; status(code: number): { json(body: unknown): void } };
 
-const HARD_DEADLINE_MS = 6_000;
+const HARD_DEADLINE_MS = interpretationDeadlines().providerMs;
 
 function failureReason(error: unknown, timedOut: boolean) {
   if (timedOut) return "teaching-interpretation-timeout";
   const value = error && typeof error === "object" ? error as { status?: unknown; message?: unknown; name?: unknown } : undefined;
+  const stage = error && typeof error === "object" ? (error as { audit?: { failureStage?: string } }).audit?.failureStage : undefined;
+  if (stage === "structured_parse_error") return "teaching-interpretation-structured-parse-failed";
+  if (stage === "normalization_error") return "teaching-normalization-failed";
+  if (value?.message === "interpretation-request-budget-exceeded") return value.message;
   if (typeof value?.status === "number") return `teaching-provider-http-${value.status}`;
   if (value?.name === "AbortError") return "teaching-request-aborted";
   if (value?.message === "teaching-interpretation-empty-response") return value.message;

@@ -1,5 +1,6 @@
-import { LESSON_EVENT_SCHEMA_VERSION, type CompactEvidenceCheckpoint, type GroundingRecord, type LessonEvent, type TeachingStateSnapshot } from "./contracts";
-import { createInitialTeachingState, reduceLessonEvent } from "./teaching-state";
+import { reduceLessonEvent as reduceV3Event } from "./teaching-state-v3.ts";
+import { LESSON_EVENT_SCHEMA_VERSION, type CompactEvidenceCheckpoint, type GroundingRecord, type LessonEvent, type TeachingStateSnapshot } from "./contracts.ts";
+import { createInitialTeachingState, reduceLessonEvent } from "./teaching-state.ts";
 
 export type LessonReplay = {
   events: LessonEvent[];
@@ -26,7 +27,7 @@ export function replayLessonEvents(input: readonly LessonEvent[]): LessonReplay 
   const sequences = new Set<number>();
 
   for (const event of [...input].sort((left, right) => left.sequence - right.sequence)) {
-    if (event.schemaVersion !== LESSON_EVENT_SCHEMA_VERSION) throw new Error("lesson-event-schema-incompatible");
+    if (event.schemaVersion !== LESSON_EVENT_SCHEMA_VERSION && event.schemaVersion !== "lesson-event-v3-learner-agency") throw new Error("lesson-event-schema-incompatible");
     if (eventIds.has(event.eventId)) continue;
     if (sequences.has(event.sequence)) throw new Error("lesson-event-sequence-collision");
     if (sessionId && event.sessionId !== sessionId) throw new Error("lesson-event-session-mismatch");
@@ -52,7 +53,7 @@ export function replayLessonEvents(input: readonly LessonEvent[]): LessonReplay 
       acceptedStepKeys.add(stepKey);
     }
 
-    state = reduceLessonEvent(state, event, checkpointSequences);
+    state = event.schemaVersion === "lesson-event-v3-learner-agency" ? reduceV3Event(state, event, checkpointSequences) : reduceLessonEvent(state, event, checkpointSequences);
     if (event.type === "lesson.ended") ended = true;
     eventIds.add(event.eventId);
     sequences.add(event.sequence);

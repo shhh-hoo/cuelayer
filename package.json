@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:live-state": "vitest run src/lesson-stream/continuous-state.test.tsx src/session/continuous-runtime.test.tsx"
   },
   "dependencies": {
     "@speechmatics/auth": "^0.1.0",
@@ -23,10 +24,13 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@types/node": "^26.4.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "6.1.1",
     "fake-indexeddb": "^6.2.5",
+    "jsdom": "^30.0.1",
+    "tsx": "^4.23.13",
     "typescript": "5.9.3",
     "vite": "8.2.2",
     "vitest": "4.1.11"

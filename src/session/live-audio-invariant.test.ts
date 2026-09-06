@@ -4,11 +4,13 @@ import speechProviderSource from "./SpeechmaticsSessionProvider.tsx?raw";
 
 describe("live audio transport invariant", () => {
   it("keeps the official PCM listener as a direct sendAudio handoff", () => {
-    expect(speechSessionSource.match(/usePCMAudioListener\s*\(/g)).toHaveLength(1);
+    expect(speechSessionSource.match(/usePCMAudioListener\s*\(/g)).toHaveLength(2);
     expect(speechSessionSource).toContain("usePCMAudioListener(sendAudio);");
+    expect(speechSessionSource).toContain("[audioContext, sendAudio]");
+    expect(speechSessionSource.indexOf("usePCMAudioListener(sendAudio)")).toBeLessThan(speechSessionSource.indexOf("usePCMAudioListener(observePcm)"));
   });
 
-  it("does not reintroduce synchronous PCM diagnostics into the browser callback", () => {
+  it("keeps metadata-only observation out of the transport callback", () => {
     expect(speechSessionSource).not.toContain("forwardAudio");
     expect(speechSessionSource).not.toContain("PcmHealth");
     expect(speechSessionSource).not.toMatch(/for\s*\([^)]*audio\.length/);

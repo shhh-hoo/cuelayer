@@ -8,3 +8,9 @@ artifacts/
 skills/9701-cuecaption/eval/generated/
 *.tsbuildinfo
 .DS_Store
+
+# Generated evaluation/live evidence must never become repository resources.
+resources/**/results/
+resources/**/*summary*.json
+resources/**/*playback-timing.jsonl
+resources/**/*integrity.json

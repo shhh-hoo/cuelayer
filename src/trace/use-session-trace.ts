@@ -1,3 +1,4 @@
+import { LearnerLatencyTracker } from "./learner-latency";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { defaultTracePriority, traceDraft, type SessionTraceDraft, type SessionTraceEvent, type TraceEmitter } from "./contracts";
 import { createTraceSessionId, replaceTraceSessionId, resolveTraceSessionIdentity } from "./session-identity";
@@ -41,6 +42,7 @@ export function useSessionTrace({ observeStatus = false }: { observeStatus?: boo
   const [initialIdentity] = useState(() => resolveTraceSessionIdentity(window.location, window.history));
   const [requestedSessionId, setRequestedSessionId] = useState(initialIdentity.sessionId);
   const [sessionId, setSessionId] = useState(initialIdentity.sessionId);
+  const latencyRef = useRef(new LearnerLatencyTracker());
   const runtimeRef = useRef<SessionTraceRuntime | undefined>(undefined);
   const pendingRef = useRef<PendingState>({ drafts: [], dropped: new Map() });
   const [snapshot, setSnapshot] = useState<SessionTraceController["snapshot"]>(initialSnapshot);
@@ -49,6 +51,9 @@ export function useSessionTrace({ observeStatus = false }: { observeStatus?: boo
     const runtime = runtimeRef.current;
     if (runtime) runtime.emit(draft);
     else queueBeforeRuntime(pendingRef.current, draft);
+    try { for (const observation of latencyRef.current.observe(draft)) {
+      if (runtime) runtime.emit(observation); else queueBeforeRuntime(pendingRef.current, observation);
+    } } catch { /* Measurement is best-effort and cannot control the lesson. */ }
   }, []);
 
   useEffect(() => {
@@ -131,6 +136,7 @@ export function useSessionTrace({ observeStatus = false }: { observeStatus?: boo
     runtimeRef.current = undefined;
     runtime?.close();
     pendingRef.current = { drafts: [], dropped: new Map() };
+    latencyRef.current = new LearnerLatencyTracker();
     setSnapshot(initialSnapshot());
     setSessionId(nextSessionId);
     setRequestedSessionId(nextSessionId);

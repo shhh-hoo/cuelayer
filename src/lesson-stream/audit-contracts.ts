@@ -5,10 +5,11 @@ export type TeachingProviderUsage = { inputTokens: number; cachedInputTokens: nu
 export type ProviderContractSnapshot = {
   requestedModel: string;
   serviceTier?: string;
-  temperature: number;
+  temperature?: number;
   reasoningEffort: string;
   maxOutputTokens: number;
   policyVersion: string;
+  semanticProfileId: string;
   systemPolicy: string;
   systemPolicyDigest: string;
   structuredOutputSchema: JsonValue;
@@ -20,7 +21,7 @@ export type ProviderRequestEnvelope = {
   model: string;
   service_tier?: string;
   reasoning: { effort: string };
-  temperature: number;
+  temperature?: number;
   max_output_tokens: number;
   input: Array<{ role: "system" | "user"; content: string }>;
   text: { format: JsonValue };
@@ -39,7 +40,11 @@ export type ProviderResponseSnapshot = {
   providerResponseDigest: string;
 };
 
+export type ProviderTiming = { providerStartedAt: number; providerFinishedAt: number; providerDurationMs: number; clock: "server-performance-duration" };
+
 export type TeachingProviderAudit = {
+  timing?: ProviderTiming;
+  referenceCodec?: ReturnType<typeof import("../../server/teaching/output-reference-codec").createOutputReferenceCodec>["audit"];
   providerContract: ProviderContractSnapshot;
   providerRequest: ProviderRequestEnvelope;
   providerRequestDigest: string;
@@ -49,6 +54,8 @@ export type TeachingProviderAudit = {
 };
 
 export type TeachingProviderFailureAudit = {
+  timing?: ProviderTiming;
+  referenceCodec?: TeachingProviderAudit["referenceCodec"];
   providerContract: ProviderContractSnapshot;
   providerRequest: ProviderRequestEnvelope;
   providerRequestDigest: string;
