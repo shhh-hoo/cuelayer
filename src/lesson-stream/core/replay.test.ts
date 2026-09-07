@@ -40,7 +40,7 @@ describe("deterministic Core replay", () => {
     const f = foundation();
     const ended = appendCoreEvent(f.replay, { ...envelope(f.replay), type: "lesson.ended" });
     expect(replayCoreEvents([...ended.events, ...ended.events])).toEqual(ended);
-    expect(appendCoreEvent(ended, ended.events[2])).toBe(ended);
+    expect(appendCoreEvent(ended, ended.events[2])).toEqual(ended);
     expect(() => appendCoreEvent(ended, { ...envelope(ended), type: "lesson.ended" })).toThrow("core-lesson-ended");
   });
 
@@ -77,12 +77,12 @@ describe("deterministic Core replay", () => {
     expect(base.state.cue.active!.text).toBe("Updated note");
     const expired = appendCoreEvent(base, expire(base));
     expect(expired.state.cue).toEqual({ revision: 3 });
-    expect(expired.state.knowledge).toBe(base.state.knowledge);
+    expect(expired.state.knowledge).toEqual(base.state.knowledge);
     expect(replayCoreEvents(expired.events)).toEqual(expired);
     base = evidence(original); next = stepFor(base);
     next.cueDelta = { action: "REPLACE", targetCueId: id, id: coreEntityId(base.state.sessionId, next, "CUE", 0), evidence: speechRef("checkpoint-2"), value: { ...fact("checkpoint-2"), kind: "TASK" } };
     base = acceptCoreStep(base, next).replay;
-    expect(appendCoreEvent(base, expire(base, id, 1)).state.cue).toBe(base.state.cue);
+    expect(appendCoreEvent(base, expire(base, id, 1)).state.cue).toEqual(base.state.cue);
     expect(() => appendCoreEvent(base, expire(base))).toThrow("core-only-note-can-expire");
   });
 

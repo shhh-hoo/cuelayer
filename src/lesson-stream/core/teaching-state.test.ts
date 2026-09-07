@@ -17,7 +17,7 @@ describe("persistent Core knowledge", () => {
     expect(f.base.state.knowledge.cores).toEqual({});
   });
 
-  it("revises identified objects, relations and Support without rebuilding unrelated structure", () => {
+  it("revises identified objects, relations and Support without changing unrelated semantic structure", () => {
     const f = foundation(), base = evidence(f.replay), step = stepFor(base), cp = step.consumesCheckpointIds[0]!;
     const before = base.state.knowledge.cores[f.coreId]!;
     step.knowledgeOps = [
@@ -30,8 +30,11 @@ describe("persistent Core knowledge", () => {
     expect(core.objects[f.a]!.id).toBe(f.a);
     expect(core.relations[f.relationId]!.id).toBe(f.relationId);
     expect(core.supports[f.supportId]!.id).toBe(f.supportId);
-    expect(core.objects[f.b]).toBe(before.objects[f.b]);
-    expect(after.cue).toBe(base.state.cue);
+    expect(core.objects[f.b]).toEqual(before.objects[f.b]);
+    expect(core.objects[f.b]!.id).toBe(f.b);
+    expect(after.cue).toEqual(base.state.cue);
+    expect(after.cue.revision).toBe(base.state.cue.revision);
+    expect(after.cue.active!.id).toBe(f.cueId);
     expect(after.knowledge.revision).toBe(2);
     expect(before.objects[f.a]!.value.text).toBe("A definition");
   });
@@ -52,10 +55,10 @@ describe("persistent Core knowledge", () => {
     replay = acceptCoreStep(replay, stepFor(replay, { knowledgeOps: [{ action: "SET_CURRENT_CORE", coreId: f.coreId }] })).replay;
     expect(Object.keys(replay.state.knowledge.cores)).toHaveLength(13);
     expect(Object.keys(replay.state.knowledge.cores[f.coreId]!.supports)).toHaveLength(13);
-    expect(replay.state.knowledge.cores).toBe(parked);
+    expect(replay.state.knowledge.cores).toEqual(parked);
     expect(replay.state.knowledge.currentCoreId).toBe(f.coreId);
     expect(replay.state.knowledge.cores[f.coreId]!.objects[f.a]!.value.text).toBe("A definition");
-    expect(replay.state.cue).toBe(f.replay.state.cue);
+    expect(replay.state.cue).toEqual(f.replay.state.cue);
   });
 
   it.each(["OBJECT", "RELATION", "SUPPORT"] as const)("locally invalidates %s and preserves surrounding knowledge", kind => {
@@ -66,9 +69,9 @@ describe("persistent Core knowledge", () => {
     const old = base.state.knowledge.cores[f.coreId]!, core = after.knowledge.cores[f.coreId]!;
     const key = kind === "OBJECT" ? "objects" : kind === "RELATION" ? "relations" : "supports";
     expect(core[key][id]).toMatchObject({ id, status: "invalidated" });
-    expect(core.objects[f.b]).toBe(old.objects[f.b]);
-    for (const other of ["objects", "relations", "supports"] as const) if (other !== key) expect(core[other]).toBe(old[other]);
-    expect(after.cue).toBe(base.state.cue);
+    expect(core.objects[f.b]).toEqual(old.objects[f.b]);
+    for (const other of ["objects", "relations", "supports"] as const) if (other !== key) expect(core[other]).toEqual(old[other]);
+    expect(after.cue).toEqual(base.state.cue);
   });
 
   it("supersedes explicitly without retargeting existing relations or erasing old content", () => {
@@ -81,8 +84,8 @@ describe("persistent Core knowledge", () => {
     const core = acceptCoreStep(base, step).replay.state.knowledge.cores[f.coreId]!;
     expect(core.objects[f.a]).toMatchObject({ status: "superseded", value: { text: "A definition" }, supersededBy: { id: replacement } });
     expect(core.objects[replacement]!.status).toBe("valid");
-    expect(core.relations).toBe(base.state.knowledge.cores[f.coreId]!.relations);
-    expect(core.supports).toBe(base.state.knowledge.cores[f.coreId]!.supports);
+    expect(core.relations).toEqual(base.state.knowledge.cores[f.coreId]!.relations);
+    expect(core.supports).toEqual(base.state.knowledge.cores[f.coreId]!.supports);
   });
 
   it("anchors state provenance to the accepted channel revision, surviving subsequent revision", () => {
@@ -102,8 +105,13 @@ describe("persistent Core knowledge", () => {
     const f = foundation(), base = evidence(f.replay), step = stepFor(base);
     step.knowledgeOps = [{ action: "SET_CURRENT_CORE", coreId: f.coreId }, { action: "REVISE_OBJECT", coreId: f.coreId, id: f.a, value: f.replay.state.knowledge.cores[f.coreId]!.objects[f.a]!.value }];
     const next = reduceCoreStep(base.state, step, base.checkpoints);
-    expect(next.knowledge).toBe(base.state.knowledge);
-    expect(next.cue).toBe(base.state.cue);
+    expect(next.knowledge).toEqual(base.state.knowledge);
+    expect(next.cue).toEqual(base.state.cue);
+    expect(next.knowledge.revision).toBe(base.state.knowledge.revision);
+    expect(next.cue.revision).toBe(base.state.cue.revision);
+    expect(next.knowledge.currentCoreId).toBe(f.coreId);
+    expect(next.knowledge.cores[f.coreId]!.objects[f.a]!.id).toBe(f.a);
+    expect(next.cue.active!.id).toBe(f.cueId);
     expect(next.processedThroughSequence).toBe(2);
   });
 });

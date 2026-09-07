@@ -10,6 +10,10 @@ export const speechReferenceSchema = z.object({ checkpointId: id, quote: text })
 const coreReference = z.object({ kind: z.literal("CORE"), id }).strict();
 export const unitReferenceSchema = z.object({ kind: z.enum(["OBJECT", "RELATION", "SUPPORT"]), coreId: id, id }).strict();
 export const knowledgeReferenceSchema = z.union([coreReference, unitReferenceSchema]);
+// Target capabilities are narrower than provenance references in M1.
+const objectOrRelationReference = unitReferenceSchema.extend({ kind: z.enum(["OBJECT", "RELATION"]) });
+export const supportTargetSchema = z.union([coreReference, objectOrRelationReference]);
+export const cueTargetSchema = z.union([coreReference, objectOrRelationReference]);
 export const semanticReferenceSchema = z.union([knowledgeReferenceSchema, z.object({ kind: z.literal("CUE"), id }).strict()]);
 // revision identifies the accepted knowledge/Cue snapshot, not a mutable entity counter.
 const stateReference = z.object({ target: semanticReferenceSchema, revision }).strict();
@@ -22,7 +26,7 @@ export const provenanceSchema = z.object({
 const fact = z.object({ text, provenance: provenanceSchema }).strict();
 // A stated relationship between identified objects, with no taxonomy or rendering vocabulary.
 const relation = fact.extend({ fromObjectId: id, toObjectId: id }).strict();
-const support = fact.extend({ target: knowledgeReferenceSchema }).strict();
+const support = fact.extend({ target: supportTargetSchema }).strict();
 const correction = { correctionEvidence: speechReferenceSchema };
 export const knowledgeOperationSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("CREATE_CORE"), id, provenance: provenanceSchema }).strict(),
@@ -36,7 +40,7 @@ export const knowledgeOperationSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("INVALIDATE"), target: unitReferenceSchema, ...correction }).strict(),
   z.object({ action: z.literal("SUPERSEDE"), target: unitReferenceSchema, replacement: unitReferenceSchema, ...correction }).strict(),
 ]);
-const cueValue = fact.extend({ kind: z.enum(["NOTE", "QUESTION", "TASK", "HINT"]), target: knowledgeReferenceSchema.optional() }).strict();
+const cueValue = fact.extend({ kind: z.enum(["NOTE", "QUESTION", "TASK", "HINT"]), target: cueTargetSchema.optional() }).strict();
 export const cueMutationSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("KEEP") }).strict(),
   z.object({ action: z.literal("SET"), id, value: cueValue }).strict(),

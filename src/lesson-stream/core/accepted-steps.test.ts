@@ -1,10 +1,38 @@
 import { describe, expect, it } from "vitest";
 import { acceptCoreStep } from "./accepted-steps.ts";
+import { cueMutationSchema, knowledgeOperationSchema, semanticReferenceSchema } from "./contracts.ts";
 import { coreEntityId } from "./events.ts";
 import { appendCoreEvent, pendingCoreEvidence } from "./replay.ts";
 import { evidence, expire, fact, foundation, speechRef, start, stepFor } from "./test-fixtures.ts";
 
 describe("pure atomic Core acceptance", () => {
+  it.each(["CORE", "OBJECT", "RELATION"] as const)("accepts %s targets for both Support and Cue", kind => {
+    const f = foundation(), base = evidence(f.replay), next = stepFor(base), cp = next.consumesCheckpointIds[0]!;
+    const target = kind === "CORE" ? { kind, id: f.coreId } : { kind, coreId: f.coreId, id: kind === "OBJECT" ? f.a : f.relationId };
+    next.knowledgeOps = [{ action: "REVISE_SUPPORT", coreId: f.coreId, id: f.supportId, value: { ...fact(cp), target } }];
+    next.cueDelta = { action: "REVISE", targetCueId: f.cueId, value: { ...fact(cp), kind: "QUESTION", target } };
+    expect(knowledgeOperationSchema.safeParse(next.knowledgeOps[0]).success).toBe(true);
+    expect(cueMutationSchema.safeParse(next.cueDelta).success).toBe(true);
+    const after = acceptCoreStep(base, next).replay.state;
+    expect(after.knowledge.cores[f.coreId]!.supports[f.supportId]!.value.target).toEqual(target);
+    expect(after.cue.active!.target).toEqual(target);
+  });
+
+  it.each(["support", "cue"])("rejects %s targeting Support at schema validation, without changing the base", channel => {
+    const f = foundation(), base = evidence(f.replay), next = stepFor(base), cp = next.consumesCheckpointIds[0]!;
+    const target = { kind: "SUPPORT", coreId: f.coreId, id: f.supportId };
+    const mutation = channel === "support"
+      ? { action: "REVISE_SUPPORT", coreId: f.coreId, id: f.supportId, value: { ...fact(cp), target } }
+      : { action: "REVISE", targetCueId: f.cueId, value: { ...fact(cp), kind: "QUESTION", target } };
+    expect((channel === "support" ? knowledgeOperationSchema : cueMutationSchema).safeParse(mutation).success).toBe(false);
+    const input = channel === "support" ? { ...next, knowledgeOps: [mutation] } : { ...next, cueDelta: mutation };
+    const before = structuredClone(base);
+    expect(() => acceptCoreStep(base, input)).toThrow();
+    expect(base).toEqual(before);
+    // Support remains referenceable for provenance and local semantic mutation.
+    expect(semanticReferenceSchema.safeParse(target).success).toBe(true);
+  });
+
   it.each(["late-operation", "cue", "identity", "forward-reference"])("rejects all mutations and consumption on invalid %s", failure => {
     const f = foundation();
     const candidate = structuredClone(f.step), before = structuredClone(f.base);
@@ -23,8 +51,8 @@ describe("pure atomic Core acceptance", () => {
     const base = evidence(start()), candidate = stepFor(base, { evidenceRefs: [] });
     const { event, replay } = acceptCoreStep(base, candidate);
     expect(event.type).toBe("core.step_accepted");
-    expect(replay.state.knowledge).toBe(base.state.knowledge);
-    expect(replay.state.cue).toBe(base.state.cue);
+    expect(replay.state.knowledge).toEqual(base.state.knowledge);
+    expect(replay.state.cue).toEqual(base.state.cue);
     expect(replay.state.processedThroughSequence).toBe(1);
     expect(pendingCoreEvidence(replay)).toEqual([]);
     expect(pendingCoreEvidence(base)).toHaveLength(1);
@@ -40,7 +68,7 @@ describe("pure atomic Core acceptance", () => {
     const expired = appendCoreEvent(base, expire(base));
     const after = acceptCoreStep(expired, next).replay;
     expect(after.state.knowledge.revision).toBe(1);
-    expect(after.state.cue).toBe(expired.state.cue);
+    expect(after.state.cue).toEqual(expired.state.cue);
     expect(after.state.cue.revision).toBe(2);
   });
 
@@ -48,7 +76,7 @@ describe("pure atomic Core acceptance", () => {
     const f = foundation(), base = evidence(f.replay), next = stepFor(base, { baseKnowledgeRevision: 0 });
     next.cueDelta = { action: "RESOLVE", targetCueId: f.cueId, evidence: speechRef("checkpoint-2") };
     const after = acceptCoreStep(base, next).replay;
-    expect(after.state.knowledge).toBe(base.state.knowledge);
+    expect(after.state.knowledge).toEqual(base.state.knowledge);
     expect(after.state.cue).toEqual({ revision: 2 });
   });
 
@@ -116,7 +144,7 @@ describe("pure atomic Core acceptance", () => {
     base = acceptCoreStep(base, next).replay;
     expect(base.state.cue.active!.id).toBe(f.cueId);
     expect(base.state.cue.revision).toBe(2);
-    expect(base.state.knowledge).toBe(f.replay.state.knowledge);
+    expect(base.state.knowledge).toEqual(f.replay.state.knowledge);
     base = evidence(base); next = stepFor(base);
     const id = coreEntityId(base.state.sessionId, next, "CUE", 0);
     next.cueDelta = { action: "REPLACE", targetCueId: f.cueId, id, evidence: speechRef("checkpoint-3"), value: { ...fact("checkpoint-3"), kind: "TASK" } };

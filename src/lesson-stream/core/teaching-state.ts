@@ -104,7 +104,7 @@ function applyOperation(state: CoreTeachingState, op: KnowledgeOperation, step: 
   }
   if ("target" in op.value) {
     const target = op.value.target;
-    if ((target.kind === "CORE" ? target.id : target.coreId) !== op.coreId || target.kind === "SUPPORT") throw new Error("core-support-target-invalid");
+    if ((target.kind === "CORE" ? target.id : target.coreId) !== op.coreId) throw new Error("core-support-target-invalid");
     requireReference(state, target);
   }
   const previous = resolveSemanticReference(state, ref);
