@@ -83,6 +83,8 @@ The implementation must support functional equivalents of:
 
 One accepted interpretation step may contain zero or more ordered knowledge mutations together with its Cue mutation. The step must validate against one accepted base state and publish atomically; renderer-visible authority must not pass through partially applied intermediate semantic states. A valid accepted no-op may consume evidence without changing knowledge or Cue when nothing useful changed.
 
+A provider response may contain multiple ordered semantic steps. Request batching does not determine semantic-step identity; each step validates atomically against its own accepted base.
+
 Exact event names such as `UPDATE`, `SUPERSEDE`, or `INVALIDATE` are repository-level design choices. Historical auditability must not be confused with destructive deletion.
 
 Explicit teacher self-correction may revise the affected semantic unit. Alpha does not autonomously correct an uncorrected teacher subject-matter claim.
@@ -109,6 +111,8 @@ Provider context remains bounded even though lesson knowledge is conceptually un
 The complete authoritative lesson state is not required to fit into or be serialized wholesale into a provider request. The request receives a bounded interpretation projection of the historical evidence and durable state needed to interpret the new evidence safely. Omission from that projection does not delete lesson knowledge or imply that historical content no longer exists.
 
 Provider operations may reference existing semantic entities only when those identities are included in the request's writable/referenceable projection, plus entities created within the current proposal. Context-budget pressure must never be solved by deleting accepted lesson knowledge or reverting to fixed semantic capacities.
+
+Projection must distinguish complete scopes from partial scopes: a projected Core identity does not imply that all its contents were supplied. Omission cannot establish authoritative absence. A request for missing context is non-accepting and consumes no evidence or semantic revision.
 
 Current production budgets, retry rules, batching, compact-reference codecs, and provider envelopes are implementation configuration and must remain explicit in code/tests. Changing those values requires scoped review; do not use semantic deletion or renderer eviction as a context-budget shortcut.
 
@@ -142,6 +146,8 @@ Alpha must not yet:
 - disclose complete answers that destroy unresolved productive learner work;
 - use hidden syllabus assumptions as if they were teacher evidence;
 - require teacher micromanagement for ordinary Board updates.
+
+Sufficiently speech-grounded teacher-established claims must be represented faithfully with honest provenance even when the model suspects teacher error. Suspicion alone does not justify suppression, substitution with model-preferred truth, or contradiction through domain augmentation. Later explicit teacher self-correction may change the affected knowledge.
 
 Broader autonomous correction, proactive learner actions, intervention controls, teacher approval/override UI, personality/avatar/voice, and cross-lesson memory are future authority, not Alpha requirements.
 

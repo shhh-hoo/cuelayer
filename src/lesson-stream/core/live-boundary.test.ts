@@ -10,6 +10,7 @@ it("keeps the Core library and dispatcher unreachable from production browser/AP
     if (seen.has(path) || !/\.[cm]?tsx?$/.test(path)) return;
     seen.add(path);
     expect(path).not.toContain("/lesson-stream/core/");
+    expect(path).not.toContain("/server/teaching/core/");
     expect(path).not.toContain("/lesson-stream/replay-versioned.");
     for (const { fileName } of ts.preProcessFile(readFileSync(path, "utf8"), true, true).importedFiles) {
       if (!fileName.startsWith(".")) continue;

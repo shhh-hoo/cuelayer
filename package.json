@@ -13,6 +13,8 @@
     "eval:lesson-replay": "node --import tsx scripts/evaluate-lesson-replay.ts",
     "eval:semantics:validate": "node --experimental-strip-types scripts/evaluate-semantics.ts --validate",
     "eval:semantics:live": "node --experimental-strip-types scripts/evaluate-semantics.ts --live",
+    "eval:core:validate": "node --import tsx scripts/evaluate-core-semantics.ts --validate",
+    "eval:core": "node --import tsx scripts/evaluate-core-semantics.ts",
     "check:repo": "node --experimental-strip-types scripts/check-repository-hygiene.ts"
   },
   "dependencies": {

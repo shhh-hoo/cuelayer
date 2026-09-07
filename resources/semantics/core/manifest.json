@@ -1,0 +1,11 @@
+{
+  "corpus": "core-interpretation-corpus-v1",
+  "evaluator": "core-interpretation-evaluator-v1",
+  "cases": 24,
+  "sha256": "0deb20adc39df55e3d63231404e0f2ba4eb7660db86e53e9a678314132afcf9e",
+  "review": "Synthetic examples authored for M2 PR review; no model-generated gold and no model calls.",
+  "splitCounts": {
+    "development": 17,
+    "holdout": 7
+  }
+}
