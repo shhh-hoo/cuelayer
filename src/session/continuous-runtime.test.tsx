@@ -9,6 +9,7 @@ import { TeachingInterpreterError, type TeachingInterpretationResponse } from ".
 import type { TeachingProviderAudit } from "../lesson-stream/audit-contracts";
 import { prepareTraceEvent, sanitizeTraceEvent, type SessionTraceDraft } from "../trace/contracts";
 import { createOutputReferenceCodec } from "../../server/teaching/output-reference-codec";
+import { teachingProviderContract } from "../../server/teaching/provider-contract";
 import type { CanonicalSpeechState } from "./speech-types";
 
 const empty: CanonicalSpeechState = { spans: [] } as unknown as CanonicalSpeechState;
@@ -21,6 +22,7 @@ let root: Root;
 let latest: ReturnType<typeof useLiveTeaching>;
 let records: Array<{ request: TeachingInterpretationRequest; signal?: AbortSignal; resolve(value: TeachingInterpretationResponse): void; reject(error: Error): void }>;
 let props: Parameters<typeof useLiveTeaching>[0];
+let sessions: Map<string, LessonEvent[]>;
 const open = LessonStreamRuntime.open.bind(LessonStreamRuntime);
 function Harness() { latest = useLiveTeaching(props); return <div>{latest.status}:{latest.pendingCount}:{latest.state.board.active?.contribution.content.kind === "TEXT" ? latest.state.board.active.contribution.content.text : ""}</div>; }
 async function render(update: Partial<typeof props> = {}) {
@@ -30,7 +32,7 @@ async function render(update: Partial<typeof props> = {}) {
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   vi.useFakeTimers();
-  const sessions = new Map<string, LessonEvent[]>();
+  sessions = new Map<string, LessonEvent[]>();
   vi.spyOn(LessonStreamRuntime, "open").mockImplementation(async (id) => {
     const events = sessions.get(id) ?? []; sessions.set(id, events);
     return open(id, { readSession: async () => [...events], append: async (items) => { events.push(...items); } });
@@ -42,6 +44,25 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("actual live hook generation and recovery", () => {
+  it("keeps normal live requests, provider schema, persisted events and state on legacy Board semantics", async () => {
+    await render({ canonicalSpeech: speech("m1-sentinel", "Synthetic legacy teaching.") });
+    const call = records[0]!;
+    expect(call.request.currentState).toHaveProperty("board");
+    expect(call.request.currentState).not.toHaveProperty("knowledge");
+    const format = JSON.stringify(teachingProviderContract());
+    expect(format).toContain("SET_ACTIVE");
+    expect(format).toContain("BOARD_ITEM");
+    expect(format).not.toContain("knowledgeOps");
+    expect(format).not.toContain("CREATE_CORE");
+    await act(async () => { call.resolve(response(call.request)); for (let i = 0; i < 30; i++) await Promise.resolve(); });
+    const events = sessions.get("session-a")!;
+    expect(events.length).toBeGreaterThan(0);
+    expect(new Set(events.map(event => event.schemaVersion))).toEqual(new Set(["lesson-event-v4-continuous"]));
+    expect(events.find(event => event.type === "interpretation.step_accepted")).toMatchObject({ step: { boardDelta: { action: "SET_ACTIVE" } } });
+    expect(latest.state.board.active?.contribution.content).toEqual({ kind: "TEXT", text: "Synthetic legacy teaching." });
+    expect(latest.state).not.toHaveProperty("knowledge");
+    expect(latest.pendingCount).toBe(0);
+  });
   it("emits correlated browser pipeline timings while preserving acceptance", async () => {
     const drafts: SessionTraceDraft[] = [];
     await render({ canonicalSpeech: speech("latency", "Synthetic timing."), onTrace: d => { drafts.push(d); } });
