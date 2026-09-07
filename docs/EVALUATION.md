@@ -46,7 +46,7 @@ The Core evaluator is separate from the frozen legacy evaluator above:
 - Corpus: `resources/semantics/core/corpus.jsonl`; identity `core-interpretation-corpus-v1`. The adjacent manifest pins its hash and split counts.
 - Evaluator: `server/teaching/core/semantic-evaluation.ts`; identity `core-interpretation-evaluator-v1`.
 - CLI: `scripts/evaluate-core-semantics.ts`.
-- Provider schema: `core-interpretation-proposal-v1`; policy: `alpha-core-interpretation-v2`.
+- Provider schema: `core-interpretation-proposal-v1`; policy: `alpha-core-interpretation-v3`.
 - Context: `core-interpretation-context-v2`. Durable events remain `lesson-event-v5-core`.
 
 Synthetic exemplars are authored independently for PR review. They are neither translated legacy gold nor outputs from a model run. Corpus validation checks strict case schemas, identity/hash, development/holdout presence, scenario coverage, reference selector resolution, actual Core normalization/acceptance, expected semantic predicates and deterministic replay. It does not establish that a model can produce those exemplars. Human review of corpus semantics remains part of PR review.
@@ -87,17 +87,27 @@ Evaluation output must remain outside tracked source. Repository validation must
 
 The first authorized Luna run on `a9d0b7e` and the original 24-case corpus/hash are frozen baseline evidence. The next same-case run is regression evidence, not an unbiased holdout. No second run is implied by deterministic validation or by the commands below. Live runs still require separate user authorization.
 
-A separate, pre-run authored set lives in `resources/semantics/core/postfix-holdout.jsonl`, pinned by `postfix-holdout-manifest.json` as `core-interpretation-postfix-holdout-v1` (eight holdout-only cases). It shares the unchanged evaluator and proposal schema. Freeze this set before its first live evaluation; do not tune policy, context or corpus against its model outcomes. Its deterministic exemplar results prove fixture/contract consistency only. Reviewers should review corpus semantics before the separately authorized acceptance run.
+The separate eight-case set in `resources/semantics/core/postfix-holdout.jsonl`, pinned by `postfix-holdout-manifest.json` as `core-interpretation-postfix-holdout-v1`, is now frozen, consumed holdout evidence. Do not edit it or run it live again. Preserve its recorded machine result exactly; human adjudication does not retrospectively rescore the artifact. Deterministic exemplar validation remains permitted and establishes fixture/contract consistency only. The explicit reviewed follow-up scope permits the general referent-resolution clarification below and future fixture-authoring guidance; it does not authorize rewriting these frozen fixtures or another model run.
 
 ```sh
 npm run eval:core:validate -- --fresh-holdout
 ```
 
-The default dataset remains the original 24 cases. `--fresh-holdout` explicitly selects the separate set for validation, saved-output assessment or a separately authorized live run. Context/policy semantics are v2; proposal schema, durable event schema, evaluator scoring and baseline corpus identities remain unchanged.
+The default dataset remains the original 24 cases. `--fresh-holdout` explicitly selects the separate set; only deterministic exemplar validation of that frozen holdout is authorized here. Context semantics remain v2; policy v3 clarifies resolution of visible accepted factual referents; proposal schema, durable event schema, evaluator scoring and baseline corpus identities remain unchanged.
 
 Live evaluation journals each raw provider response to a unique ignored `.cuelayer/evaluations/core-calls-*.jsonl` **before** incomplete-status, JSON/schema or semantic validation. Available response ID, request ID, actual model, usage, output content, start time and elapsed milliseconds are retained. Final case results retain the same diagnostic and any parsed proposal even on rejection. Transport errors retain timing/error metadata without invented output. These are evaluation artifacts, not production trace or durable state; request settings, reasoning, token limits and zero-retry behavior are unchanged. The first run's missing rejected raw proposal cannot be recovered retrospectively.
 
-Policy v2 distinguishes an unfinished current phrase (normally accepted no-op, with recent evidence available for continuation) from required missing earlier context (NEEDS_CONTEXT). A distinct self-contained explanatory mainline can require a new Core without transition words; unresolved Cue does not force Core continuity. Exact boundary heuristics remain open. A visible current shell cannot identify omitted specific content, and staying current requires no refocus operation.
+Policy v2 distinguishes an unfinished current phrase (normally accepted no-op, with recent evidence available for continuation) from required missing earlier context (NEEDS_CONTEXT). A distinct self-contained explanatory mainline can require a new Core without transition words; unresolved Cue does not force Core continuity. Exact boundary heuristics remain open. A visible current shell cannot identify omitted specific content, and staying current requires no refocus operation. Policy v3 additionally directs interpretation to use a complete visible `factual_basis` unit when the current reference actually resolves to it; prior-state origin is not itself missing context. Availability does not imply relevance. The policy identity changes because this clarifies the model's PROPOSE/NEEDS_CONTEXT decision; context projection, capability enforcement, evaluator scoring, proposal schema and durable schema are unchanged.
+
+### Authoring semantic predicates
+
+For future fixtures, use independent `all` groups for independently required semantic components when exact surface wording is not the behavior under test. For example, `[["pump"], ["pressure"], ["adequate", "sufficient"]]` accepts reviewed reordering and synonyms while requiring all three components in the same matching unit. Each inner group supplies explicit alternatives; every outer group is required. Avoid a single canonical full sentence for a compositional assertion, including in `currentContains` when that would inadvertently restore the same wording restriction.
+
+Keep truth-critical relationships intact. Do not reduce negation, quantities, directional roles or conditions to an unordered bag of words. Author phrases/alternatives such as `does not open`, `ten litres`, `from inlet to outlet`, or `only when power is on` as appropriate, with `none` exclusions for known confusions and `forbidden` for prohibited content across accepted output. Pair each positive fixture with minimally altered negative examples. The existing lexical scorer cannot prove entailment or exhaustively detect every semantic inversion; explicit alternatives and human review remain necessary. No fuzzy matching, general LLM judge or universal semantic guarantee is introduced.
+
+Test retrieval with predetermined separate accepted Cores when retrieval is the behavior under test. Do not make retrieval coverage depend on a model first choosing a debatable Core boundary. Deterministic numbered-history regression establishes candidate identity, numeric discrimination, append/refocus authority, current-Core non-refocus and identity reuse without imposing new Core-boundary semantics.
+
+This is guidance and regression coverage for future authoring, not retroactive rescoring or modification of either frozen corpus or historical model result.
 
 ## Acceptance boundary
 

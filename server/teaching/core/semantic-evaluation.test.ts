@@ -72,3 +72,41 @@ it("preserves raw diagnostic output when parsing fails before a proposal is retu
   expect(result.results[0]!.proposal).toBeUndefined();
   expect(result.results[0]!.diagnostic?.response?.output_text).toBe("not JSON");
 });
+
+// Authored examples exercise the existing scorer; neither frozen corpus is edited.
+function predicateFixture(sentence: string, all: string[][], none: string[] = [], forbidden: string[] = []) {
+  const provenance = { speech: ["e0"], state: [], domain: null };
+  return { id: "authoring-components", split: "development", tags: ["predicate-authoring"], rationale: "Deterministic authoring checks, not a model benchmark.", turns: [{
+    speech: [sentence], references: {}, domainRules: [], partial: false,
+    exemplar: { outcome: { kind: "PROPOSE", steps: [{ consumes: ["e0"], knowledgeOps: [
+      { action: "CREATE_CORE", as: "main", provenance },
+      { action: "ADD_OBJECT", core: { created: "main" }, as: "claim", value: { text: sentence, provenance } },
+      { action: "SET_CURRENT_CORE", core: { created: "main" } },
+    ], cueDelta: { action: "KEEP" }, evidenceRefs: ["e0"], readRefs: [], reads: { knowledge: false, cue: false }, warnings: [] }] } },
+    expected: { outcome: "PROPOSE", cores: 1, currentContains: null, cueKind: null, facts: [{ location: "OBJECT", all, none, status: "valid" }], forbidden, minSteps: 1, minOperations: 0, sameCurrent: false, domainFacts: 0 },
+  }] };
+}
+it.each(["Pressure must be adequate for the pump.", "The pump requires sufficient pressure."])("accepts compositional predicates across reviewed surface variation: %s", paraphrase => {
+  const fixture = predicateFixture("The pump needs adequate pressure.", [["pump"], ["pressure"], ["adequate", "sufficient"]]);
+  const output = predicateFixture(paraphrase, []).turns[0]!.exemplar;
+  return evaluateCoreCase(fixture, async () => output).then(result => expect(result.pass).toBe(true));
+});
+it.each([
+  { distinction: "missing component", good: "The pump needs adequate pressure.", bad: "The pump needs adequate cooling.", all: [["pump"], ["pressure"], ["adequate"]], none: [], forbidden: [] },
+  { distinction: "negation", good: "The valve does not open below ten degrees.", bad: "The valve does open below ten degrees.", all: [["valve"], ["below ten degrees"], ["does not open", "stays closed"]], none: ["does open"], forbidden: [] },
+  { distinction: "quantity", good: "The tank holds ten litres.", bad: "The tank holds nine litres.", all: [["tank"], ["ten litres", "10 litres"]], none: ["nine litres"], forbidden: [] },
+  { distinction: "direction", good: "Water flows from inlet to outlet.", bad: "Water flows from outlet to inlet.", all: [["water"], ["from inlet to outlet"]], none: ["from outlet to inlet"], forbidden: [] },
+  { distinction: "condition", good: "The motor runs only when power is on.", bad: "The motor runs even when power is off.", all: [["motor"], ["only when power is on"]], none: ["even when power is off"], forbidden: [] },
+  { distinction: "prohibited content", good: "The pump circulates water.", bad: "The pump circulates water. The secret answer is forty-two.", all: [["pump"], ["water"]], none: [], forbidden: ["secret answer"] },
+])("keeps $distinction testable with explicit authored constraints", async ({ good, bad, all, none, forbidden }) => {
+  const fixture = predicateFixture(good, all, none, forbidden);
+  expect((await evaluateCoreCase(fixture)).pass).toBe(true);
+  const result = await evaluateCoreCase(fixture, async () => predicateFixture(bad, []).turns[0]!.exemplar);
+  expect(result.pass).toBe(false);
+  expect(result.results[0]!.failures).toContain(forbidden.length ? "forbidden:secret answer" : "fact:0");
+});
+it("enforces explicit exclusions even when all positive components are present", async () => {
+  const fixture = predicateFixture("The valve stays closed below ten degrees.", [["valve"], ["stays closed"], ["below ten degrees"]], ["opens regardless"]);
+  const result = await evaluateCoreCase(fixture, async () => predicateFixture("The valve stays closed below ten degrees, but opens regardless of temperature.", []).turns[0]!.exemplar);
+  expect(result.results[0]!.failures).toContain("fact:0");
+});

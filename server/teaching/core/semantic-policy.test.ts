@@ -3,7 +3,7 @@ import { CORE_INTERPRETATION_POLICY, CORE_POLICY_VERSION } from "./semantic-poli
 import { buildCoreInterpretationContext, CORE_CONTEXT_VERSION } from "../../../src/lesson-stream/core/interpretation-context.ts";
 import { acceptCoreInterpretation } from "../../../src/lesson-stream/core/interpretation-validation.ts";
 import { appendCoreEvent, type CoreReplay } from "../../../src/lesson-stream/core/replay.ts";
-import { evidence, foundation, timestamp } from "../../../src/lesson-stream/core/test-fixtures.ts";
+import { evidence, foundation, timestamp, start } from "../../../src/lesson-stream/core/test-fixtures.ts";
 import type { ProposalStep } from "../../../src/lesson-stream/core/interpretation-proposal.ts";
 
 function commit(base: CoreReplay, text: string) {
@@ -16,9 +16,9 @@ const noop = (): ProposalStep => ({ consumes: ["e0"], knowledgeOps: [], cueDelta
 const propose = (step: ProposalStep) => ({ outcome: { kind: "PROPOSE", steps: [step] } });
 it("versions the changed context and policy without a classifier or holdout wording", () => {
   expect(CORE_CONTEXT_VERSION).toBe("core-interpretation-context-v2");
-  expect(CORE_POLICY_VERSION).toBe("alpha-core-interpretation-v2");
-  for (const principle of ["reference permits structural targets and readRefs", "only factual_basis", "unfinished current teaching phrase", "not merely an unfinished current utterance", "without an explicit transition phrase", "unresolved active Cue does not imply", "Exact Core-boundary heuristics remain open", "lone visible Core shell does not identify"]) expect(CORE_INTERPRETATION_POLICY).toContain(principle);
-  for (const exposed of ["photosynthesis explanation", "Topic 19", "And the activation"]) expect(CORE_INTERPRETATION_POLICY).not.toContain(exposed);
+  expect(CORE_POLICY_VERSION).toBe("alpha-core-interpretation-v3");
+  for (const principle of ["reference permits structural targets and readRefs", "only factual_basis", "unfinished current teaching phrase", "not merely an unfinished current utterance", "without an explicit transition phrase", "unresolved active Cue does not imply", "Exact Core-boundary heuristics remain open", "lone visible Core shell does not identify", "use it as accepted-state provenance", "availability, not automatic relevance"]) expect(CORE_INTERPRETATION_POLICY).toContain(principle);
+  for (const exposed of ["photosynthesis explanation", "Topic 19", "And the activation", "squares", "equal sides", "CORE2-H-accepted-representation", "Represent that same equality"]) expect(CORE_INTERPRETATION_POLICY).not.toContain(exposed);
 });
 it("accepts an unfinished phrase as no-op and supplies its immutable evidence on continuation", () => {
   const f = foundation(), fragment = "The additional condition is...";
@@ -49,4 +49,48 @@ it.each([true, false])("preserves active Cue across a %s distinct explanatory ma
   expect(result.replay.state.cue).toEqual(base.state.cue);
   expect(Object.keys(result.replay.state.knowledge.cores)).toHaveLength(distinct ? 2 : 1);
   expect(result.replay.state.knowledge.currentCoreId === f.coreId).toBe(!distinct);
+});
+
+it.each([true, false])("distinguishes available accepted factual content from an omitted referent (visible=%s)", visible => {
+  const statement = "The reservoir holds twelve litres.", instruction = "Restate the reservoir's capacity.";
+  const initial = commit(start(), statement);
+  const initialBinding = buildCoreInterpretationContext(initial, { requestId: "capacity", newEvidence: initial.checkpoints });
+  const setup = noop(), provenance = { speech: ["e0"], state: [], domain: null };
+  setup.evidenceRefs = ["e0"];
+  setup.knowledgeOps = [
+    { action: "CREATE_CORE", as: "reservoir", provenance },
+    { action: "ADD_OBJECT", core: { created: "reservoir" }, as: "capacity", value: { text: statement, provenance } },
+    { action: "SET_CURRENT_CORE", core: { created: "reservoir" } },
+  ];
+  const accepted = acceptCoreInterpretation(initialBinding, propose(setup), timestamp);
+  const coreId = accepted.replay.state.knowledge.currentCoreId!;
+  const objectId = Object.keys(accepted.replay.state.knowledge.cores[coreId]!.objects)[0]!;
+  const target = { kind: "OBJECT" as const, coreId, id: objectId };
+  const base = commit(accepted.replay, instruction);
+  const bound = buildCoreInterpretationContext(base, { requestId: "restate", newEvidence: [base.checkpoints.at(-1)!], includeCue: false,
+    factualBasis: visible ? [target] : [], budgets: { optionalRoots: 0, recentEvidence: 0, recentChanges: 0 } });
+  // Identical immutable state and current evidence; only the factual projection differs.
+  expect(bound.context.evidence.map(e => e.text)).toEqual([instruction]);
+  expect(bound.context.knowledge.current).not.toBeNull();
+  expect(bound.base.state.knowledge.cores[coreId]!.objects[objectId]!.value.text).toBe(statement);
+  if (visible) {
+    const fact = bound.context.entities.find(e => e.text === statement)!;
+    expect(fact).toMatchObject({ kind: "OBJECT", status: "valid", capabilities: ["reference", "factual_basis"] });
+    expect(bound.entities.get(fact.handle)!.target).toEqual(target);
+    const step = noop(); step.evidenceRefs = ["e0"];
+    step.knowledgeOps = [{ action: "ADD_OBJECT", core: { existing: bound.context.knowledge.current! }, as: "restated_capacity",
+      value: { text: "The reservoir's capacity is twelve litres.", provenance: { speech: [], state: [{ existing: fact.handle }], domain: null } } }];
+    const result = acceptCoreInterpretation(bound, propose(step), timestamp);
+    expect(result.kind).toBe("PROPOSE");
+    expect(result.events).toHaveLength(1);
+    expect(result.steps[0]!.knowledgeOps[0]).toMatchObject({ value: { provenance: { speechRefs: [], stateRefs: [{ target, revision: 1 }] } } });
+  } else {
+    expect(bound.context.entities).toHaveLength(1);
+    expect(bound.context.entities[0]).toMatchObject({ kind: "CORE", contents: "partial", capabilities: ["reference", "append"] });
+    expect(bound.context.entities.some(e => e.capabilities.includes("factual_basis"))).toBe(false);
+    const result = acceptCoreInterpretation(bound, { outcome: { kind: "NEEDS_CONTEXT", query: instruction, evidence: ["e0"] } }, timestamp);
+    expect(result.events).toEqual([]);
+    expect(result.steps).toEqual([]);
+    expect(result.replay).toEqual(base);
+  }
 });

@@ -219,3 +219,41 @@ it("rejects ubiquitous templates while retaining short numeric retrieval in long
   const short = project("Return to module 1");
   expect(short.context.candidates.map(h => short.entities.get(h)!.target.id)).toEqual([ids[1]]);
 });
+
+it("retrieves a numbered Parked Core from predetermined separate accepted mainlines", () => {
+  let base = start();
+  const ids: string[] = [];
+  for (const text of ["Channel 6 carries the reference signal.", "Channel 8 carries the timing signal.", "Channel 9 carries the control signal."]) {
+    const event = evidence(base).events.at(-1)!;
+    if (event.type !== "evidence.checkpoint_committed") throw new Error("fixture");
+    event.checkpoint.text = text;
+    base = appendCoreEvent(base, event);
+    const cp = base.checkpoints.at(-1)!, p = { speechRefs: [{ checkpointId: cp.checkpointId, quote: text }], stateRefs: [] };
+    const step = stepFor(base, { evidenceRefs: p.speechRefs });
+    const coreId = coreEntityId(base.state.sessionId, step, "CORE", 0); ids.push(coreId);
+    step.knowledgeOps = [
+      { action: "CREATE_CORE", id: coreId, provenance: p },
+      { action: "ADD_OBJECT", coreId, id: coreEntityId(base.state.sessionId, step, "OBJECT", 1), value: { text, provenance: p } },
+      { action: "SET_CURRENT_CORE", coreId },
+    ];
+    base = acceptCoreStep(base, step).replay;
+  }
+  const project = (text: string) => {
+    const event = evidence(base).events.at(-1)!;
+    if (event.type !== "evidence.checkpoint_committed") throw new Error("fixture");
+    event.checkpoint.text = text;
+    const next = appendCoreEvent(base, event);
+    return buildCoreInterpretationContext(next, { requestId: "numbered-retrieval", newEvidence: [next.checkpoints.at(-1)!], budgets: { optionalRoots: 0 } });
+  };
+  expect(project("A channel carries a signal.").context.candidates).toEqual([]);
+  const bound = project("Return to channel 6 and continue its explanation.");
+  expect(bound.context.candidates).toHaveLength(1);
+  const candidate = bound.context.candidates[0]!;
+  expect(bound.entities.get(candidate)).toMatchObject({ target: { kind: "CORE", id: ids[0] }, capabilities: ["reference", "append", "refocus"] });
+  expect(bound.context.entities.find(e => e.core === candidate)?.text).toBe("Channel 6 carries the reference signal.");
+  expect([...bound.entities.values()].some(e => e.target.id === ids[1])).toBe(false);
+  expect(bound.entities.get(bound.context.knowledge.current!)!.capabilities).toEqual(["reference", "append"]);
+  const result = acceptCoreInterpretation(bound, { outcome: { kind: "PROPOSE", steps: [{ consumes: ["e0"], knowledgeOps: [{ action: "SET_CURRENT_CORE", core: { existing: candidate } }], cueDelta: { action: "KEEP" }, evidenceRefs: ["e0"], readRefs: [], reads: { knowledge: false, cue: false }, warnings: [] }] } }, timestamp);
+  expect(result.replay.state.knowledge.currentCoreId).toBe(ids[0]);
+  expect(Object.keys(result.replay.state.knowledge.cores).sort()).toEqual([...ids].sort());
+});
