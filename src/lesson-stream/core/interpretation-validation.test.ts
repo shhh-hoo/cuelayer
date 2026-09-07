@@ -81,7 +81,7 @@ describe("Core provider normalization", () => {
   });
   it("rejects omitted and read-only mutations even though IDs exist in accepted state", () => {
     const f = foundation(), base = evidence(f.replay), target = { kind: "OBJECT" as const, coreId: f.coreId, id: f.a };
-    const request = buildCoreInterpretationContext(base, { requestId: "r", newEvidence: [base.checkpoints.at(-1)!], required: [target], readOnly: [target] });
+    const request = buildCoreInterpretationContext(base, { requestId: "r", newEvidence: [base.checkpoints.at(-1)!], required: [target] });
     const handle = [...request.entities].find(([, e]) => e.target.id === f.a)![0];
     const step = empty(); step.evidenceRefs = ["e0"]; step.knowledgeOps = [{ action: "REVISE_OBJECT", target: existing(handle), value: value(), correctionEvidence: "e0" }];
     expect(() => acceptCoreInterpretation(request, propose(step), timestamp)).toThrow("capability-denied");
@@ -102,7 +102,7 @@ describe("Core provider normalization", () => {
     expect(() => acceptCoreInterpretation(bound, propose(read), timestamp, expired)).toThrow();
   });
   it("accepts a Cue-only step despite unrelated knowledge revision changes", () => {
-    const f = foundation(), base = evidence(f.replay), request = buildCoreInterpretationContext(base, { requestId: "cue-only", newEvidence: [base.checkpoints.at(-1)!] });
+    const f = foundation(), base = evidence(f.replay), request = buildCoreInterpretationContext(base, { requestId: "cue-only", newEvidence: [base.checkpoints.at(-1)!], writable: [{ kind: "CUE", id: f.cueId }] });
     const advanced = structuredClone(base); advanced.state.knowledge.revision += 1;
     const step = empty(); step.evidenceRefs = ["e0"]; step.cueDelta = { action: "RESOLVE", target: existing(request.context.cue.active!), evidence: "e0" };
     expect(acceptCoreInterpretation(request, propose(step), timestamp, advanced).replay.state.cue.active).toBeUndefined();
@@ -119,7 +119,7 @@ describe("Core provider normalization", () => {
     expect(() => acceptCoreInterpretation(request, propose(step), timestamp)).toThrow("domain-not-speech");
   });
   it.each(["OBJECT", "RELATION", "SUPPORT"] as const)("revises and supersedes projected %s without changing unrelated identities", kind => {
-    const f = foundation(), base = evidence(f.replay), request = buildCoreInterpretationContext(base, { requestId: "local", newEvidence: [base.checkpoints.at(-1)!] });
+    const f = foundation(), base = evidence(f.replay), request = buildCoreInterpretationContext(base, { requestId: "local", newEvidence: [base.checkpoints.at(-1)!], writable: [{ kind, coreId: f.coreId, id: kind === "OBJECT" ? f.a : kind === "RELATION" ? f.relationId : f.supportId }] });
     const h = (id: string) => existing([...request.entities].find(([, e]) => e.target.id === id)![0]);
     const id = kind === "OBJECT" ? f.a : kind === "RELATION" ? f.relationId : f.supportId;
     const v = kind === "OBJECT" ? value("Corrected proposition") : kind === "RELATION" ? { ...value("Corrected relationship"), from: h(f.a), to: h(f.b) } : { ...value("Corrected example"), target: h(f.coreId) };
@@ -129,13 +129,17 @@ describe("Core provider normalization", () => {
     expect(revised.steps[0]!.knowledgeOps[0]).toMatchObject({ id });
     expect(revised.replay.state.cue).toEqual(base.state.cue);
     step.knowledgeOps = [{ action: `ADD_${kind}`, core: h(f.coreId), as: "replacement", value: v } as ProposalStep["knowledgeOps"][number], { action: "SUPERSEDE", target: h(id), replacement: created("replacement"), correctionEvidence: "e0" }];
+    const invalidation = empty(); invalidation.evidenceRefs = ["e0"];
+    invalidation.knowledgeOps = [{ action: "INVALIDATE", target: h(id), correctionEvidence: "e0" }];
+    const invalidated = acceptCoreInterpretation(request, propose(invalidation), timestamp);
+    expect(invalidated.steps[0]!.knowledgeOps[0]).toMatchObject({ action: "INVALIDATE", target: { id } });
     const superseded = acceptCoreInterpretation(request, propose(step), timestamp);
     const collection = kind === "OBJECT" ? "objects" : kind === "RELATION" ? "relations" : "supports";
     expect(superseded.replay.state.knowledge.cores[f.coreId]![collection][id]!.status).toBe("superseded");
     expect(superseded.replay.state.cue).toEqual(base.state.cue);
   });
   it.each(["REVISE", "REPLACE", "RESOLVE"] as const)("normalizes Cue %s while preserving knowledge", action => {
-    const f = foundation(), base = evidence(f.replay), request = buildCoreInterpretationContext(base, { requestId: "cue", newEvidence: [base.checkpoints.at(-1)!] });
+    const f = foundation(), base = evidence(f.replay), request = buildCoreInterpretationContext(base, { requestId: "cue", newEvidence: [base.checkpoints.at(-1)!], writable: [{ kind: "CUE", id: f.cueId }] });
     const step = empty(); step.evidenceRefs = ["e0"];
     const target = existing(request.context.cue.active!), v = { ...value("Compare A carefully"), kind: "QUESTION" as const, target: null };
     step.cueDelta = action === "RESOLVE" ? { action, target, evidence: "e0" } : action === "REVISE" ? { action, target, value: v } : { action, target, as: "nextcue", value: v, evidence: "e0" };

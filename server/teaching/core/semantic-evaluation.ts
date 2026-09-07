@@ -40,7 +40,7 @@ function commit(replay: CoreReplay, speech: string) {
 }
 
 /** Exemplar selectors belong to corpus authoring only. They are never sent to a provider. */
-export function materializeCoreExemplar(turn: CoreCorpusCase["turns"][number], request: CoreInterpretationBinding): unknown {
+function referenceHandles(turn: CoreCorpusCase["turns"][number], request: CoreInterpretationBinding) {
   const handles = new Map<string, string>();
   for (const [name, selector] of Object.entries(turn.references)) {
     const matches = request.context.entities.filter(entity => {
@@ -52,6 +52,11 @@ export function materializeCoreExemplar(turn: CoreCorpusCase["turns"][number], r
     if (matches.length !== 1) throw new Error(`core-corpus-selector-ambiguous:${name}`);
     handles.set(name, matches[0]!.handle);
   }
+  return handles;
+}
+
+export function materializeCoreExemplar(turn: CoreCorpusCase["turns"][number], request: CoreInterpretationBinding): unknown {
+  const handles = referenceHandles(turn, request);
   const walk = (input: unknown): unknown => {
     if (Array.isArray(input)) return input.map(walk);
     if (!input || typeof input !== "object") return input;
@@ -102,8 +107,13 @@ export async function evaluateCoreCase(input: unknown, provider?: CoreEvaluation
     const before = replay;
     let contextCharacters = 0;
     try {
-      const request = buildCoreInterpretationContext(replay, { requestId: `${item.id}-${index}`, newEvidence: replay.checkpoints.filter(c => c.lessonSequence > replay.state.processedThroughSequence), domainRules: turn.domainRules,
-        ...(turn.partial ? { includeCue: false, budgets: { optionalRoots: 0, candidateCores: 0 } } : {}) });
+      const options = { requestId: `${item.id}-${index}`, newEvidence: replay.checkpoints.filter(c => c.lessonSequence > replay.state.processedThroughSequence), domainRules: turn.domainRules,
+        ...(turn.partial ? { includeCue: false, budgets: { optionalRoots: 0, candidateCores: 0 } } : {}) };
+      const projected = buildCoreInterpretationContext(replay, options);
+      // Reviewed fixture selectors explicitly name the host's target scope. Never infer
+      // authority from provider output, exemplar operations, or dependency closure.
+      const writable = [...referenceHandles(turn, projected).values()].map(handle => projected.entities.get(handle)!.target);
+      const request = buildCoreInterpretationContext(replay, { ...options, writable });
       contextCharacters = JSON.stringify(request.context).length;
       const proposal = provider ? await provider(request, item.id, index) : materializeCoreExemplar(turn, request);
       const result = acceptCoreInterpretation(request, proposal, timestamp);

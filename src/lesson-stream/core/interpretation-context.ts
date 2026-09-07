@@ -16,7 +16,7 @@ export type InterpretationContext = {
   knowledge: { empty: boolean; cores: "complete" | "partial"; current: string | null };
   cue: { presence: "absent" | "included" | "omitted"; active: string | null };
   candidates: string[];
-  recentChanges: Array<{ actions: string[]; consumedSequences: number[] }>;
+  recentChanges: Array<{ changes: Array<{ action: string; target: string; replacement?: string }>; complete: boolean; consumedSequences: number[] }>;
   unresolved: Array<{ evidence: string; phrase: string }>;
   structuralPriors: string[];
   domainRules: DomainRule[];
@@ -79,6 +79,8 @@ export type ContextOptions = {
   requestId: string; newEvidence: readonly CompactEvidenceCheckpoint[];
   required?: readonly SemanticReference[];
   readOnly?: readonly SemanticReference[];
+  /** Explicit host authorization; dependencies remain reference-only. */
+  writable?: readonly SemanticReference[];
   includeCue?: boolean;
   unresolved?: readonly { checkpointId: string; phrase: string }[];
   structuralPriors?: readonly string[];
@@ -94,6 +96,7 @@ export function buildCoreInterpretationContext(input: CoreReplay, options: Conte
   if (!options.requestId || !options.newEvidence.length || options.newEvidence.some((c, i) => JSON.stringify(c) !== JSON.stringify(pending[i]))) throw new Error("core-context-pending-prefix-invalid");
   const selected = new Map<string, BoundEntity>(), evidence = new Map<string, CompactEvidenceCheckpoint>();
   const sources = historicalSources(base), readOnly = new Set((options.readOnly ?? []).map(key));
+  const writable = new Set((options.writable ?? []).map(key));
   const rules = structuredClone([...(options.domainRules ?? [])]);
   if (rules.length > budgets.domainRules || new Set(rules.map(r => r.id)).size !== rules.length || rules.some(r => !/^[a-z][a-z0-9_]{0,39}$/.test(r.id) || !r.text.trim() || !r.basis.trim())) throw new Error("core-context-domain-rules-invalid");
   const context: InterpretationContext = {
@@ -118,7 +121,8 @@ export function buildCoreInterpretationContext(input: CoreReplay, options: Conte
     const value = resolveSemanticReference(base.state, target);
     if (!value) throw new Error("core-context-required-reference-missing");
     const handle = `r${selected.size}`;
-    const capabilities: Capability[] = !valid(value) ? [] : target.kind === "CORE" ? ["reference", "append", "refocus"]
+    const authorized = writable.has(key(target)) || (target.kind === "CORE" && target.id === base.state.knowledge.currentCoreId);
+    const capabilities: Capability[] = !valid(value) ? [] : !authorized ? ["reference"] : target.kind === "CORE" ? ["reference", "append", "refocus"]
       : target.kind === "CUE" ? ["reference", "revise"] : ["reference", "revise", "invalidate", "supersede"];
     const granted = readOnly.has(key(target)) ? capabilities.filter(c => c === "reference") : capabilities;
     selected.set(handle, { target, capabilities: granted });
@@ -151,11 +155,22 @@ export function buildCoreInterpretationContext(input: CoreReplay, options: Conte
     }
     context.knowledge.cores = context.entities.filter(e => e.kind === "CORE").length === Object.keys(base.state.knowledge.cores).length ? "complete" : "partial";
   };
-  const admit = (root: SemanticReference, mandatory: boolean) => {
-    const beforeEntities = structuredClone(context.entities), beforeSelected = new Map(selected);
-    const result = add(root); refresh();
+  const admit = (root: SemanticReference, mandatory: boolean, anchor?: SemanticReference) => {
+    const beforeEntities = structuredClone(context.entities), beforeSelected = structuredClone(selected);
+    const beforeCandidates = [...context.candidates];
+    const result = add(root);
+    if (anchor) {
+      add(anchor);
+      if (!readOnly.has(key(root))) {
+        const capabilities: Capability[] = ["reference", "append", "refocus"];
+        selected.get(result)!.capabilities = capabilities;
+        context.entities.find(e => e.handle === result)!.capabilities = capabilities;
+      }
+      context.candidates.push(result);
+    }
+    refresh();
     if (fits()) return result;
-    context.entities = beforeEntities; selected.clear(); beforeSelected.forEach((v, k) => selected.set(k, v)); refresh();
+    context.entities = beforeEntities; context.candidates = beforeCandidates; selected.clear(); beforeSelected.forEach((v, k) => selected.set(k, v)); refresh();
     if (mandatory) throw new Error("core-context-required-budget-exceeded");
     return undefined;
   };
@@ -163,7 +178,7 @@ export function buildCoreInterpretationContext(input: CoreReplay, options: Conte
   if (base.state.cue.active && options.includeCue !== false) {
     context.cue.active = admit({ kind: "CUE", id: base.state.cue.active.id }, true)!; context.cue.presence = "included";
   }
-  for (const root of options.required ?? []) admit(root, true);
+  for (const root of [...(options.required ?? []), ...(options.writable ?? [])]) admit(root, true);
   if (!fits()) throw new Error("core-context-required-budget-exceeded");
   for (const prior of (options.structuralPriors ?? []).slice(0, budgets.priors)) {
     context.structuralPriors.push(prior);
@@ -174,15 +189,12 @@ export function buildCoreInterpretationContext(input: CoreReplay, options: Conte
   const terms = new Set(query.match(/[\p{L}\p{N}]{3,}/gu) ?? []);
   const score = (text: string) => [...terms].filter(t => text.toLowerCase().includes(t)).length;
   const cores = Object.values(base.state.knowledge.cores);
-  const parked = cores.filter(c => c.id !== base.state.knowledge.currentCoreId).map(c => ({ core: c, score: Math.max(0, ...Object.values(c.objects).map(o => score(o.value.text))) }))
-    .sort((a, b) => b.score - a.score || a.core.id.localeCompare(b.core.id)).slice(0, budgets.candidateCores);
+  const parked = cores.filter(c => c.id !== base.state.knowledge.currentCoreId).map(c => ({ core: c, score: Math.max(0, ...Object.values(c.objects).filter(o => o.status === "valid").map(o => score(o.value.text))) }))
+    .filter(c => c.score > 0).sort((a, b) => b.score - a.score || a.core.id.localeCompare(b.core.id)).slice(0, budgets.candidateCores);
   for (const item of parked) {
-    const h = admit({ kind: "CORE", id: item.core.id }, false);
     const anchor = Object.values(item.core.objects).filter(o => o.status === "valid").sort((a, b) => score(b.value.text) - score(a.value.text) || a.id.localeCompare(b.id))[0];
-    // A candidate must show actual accepted meaning, not merely a nameless container.
-    if (h && anchor && admit({ kind: "OBJECT", coreId: item.core.id, id: anchor.id }, false)) {
-      context.candidates.push(h); if (!fits()) context.candidates.pop();
-    }
+    // Identity, accepted meaning, candidate metadata and Core authority fit together or roll back together.
+    if (anchor) admit({ kind: "CORE", id: item.core.id }, false, { kind: "OBJECT", coreId: item.core.id, id: anchor.id });
   }
   const chosenCores = cores.filter(c => handleFor({ kind: "CORE", id: c.id }));
   const roots = chosenCores.flatMap(c => (["OBJECT", "RELATION", "SUPPORT"] as const).flatMap(kind => {
@@ -205,7 +217,16 @@ export function buildCoreInterpretationContext(input: CoreReplay, options: Conte
   const events = budgets.recentChanges ? base.events.filter(e => e.type === "core.step_accepted").slice(-budgets.recentChanges) : [];
   for (const event of events) {
     if (event.type !== "core.step_accepted") continue;
-    context.recentChanges.push({ actions: event.step.knowledgeOps.map(op => op.action), consumedSequences: event.step.consumesCheckpointIds.map(id => base.checkpoints.find(c => c.checkpointId === id)!.lessonSequence) });
+    const changes: InterpretationContext["recentChanges"][number]["changes"] = [];
+    for (const op of event.step.knowledgeOps) {
+      const ref: SemanticReference = "target" in op ? op.target : op.action === "SET_CURRENT_CORE" ? { kind: "CORE", id: op.coreId }
+        : op.action === "CREATE_CORE" ? { kind: "CORE", id: op.id }
+        : { kind: op.action.endsWith("OBJECT") ? "OBJECT" : op.action.endsWith("RELATION") ? "RELATION" : "SUPPORT", coreId: op.coreId, id: op.id };
+      const target = handleFor(ref);
+      const replacement = op.action === "SUPERSEDE" ? handleFor(op.replacement) : undefined;
+      if (target && (op.action !== "SUPERSEDE" || replacement)) changes.push({ action: op.action, target, ...(replacement ? { replacement } : {}) });
+    }
+    context.recentChanges.push({ changes, complete: changes.length === event.step.knowledgeOps.length, consumedSequences: event.step.consumesCheckpointIds.map(id => base.checkpoints.find(c => c.checkpointId === id)!.lessonSequence) });
     if (!fits()) context.recentChanges.pop();
   }
   refresh();

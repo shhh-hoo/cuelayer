@@ -2,7 +2,9 @@ import { expect, it } from "vitest";
 import { acceptCoreStep } from "./accepted-steps.ts";
 import { coreEntityId } from "./events.ts";
 import { buildCoreInterpretationContext, CORE_CONTEXT_BUDGETS, historicalSources } from "./interpretation-context.ts";
-import { evidence, fact, foundation, provenance, stepFor } from "./test-fixtures.ts";
+import { appendCoreEvent } from "./replay.ts";
+import { acceptCoreInterpretation } from "./interpretation-validation.ts";
+import { evidence, fact, foundation, provenance, stepFor, timestamp } from "./test-fixtures.ts";
 
 it("projects complete mutable values with intra-Core structural closure", () => {
   const f = foundation(), base = evidence(f.replay);
@@ -95,7 +97,96 @@ it("honors zero optional budgets and explicit required Cue coverage", () => {
 it("does not duplicate entities or bypass read-only scope when reference key order differs", () => {
   const f = foundation(), base = evidence(f.replay);
   const ref = { id: f.a, coreId: f.coreId, kind: "OBJECT" as const };
-  const bound = buildCoreInterpretationContext(base, { requestId: "keys", newEvidence: [base.checkpoints.at(-1)!], required: [ref], readOnly: [ref] });
+  const bound = buildCoreInterpretationContext(base, { requestId: "keys", newEvidence: [base.checkpoints.at(-1)!], required: [ref], writable: [ref], readOnly: [ref] });
   const handles = [...bound.entities].filter(([, e]) => e.target.id === f.a);
   expect(handles).toHaveLength(1); expect(handles[0]![1].capabilities).toEqual(["reference"]);
+});
+
+function parkedRequest(text: string, budgets = {}) {
+  const parked = foundation(), current = foundation(evidence(parked.replay));
+  const event = evidence(current.replay).events.at(-1)!;
+  if (event.type !== "evidence.checkpoint_committed") throw new Error("fixture");
+  event.checkpoint.text = text;
+  const base = appendCoreEvent(current.replay, event);
+  const bound = buildCoreInterpretationContext(base, { requestId: "retrieval", newEvidence: [base.checkpoints.at(-1)!], includeCue: false, budgets: { optionalRoots: 0, ...budgets } });
+  return { parked, current, base, bound };
+}
+
+it.each([{ maxEntities: 2, optionalRoots: 18 }, { maxCharacters: 750, optionalRoots: 18 }])("rolls back candidate identity and authority when its anchor cannot fit: %j", budgets => {
+  const { parked, bound } = parkedRequest("Return to the definition", budgets);
+  expect(bound.context.candidates).toEqual([]);
+  expect([...bound.entities.values()].some(e => e.target.id === parked.coreId || ("coreId" in e.target && e.target.coreId === parked.coreId))).toBe(false);
+  expect(bound.context.entities.filter(e => e.kind === "CORE")).toHaveLength(1);
+  expect(JSON.stringify(bound.context)).not.toContain(parked.coreId);
+});
+
+it("does not fill the candidate quota for an unrelated new topic", () => {
+  const { bound } = parkedRequest("Photosynthesis chlorophyll sunlight");
+  expect(bound.context.candidates).toEqual([]);
+  expect(bound.context.entities).toHaveLength(1);
+});
+
+it("admits a positively retrieved anchor as reference-only while allowing Core append/refocus", () => {
+  const { parked, bound } = parkedRequest("Return to the definition");
+  expect(bound.context.candidates).toHaveLength(1);
+  const core = bound.context.candidates[0]!;
+  expect(bound.entities.get(core)).toMatchObject({ target: { id: parked.coreId }, capabilities: ["reference", "append", "refocus"] });
+  const anchor = bound.context.entities.find(e => e.core === core)!;
+  expect(anchor.text).toBe("A definition");
+  expect(anchor.capabilities).toEqual(["reference"]);
+  const step = { consumes: ["e0"], knowledgeOps: [], cueDelta: { action: "KEEP" }, evidenceRefs: ["e0"], readRefs: [], reads: { knowledge: false, cue: false }, warnings: [] };
+  const value = { text: "Definition expanded", provenance: { speech: ["e0"], state: [], domain: null } };
+  expect(() => acceptCoreInterpretation(bound, { outcome: { kind: "PROPOSE", steps: [{ ...step, knowledgeOps: [{ action: "REVISE_OBJECT", target: { existing: anchor.handle }, value, correctionEvidence: "e0" }] }] } }, timestamp)).toThrow("capability-denied");
+  const result = acceptCoreInterpretation(bound, { outcome: { kind: "PROPOSE", steps: [{ ...step, knowledgeOps: [
+    { action: "SET_CURRENT_CORE", core: { existing: core } },
+    { action: "ADD_OBJECT", core: { existing: core }, as: "extension", value },
+  ] }] } }, timestamp);
+  expect(result.replay.state.knowledge.currentCoreId).toBe(parked.coreId);
+  expect(Object.values(result.replay.state.knowledge.cores[parked.coreId]!.objects).some(o => o.value.text === value.text)).toBe(true);
+});
+
+it("keeps an ungrounded earlier reference unresolved without guessing a Parked identity", () => {
+  const text = "Revisit whatever we discussed earlier", { bound, parked } = parkedRequest(text);
+  expect(bound.context.candidates).toEqual([]);
+  expect([...bound.entities.values()].some(e => e.target.id === parked.coreId)).toBe(false);
+  const result = acceptCoreInterpretation(bound, { outcome: { kind: "NEEDS_CONTEXT", query: text, evidence: ["e0"] } }, timestamp);
+  expect(result.events).toEqual([]);
+  expect(result.replay).toEqual(bound.base);
+});
+
+it("projects dependencies without inheriting their explicitly writable root's authority", () => {
+  const f = foundation(), base = evidence(f.replay);
+  const bound = buildCoreInterpretationContext(base, { requestId: "scope", newEvidence: [base.checkpoints.at(-1)!], includeCue: false, writable: [{ kind: "RELATION", coreId: f.coreId, id: f.relationId }], budgets: { optionalRoots: 0 } });
+  expect(bound.context.entities.find(e => e.kind === "RELATION")!.capabilities).toContain("revise");
+  expect(bound.context.entities.filter(e => e.kind === "OBJECT").map(e => e.capabilities)).toEqual([["reference"], ["reference"]]);
+});
+
+it("identifies recent accepted semantic changes through bounded provider handles", () => {
+  const f = foundation(); let base = evidence(f.replay);
+  const step = stepFor(base), cp = base.checkpoints.at(-1)!;
+  step.knowledgeOps = [{ action: "REVISE_OBJECT", coreId: f.coreId, id: f.a, value: fact(cp.checkpointId, "Corrected definition"), correctionEvidence: { checkpointId: cp.checkpointId, quote: cp.text } }];
+  base = evidence(acceptCoreStep(base, step).replay);
+  const bound = buildCoreInterpretationContext(base, { requestId: "recent", newEvidence: [base.checkpoints.at(-1)!], budgets: { recentChanges: 1, maxCharacters: 4000 } });
+  expect(bound.context.recentChanges).toHaveLength(1);
+  const change = bound.context.recentChanges[0]!;
+  expect(change.complete).toBe(true);
+  expect(change.changes).toHaveLength(1);
+  expect(bound.context.entities.find(e => e.handle === change.changes[0]!.target)?.text).toBe("Corrected definition");
+  expect(change.changes[0]!.action).toBe("REVISE_OBJECT");
+  expect(JSON.stringify(bound.context).length).toBeLessThanOrEqual(4000);
+});
+
+
+it("does not retrieve a Parked Core whose only matching anchors are invalid", () => {
+  const f = foundation(); let base = evidence(f.replay);
+  const step = stepFor(base), cp = base.checkpoints.at(-1)!;
+  step.knowledgeOps = [f.a, f.b].map(id => ({ action: "INVALIDATE" as const, target: { kind: "OBJECT" as const, coreId: f.coreId, id }, correctionEvidence: { checkpointId: cp.checkpointId, quote: cp.text } }));
+  base = foundation(evidence(acceptCoreStep(base, step).replay)).replay;
+  const event = evidence(base).events.at(-1)!;
+  if (event.type !== "evidence.checkpoint_committed") throw new Error("fixture");
+  event.checkpoint.text = "Return to definition proposition";
+  base = appendCoreEvent(base, event);
+  const bound = buildCoreInterpretationContext(base, { requestId: "invalid-anchor", newEvidence: [base.checkpoints.at(-1)!], includeCue: false });
+  expect(bound.context.candidates).toEqual([]);
+  expect([...bound.entities.values()].some(e => e.target.id === f.coreId)).toBe(false);
 });
