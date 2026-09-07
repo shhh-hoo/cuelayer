@@ -6,7 +6,7 @@ const files = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" }).spli
 const forbidden = files.filter(path =>
   path.startsWith(".cuelayer/") || path.startsWith("artifacts/") ||
   /^resources\/.*(?:\/results\/|(?:summary|playback-timing|integrity)[^/]*\.(?:json|jsonl)$)/.test(path) ||
-  /^resources\/semantics\/(?!current\/|core\/(?:corpus\.jsonl|manifest\.json)$)/.test(path) ||
+  /^resources\/semantics\/(?!current\/|core\/(?:corpus\.jsonl|manifest\.json|postfix-holdout\.jsonl|postfix-holdout-manifest\.json)$)/.test(path) ||
   /^(?:scripts|server\/teaching)\/(?:build-semantics-corpus|evaluate-semantics|semantic-evaluation)-v\d/.test(path));
 if (forbidden.length) throw new Error(`Generated evidence or retired evaluators tracked:\n${forbidden.join("\n")}`);
 const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts as Record<string, string>;

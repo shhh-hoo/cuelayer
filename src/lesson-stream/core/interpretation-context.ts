@@ -3,9 +3,9 @@ import type { CoreTeachingState, Provenance, SemanticReference } from "./contrac
 import { appendCoreEvent, createCoreReplay, type CoreReplay } from "./replay.ts";
 import { resolveSemanticReference } from "./teaching-state.ts";
 
-export const CORE_CONTEXT_VERSION = "core-interpretation-context-v1";
+export const CORE_CONTEXT_VERSION = "core-interpretation-context-v2";
 export const CORE_CONTEXT_BUDGETS = Object.freeze({ maxCharacters: 32_000, maxEntities: 48, candidateCores: 3, optionalRoots: 18, recentEvidence: 6, recentChanges: 4, unresolved: 8, priors: 4, domainRules: 8 });
-export type Capability = "reference" | "append" | "refocus" | "revise" | "invalidate" | "supersede";
+export type Capability = "reference" | "factual_basis" | "append" | "refocus" | "revise" | "invalidate" | "supersede";
 export type DomainRule = { id: string; text: string; basis: string };
 export type BoundEntity = { target: SemanticReference; capabilities: Capability[] };
 type ProjectedEntity = { handle: string; kind: SemanticReference["kind"]; core?: string; status: string; capabilities: Capability[]; text?: string; from?: string; to?: string; target?: string; cueKind?: string; origins: string[]; contents?: "complete" | "partial" };
@@ -81,6 +81,8 @@ export type ContextOptions = {
   readOnly?: readonly SemanticReference[];
   /** Explicit host authorization; dependencies remain reference-only. */
   writable?: readonly SemanticReference[];
+  /** Complete accepted units intentionally selected as factual sources, never Core containers. */
+  factualBasis?: readonly SemanticReference[];
   includeCue?: boolean;
   unresolved?: readonly { checkpointId: string; phrase: string }[];
   structuralPriors?: readonly string[];
@@ -122,7 +124,7 @@ export function buildCoreInterpretationContext(input: CoreReplay, options: Conte
     if (!value) throw new Error("core-context-required-reference-missing");
     const handle = `r${selected.size}`;
     const authorized = writable.has(key(target)) || (target.kind === "CORE" && target.id === base.state.knowledge.currentCoreId);
-    const capabilities: Capability[] = !valid(value) ? [] : !authorized ? ["reference"] : target.kind === "CORE" ? ["reference", "append", "refocus"]
+    const capabilities: Capability[] = !valid(value) ? [] : !authorized ? ["reference"] : target.kind === "CORE" ? ["reference", "append"]
       : target.kind === "CUE" ? ["reference", "revise"] : ["reference", "revise", "invalidate", "supersede"];
     const granted = readOnly.has(key(target)) ? capabilities.filter(c => c === "reference") : capabilities;
     selected.set(handle, { target, capabilities: granted });
@@ -155,12 +157,20 @@ export function buildCoreInterpretationContext(input: CoreReplay, options: Conte
     }
     context.knowledge.cores = context.entities.filter(e => e.kind === "CORE").length === Object.keys(base.state.knowledge.cores).length ? "complete" : "partial";
   };
-  const admit = (root: SemanticReference, mandatory: boolean, anchor?: SemanticReference) => {
+  const grantBasis = (target: SemanticReference) => {
+    if (!["OBJECT", "RELATION", "SUPPORT"].includes(target.kind) || !valid(resolveSemanticReference(base.state, target))) return;
+    const handle = handleFor(target)!;
+    const capabilities = selected.get(handle)!.capabilities;
+    if (!capabilities.includes("factual_basis")) capabilities.push("factual_basis");
+    context.entities.find(e => e.handle === handle)!.capabilities = capabilities;
+  };
+  const admit = (root: SemanticReference, mandatory: boolean, anchor?: SemanticReference, factual = false) => {
     const beforeEntities = structuredClone(context.entities), beforeSelected = structuredClone(selected);
     const beforeCandidates = [...context.candidates];
     const result = add(root);
+    if (factual) grantBasis(root);
     if (anchor) {
-      add(anchor);
+      add(anchor); grantBasis(anchor);
       if (!readOnly.has(key(root))) {
         const capabilities: Capability[] = ["reference", "append", "refocus"];
         selected.get(result)!.capabilities = capabilities;
@@ -179,6 +189,7 @@ export function buildCoreInterpretationContext(input: CoreReplay, options: Conte
     context.cue.active = admit({ kind: "CUE", id: base.state.cue.active.id }, true)!; context.cue.presence = "included";
   }
   for (const root of [...(options.required ?? []), ...(options.writable ?? [])]) admit(root, true);
+  for (const root of options.factualBasis ?? []) admit(root, true, undefined, true);
   if (!fits()) throw new Error("core-context-required-budget-exceeded");
   for (const prior of (options.structuralPriors ?? []).slice(0, budgets.priors)) {
     context.structuralPriors.push(prior);
@@ -186,10 +197,19 @@ export function buildCoreInterpretationContext(input: CoreReplay, options: Conte
   }
   // Retrieval ranks candidates; it does not decide a Core boundary or claim search completeness.
   const query = [...options.newEvidence.map(c => c.text), ...(options.unresolved ?? []).map(u => u.phrase)].join(" ").toLowerCase();
-  const terms = new Set(query.match(/[\p{L}\p{N}]{3,}/gu) ?? []);
-  const score = (text: string) => [...terms].filter(t => text.toLowerCase().includes(t)).length;
+  // Exact lexical tokens retain short numbers. Shared template vocabulary alone
+  // is not evidence for selecting one historical mainline over another.
+  const tokens = (text: string) => new Set((text.normalize("NFKC").toLowerCase().match(/\p{L}[\p{L}\p{N}]*|\p{N}+/gu) ?? []).filter(t => /^\p{N}+$/u.test(t) || t.length >= 3));
+  const terms = tokens(query);
   const cores = Object.values(base.state.knowledge.cores);
-  const parked = cores.filter(c => c.id !== base.state.knowledge.currentCoreId).map(c => ({ core: c, score: Math.max(0, ...Object.values(c.objects).filter(o => o.status === "valid").map(o => score(o.value.text))) }))
+  const historical = cores.filter(c => c.id !== base.state.knowledge.currentCoreId).map(core => ({ core, anchors: Object.values(core.objects).filter(o => o.status === "valid") })).filter(c => c.anchors.length);
+  const frequency = new Map<string, number>();
+  for (const item of historical) for (const term of new Set(item.anchors.flatMap(a => [...tokens(a.value.text)]))) frequency.set(term, (frequency.get(term) ?? 0) + 1);
+  const score = (text: string) => [...tokens(text)].filter(t => terms.has(t)).reduce((sum, t) => {
+    const count = frequency.get(t) ?? 0;
+    return sum + (historical.length < 2 ? 1 : count ? Math.log(historical.length / count) : 0);
+  }, 0);
+  const parked = historical.map(item => ({ ...item, score: Math.max(0, ...item.anchors.map(o => score(o.value.text))) }))
     .filter(c => c.score > 0).sort((a, b) => b.score - a.score || a.core.id.localeCompare(b.core.id)).slice(0, budgets.candidateCores);
   for (const item of parked) {
     const anchor = Object.values(item.core.objects).filter(o => o.status === "valid").sort((a, b) => score(b.value.text) - score(a.value.text) || a.id.localeCompare(b.id))[0];
@@ -201,7 +221,7 @@ export function buildCoreInterpretationContext(input: CoreReplay, options: Conte
     const units = c[kind === "OBJECT" ? "objects" : kind === "RELATION" ? "relations" : "supports"];
     return Object.values(units).map((unit, index) => ({ target: { kind, coreId: c.id, id: unit.id }, score: score(unit.value.text), index }));
   })).sort((a, b) => b.score - a.score || b.index - a.index || key(a.target).localeCompare(key(b.target)));
-  for (const root of roots.slice(0, budgets.optionalRoots)) admit(root.target, false);
+  for (const root of roots.slice(0, budgets.optionalRoots)) admit(root.target, false, undefined, true);
   const history = base.checkpoints.filter(c => c.lessonSequence <= base.state.processedThroughSequence);
   for (const checkpoint of (budgets.recentEvidence ? history.slice(-budgets.recentEvidence) : []).reverse()) {
     const handle = addEvidence(checkpoint, "history");

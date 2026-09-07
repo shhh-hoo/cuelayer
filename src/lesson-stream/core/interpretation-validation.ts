@@ -68,13 +68,18 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
       if (!("coreId" in target)) throw new Error("core-proposal-unit-required");
       return target;
     };
-    const source = (reference: ProposalReference) => {
+    const source = (reference: ProposalReference, capability: "reference" | "factual_basis" = "reference") => {
       const target = resolve(reference, "reference", true);
+      if (capability === "factual_basis") {
+        if (target.kind === "CORE") throw new Error("core-proposal-core-container-not-factual-basis");
+        if (!["OBJECT", "RELATION", "SUPPORT"].includes(target.kind)) throw new Error("core-proposal-state-source-not-factual");
+        resolve(reference, capability, true);
+      }
       return { target, revision: target.kind === "CUE" ? cueRevision : knowledgeRevision };
     };
     const provenance = (p: ProposalProvenance, text?: string): Provenance => {
       if (p.domain && p.speech.length) throw new Error("core-proposal-domain-not-speech");
-      const stateRefs = p.state.map(source);
+      const stateRefs = p.state.map(ref => source(ref, "factual_basis"));
       if (stateRefs.some(r => r.target.kind === "CORE")) throw new Error("core-proposal-core-container-not-factual-basis");
       let domainBasis: string | undefined;
       if (p.domain) {
@@ -148,7 +153,7 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
     if (proposed.reads.knowledge && knowledgeRevision !== replay.state.knowledge.revision) throw new Error("core-knowledge-conflict");
     if (proposed.reads.cue && cueRevision !== replay.state.cue.revision) throw new Error("core-cue-conflict");
     const step = coreStepSchema.parse({ ...identity, baseKnowledgeRevision: knowledgeRevision, baseCueRevision: cueRevision,
-      consumesCheckpointIds: consumes, knowledgeOps, cueDelta, evidenceRefs: proposed.evidenceRefs.map(h => speech(h)), stateRefs: proposed.readRefs.map(source),
+      consumesCheckpointIds: consumes, knowledgeOps, cueDelta, evidenceRefs: proposed.evidenceRefs.map(h => speech(h)), stateRefs: proposed.readRefs.map(ref => source(ref)),
       warnings: proposed.warnings.map(detail => ({ code: "interpretation_note", detail })), acceptedAt });
     const before = replay.state;
     const accepted = acceptCoreStep(replay, step);

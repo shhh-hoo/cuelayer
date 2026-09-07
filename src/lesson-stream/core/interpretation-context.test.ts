@@ -4,7 +4,7 @@ import { coreEntityId } from "./events.ts";
 import { buildCoreInterpretationContext, CORE_CONTEXT_BUDGETS, historicalSources } from "./interpretation-context.ts";
 import { appendCoreEvent } from "./replay.ts";
 import { acceptCoreInterpretation } from "./interpretation-validation.ts";
-import { evidence, fact, foundation, provenance, stepFor, timestamp } from "./test-fixtures.ts";
+import { evidence, fact, foundation, provenance, stepFor, timestamp, start } from "./test-fixtures.ts";
 
 it("projects complete mutable values with intra-Core structural closure", () => {
   const f = foundation(), base = evidence(f.replay);
@@ -99,7 +99,7 @@ it("does not duplicate entities or bypass read-only scope when reference key ord
   const ref = { id: f.a, coreId: f.coreId, kind: "OBJECT" as const };
   const bound = buildCoreInterpretationContext(base, { requestId: "keys", newEvidence: [base.checkpoints.at(-1)!], required: [ref], writable: [ref], readOnly: [ref] });
   const handles = [...bound.entities].filter(([, e]) => e.target.id === f.a);
-  expect(handles).toHaveLength(1); expect(handles[0]![1].capabilities).toEqual(["reference"]);
+  expect(handles).toHaveLength(1); expect(handles[0]![1].capabilities).toEqual(["reference", "factual_basis"]);
 });
 
 function parkedRequest(text: string, budgets = {}) {
@@ -126,14 +126,14 @@ it("does not fill the candidate quota for an unrelated new topic", () => {
   expect(bound.context.entities).toHaveLength(1);
 });
 
-it("admits a positively retrieved anchor as reference-only while allowing Core append/refocus", () => {
+it("admits a positively retrieved factual anchor without mutation authority while allowing Core append/refocus", () => {
   const { parked, bound } = parkedRequest("Return to the definition");
   expect(bound.context.candidates).toHaveLength(1);
   const core = bound.context.candidates[0]!;
   expect(bound.entities.get(core)).toMatchObject({ target: { id: parked.coreId }, capabilities: ["reference", "append", "refocus"] });
   const anchor = bound.context.entities.find(e => e.core === core)!;
   expect(anchor.text).toBe("A definition");
-  expect(anchor.capabilities).toEqual(["reference"]);
+  expect(anchor.capabilities).toEqual(["reference", "factual_basis"]);
   const step = { consumes: ["e0"], knowledgeOps: [], cueDelta: { action: "KEEP" }, evidenceRefs: ["e0"], readRefs: [], reads: { knowledge: false, cue: false }, warnings: [] };
   const value = { text: "Definition expanded", provenance: { speech: ["e0"], state: [], domain: null } };
   expect(() => acceptCoreInterpretation(bound, { outcome: { kind: "PROPOSE", steps: [{ ...step, knowledgeOps: [{ action: "REVISE_OBJECT", target: { existing: anchor.handle }, value, correctionEvidence: "e0" }] }] } }, timestamp)).toThrow("capability-denied");
@@ -189,4 +189,33 @@ it("does not retrieve a Parked Core whose only matching anchors are invalid", ()
   const bound = buildCoreInterpretationContext(base, { requestId: "invalid-anchor", newEvidence: [base.checkpoints.at(-1)!], includeCue: false });
   expect(bound.context.candidates).toEqual([]);
   expect([...bound.entities.values()].some(e => e.target.id === f.coreId)).toBe(false);
+});
+
+it("rejects ubiquitous templates while retaining short numeric retrieval in long histories", () => {
+  let base = start();
+  const ids: string[] = [];
+  for (let i = 0; i < 25; i++) {
+    base = evidence(base);
+    const step = stepFor(base), cp = base.checkpoints.at(-1)!.checkpointId;
+    const coreId = coreEntityId(base.state.sessionId, step, "CORE", 0); ids.push(coreId);
+    step.knowledgeOps = [
+      { action: "CREATE_CORE", id: coreId, provenance: provenance(cp) },
+      { action: "ADD_OBJECT", coreId, id: coreEntityId(base.state.sessionId, step, "OBJECT", 1), value: fact(cp, `Module ${i} establishes statement number ${i}.`) },
+      { action: "SET_CURRENT_CORE", coreId },
+    ];
+    base = acceptCoreStep(base, step).replay;
+  }
+  const project = (text: string) => {
+    const event = evidence(base).events.at(-1)!;
+    if (event.type !== "evidence.checkpoint_committed") throw new Error("fixture");
+    event.checkpoint.text = text;
+    const next = appendCoreEvent(base, event);
+    return buildCoreInterpretationContext(next, { requestId: "numbers", newEvidence: [next.checkpoints.at(-1)!], includeCue: false, budgets: { optionalRoots: 0 } });
+  };
+  expect(project("Module 25 establishes statement number 25.").context.candidates).toEqual([]);
+  expect(project("A module establishes a statement number").context.candidates).toEqual([]);
+  const earlier = project("Return to module 7");
+  expect(earlier.context.candidates.map(h => earlier.entities.get(h)!.target.id)).toEqual([ids[7]]);
+  const short = project("Return to module 1");
+  expect(short.context.candidates.map(h => short.entities.get(h)!.target.id)).toEqual([ids[1]]);
 });

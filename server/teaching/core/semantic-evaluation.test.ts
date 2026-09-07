@@ -1,3 +1,4 @@
+import { interpretCore } from "./openai-interpreter.ts";
 import { expect, it } from "vitest";
 import { evaluateCoreCase, loadCoreCorpus, materializeCoreExemplar, validateCoreCorpus } from "./semantic-evaluation.ts";
 
@@ -38,4 +39,36 @@ it("detects answer leakage in an intermediate step even when the final answer is
   });
   expect(result.pass).toBe(false);
   expect(result.results[0]!.failures).toContain("premature-content:forty-two");
+});
+
+it("retains proposal and call diagnostics when semantic validation rejects", async () => {
+  const item = loadCoreCorpus().cases[0]!;
+  const output = { outcome: { kind: "PROPOSE", steps: [{ consumes: ["e0"], knowledgeOps: [{ action: "SET_CURRENT_CORE", core: { existing: "missing" } }], cueDelta: { action: "KEEP" }, evidenceRefs: ["e0"], readRefs: [], reads: { knowledge: false, cue: false }, warnings: [] }] } };
+  const response = { output_text: JSON.stringify(output), model: "offline-test", usage: { output_tokens: 50 } };
+  const result = await evaluateCoreCase(item, async (_request, _id, _turn, record) => {
+    record({ requestedModel: "offline-test", startedAt: "2026-09-07T00:00:00Z", elapsedMs: 12, response });
+    return output;
+  });
+  expect(result.pass).toBe(false);
+  expect(result.results[0]!.proposal).toEqual(output);
+  expect(result.results[0]!.diagnostic?.response).toEqual(response);
+  expect(result.results[0]!.failures[0]).toContain("capability-denied");
+});
+
+it("keeps the original corpus frozen and validates a disjoint fresh holdout without model calls", async () => {
+  const baseline = loadCoreCorpus(), fresh = loadCoreCorpus(undefined, "fresh-holdout");
+  expect(baseline.hash).toBe("0deb20adc39df55e3d63231404e0f2ba4eb7660db86e53e9a678314132afcf9e");
+  expect(fresh.cases).toHaveLength(8);
+  expect(fresh.cases.every(c => c.split === "holdout" && !baseline.cases.some(b => b.id === c.id))).toBe(true);
+  const validation = await validateCoreCorpus("fresh-holdout");
+  expect(validation.failures).toEqual([]);
+  expect(validation.modelCalls).toBe(0);
+});
+
+it("preserves raw diagnostic output when parsing fails before a proposal is returned", async () => {
+  const item = loadCoreCorpus().cases[0]!;
+  const result = await evaluateCoreCase(item, async (request, _id, _turn, record) => (await interpretCore(request, "offline-test", async () => ({ output_text: "not JSON", model: "offline-actual" }), undefined, record)).proposal);
+  expect(result.pass).toBe(false);
+  expect(result.results[0]!.proposal).toBeUndefined();
+  expect(result.results[0]!.diagnostic?.response?.output_text).toBe("not JSON");
 });

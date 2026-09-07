@@ -3,13 +3,25 @@ import type { CoreInterpretationBinding } from "../../../src/lesson-stream/core/
 import { coreProposalSchema } from "../../../src/lesson-stream/core/interpretation-proposal.ts";
 import { coreProviderRequest, coreProviderIdentity, CORE_PROVIDER_BUDGET } from "./provider-contract.ts";
 
-export type CoreProviderTransport = (request: ReturnType<typeof coreProviderRequest> & { model: string }, signal?: AbortSignal) => Promise<{ output_text: string; status?: string; model?: string }>;
+export type CoreProviderTransport = (request: ReturnType<typeof coreProviderRequest> & { model: string }, signal?: AbortSignal) => Promise<{ output_text: string; status?: string; model?: string; id?: string; requestId?: string | null; usage?: unknown; output?: unknown }>;
+export type CoreCallDiagnostic = {
+  requestedModel: string; startedAt: string; elapsedMs: number;
+  response?: Awaited<ReturnType<CoreProviderTransport>>; transportError?: string;
+};
 /** Evaluation-only adapter. Explicit injection makes deterministic tests incapable of accidental calls. */
-export async function interpretCore(binding: CoreInterpretationBinding, model: string, transport: CoreProviderTransport, signal?: AbortSignal) {
+export async function interpretCore(binding: CoreInterpretationBinding, model: string, transport: CoreProviderTransport, signal?: AbortSignal, record?: (diagnostic: CoreCallDiagnostic) => void) {
   const request = { ...coreProviderRequest(binding), model };
   if (!model.trim() || Math.ceil(JSON.stringify(request).length / 4) + request.max_output_tokens > CORE_PROVIDER_BUDGET.maxEstimatedTokens) throw new Error("core-provider-envelope-budget-exceeded");
   signal?.throwIfAborted();
-  const response = await transport(request, signal);
+  const startedAt = new Date().toISOString(), started = performance.now();
+  let response: Awaited<ReturnType<CoreProviderTransport>>;
+  try { response = await transport(request, signal); }
+  catch (error) {
+    record?.({ requestedModel: model, startedAt, elapsedMs: performance.now() - started, transportError: error instanceof Error ? error.message : String(error) });
+    throw error;
+  }
+  // Capture the exact response before incomplete status, JSON/schema, or semantic rejection.
+  record?.({ requestedModel: model, startedAt, elapsedMs: performance.now() - started, response });
   signal?.throwIfAborted();
   if (response.status && response.status !== "completed") throw new Error("core-provider-incomplete");
   const proposal = coreProposalSchema.parse(JSON.parse(response.output_text));
@@ -20,6 +32,6 @@ export function openAICoreTransport(apiKey: string): CoreProviderTransport {
   const client = new OpenAI({ apiKey, maxRetries: 0 });
   return async (request, signal) => {
     const response = await client.responses.create(request, { signal });
-    return { output_text: response.output_text, status: response.status, model: response.model };
+    return { output_text: response.output_text, status: response.status, model: response.model, id: response.id, requestId: response._request_id, usage: response.usage, output: response.output };
   };
 }

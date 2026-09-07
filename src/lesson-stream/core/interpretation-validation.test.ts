@@ -150,3 +150,33 @@ describe("Core provider normalization", () => {
     if (action === "REPLACE") expect(result.replay.state.cue.active!.id).not.toBe(f.cueId);
   });
 });
+
+it("separates structural references from authorized factual provenance without weakening Core rejection", () => {
+  const f = foundation(), base = evidence(f.replay);
+  const target = { kind: "OBJECT" as const, coreId: f.coreId, id: f.a };
+  const options = { requestId: "basis", newEvidence: [base.checkpoints.at(-1)!], includeCue: false, required: [{ kind: "RELATION" as const, coreId: f.coreId, id: f.relationId }], budgets: { optionalRoots: 0 } };
+  const referenceOnly = buildCoreInterpretationContext(base, options);
+  const h = (id: string) => ({ existing: [...referenceOnly.entities].find(([, e]) => e.target.id === id)![0] });
+  const step = empty(); step.evidenceRefs = ["e0"];
+  step.knowledgeOps = [{ action: "ADD_SUPPORT", core: h(f.coreId), as: "derived", value: { text: "Representation of A", target: h(f.a), provenance: { speech: [], state: [h(f.a)], domain: null } } }];
+  expect(referenceOnly.entities.get(h(f.a).existing)!.capabilities).toEqual(["reference"]);
+  expect(() => acceptCoreInterpretation(referenceOnly, propose(step), timestamp)).toThrow("capability-denied");
+  const authorized = buildCoreInterpretationContext(base, { ...options, factualBasis: [target] });
+  const result = acceptCoreInterpretation(authorized, propose(step), timestamp);
+  expect(result.steps[0]!.knowledgeOps[0]).toMatchObject({ value: { provenance: { stateRefs: [{ target, revision: 1 }], speechRefs: [] } } });
+  const coreSource = structuredClone(step);
+  const op = coreSource.knowledgeOps[0]!;
+  if ("value" in op) op.value.provenance.state = [h(f.coreId)];
+  expect(() => acceptCoreInterpretation(authorized, propose(coreSource), timestamp)).toThrow("core-container-not-factual-basis");
+  expect(buildCoreInterpretationContext(base, { ...options, factualBasis: [{ kind: "CORE", id: f.coreId }] }).entities.get(h(f.coreId).existing)!.capabilities).not.toContain("factual_basis");
+});
+
+it("cannot refocus an ungrounded current shell even with explicit Core write scope", () => {
+  const f = foundation(), base = evidence(f.replay);
+  const bound = buildCoreInterpretationContext(base, { requestId: "shell", newEvidence: [base.checkpoints.at(-1)!], includeCue: false, writable: [{ kind: "CORE", id: f.coreId }], budgets: { optionalRoots: 0 } });
+  expect(bound.context.entities).toHaveLength(1);
+  expect(bound.context.entities[0]!.capabilities).toEqual(["reference", "append"]);
+  const step = empty(); step.evidenceRefs = ["e0"]; step.knowledgeOps = [{ action: "SET_CURRENT_CORE", core: existing(bound.context.knowledge.current!) }];
+  expect(() => acceptCoreInterpretation(bound, propose(step), timestamp)).toThrow("capability-denied");
+  expect(acceptCoreInterpretation(bound, { outcome: { kind: "NEEDS_CONTEXT", query: "the earlier statement", evidence: ["e0"] } }, timestamp).events).toEqual([]);
+});
