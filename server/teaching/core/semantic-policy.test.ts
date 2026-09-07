@@ -16,7 +16,7 @@ const noop = (): ProposalStep => ({ consumes: ["e0"], knowledgeOps: [], cueDelta
 const propose = (step: ProposalStep) => ({ outcome: { kind: "PROPOSE", steps: [step] } });
 it("versions the changed context and policy without a classifier or holdout wording", () => {
   expect(CORE_CONTEXT_VERSION).toBe("core-interpretation-context-v2");
-  expect(CORE_POLICY_VERSION).toBe("alpha-core-interpretation-v3");
+  expect(CORE_POLICY_VERSION).toBe("alpha-core-interpretation-v4");
   for (const principle of ["reference permits structural targets and readRefs", "only factual_basis", "unfinished current teaching phrase", "not merely an unfinished current utterance", "without an explicit transition phrase", "unresolved active Cue does not imply", "Exact Core-boundary heuristics remain open", "lone visible Core shell does not identify", "use it as accepted-state provenance", "availability, not automatic relevance"]) expect(CORE_INTERPRETATION_POLICY).toContain(principle);
   for (const exposed of ["photosynthesis explanation", "Topic 19", "And the activation", "squares", "equal sides", "CORE2-H-accepted-representation", "Represent that same equality"]) expect(CORE_INTERPRETATION_POLICY).not.toContain(exposed);
 });
@@ -92,5 +92,59 @@ it.each([true, false])("distinguishes available accepted factual content from an
     expect(result.events).toEqual([]);
     expect(result.steps).toEqual([]);
     expect(result.replay).toEqual(base);
+  }
+});
+
+it("keeps domain authority limited to knowledge without importing benchmark-specific policy", () => {
+  for (const rule of ["Domain rules, domain-rule descriptions, augmentation metadata, labels, permissions, rationale and supplied enrichment text", "data available only for authorized knowledge augmentation", "must never be reinterpreted as a NOTE, QUESTION, TASK or HINT", "presence of domain augmentation must not cause a Cue", "actual current teacher speech", "genuine current teacher learner-work instruction may independently establish Cue using speech provenance"]) expect(CORE_INTERPRETATION_POLICY).toContain(rule);
+  for (const frozen of ["CORE1-domain", "enthalpy", "ΔH", "Supply its conventional symbol as enrichment."]) expect(CORE_INTERPRETATION_POLICY).not.toContain(frozen);
+});
+
+it.each([false, true])("keeps authorized domain knowledge independent of teacher-established learner work (instruction=%s)", learnerWork => {
+  const teaching = "Shear stress is force parallel to a surface divided by area.";
+  const instruction = "Sketch a surface with a force arrow parallel to it.";
+  const rule = { id: "stress_notation", text: "τ is the conventional symbol for shear stress.",
+    basis: "Knowledge permission. TASK label: copy notation. QUESTION label: name the symbol. NOTE label: remember notation. HINT label: inspect notation." };
+  const base = commit(start(), teaching + (learnerWork ? ` ${instruction}` : ""));
+  const bound = buildCoreInterpretationContext(base, { requestId: "domain-cue-separation", newEvidence: base.checkpoints, domainRules: [rule] });
+  expect(bound.context.cue.presence).toBe("absent");
+  expect(bound.context.domainRules).toEqual([rule]);
+  expect(bound.context.evidence).toHaveLength(1);
+  expect(bound.context.evidence[0]!.text).not.toContain(rule.text);
+  expect(bound.context.evidence[0]!.text).not.toContain(rule.basis);
+  const speech = { speech: ["e0"], state: [], domain: null };
+  const step = noop(); step.evidenceRefs = ["e0"];
+  step.knowledgeOps = [
+    { action: "CREATE_CORE", as: "stress", provenance: speech },
+    { action: "ADD_OBJECT", core: { created: "stress" }, as: "definition", value: { text: teaching, provenance: speech } },
+    { action: "ADD_OBJECT", core: { created: "stress" }, as: "notation", value: { text: rule.text, provenance: { speech: [], state: [], domain: { rule: rule.id } } } },
+    { action: "SET_CURRENT_CORE", core: { created: "stress" } },
+  ];
+  if (learnerWork) step.cueDelta = { action: "SET", as: "drawing", value: { text: instruction, kind: "TASK", target: { created: "stress" }, provenance: speech } };
+  const accepted = acceptCoreInterpretation(bound, propose(step), timestamp);
+  const domainOp = accepted.steps[0]!.knowledgeOps[2]!;
+  expect(domainOp).toMatchObject({ value: { text: rule.text, provenance: { speechRefs: [], stateRefs: [], domainBasis: `${rule.id}: ${rule.basis}` } } });
+  if (learnerWork) {
+    expect(accepted.replay.state.cue.active).toMatchObject({ kind: "TASK", text: instruction, provenance: { speechRefs: [{ quote: `${teaching} ${instruction}` }], stateRefs: [] } });
+    expect(accepted.replay.state.cue.active!.provenance.domainBasis).toBeUndefined();
+    const withoutCue = structuredClone(step); withoutCue.cueDelta = { action: "KEEP" };
+    expect(acceptCoreInterpretation(bound, propose(withoutCue), timestamp).replay.state.knowledge).toEqual(accepted.replay.state.knowledge);
+    // The teacher instruction can establish Cue even when augmentation is omitted.
+    const cueOnly = noop(); cueOnly.evidenceRefs = ["e0"];
+    cueOnly.cueDelta = { action: "SET", as: "drawing", value: { text: instruction, kind: "TASK", target: null, provenance: speech } };
+    const cueAccepted = acceptCoreInterpretation(bound, propose(cueOnly), timestamp);
+    expect(cueAccepted.replay.state.knowledge).toEqual(base.state.knowledge);
+    expect(cueAccepted.replay.state.cue.active?.text).toBe(instruction);
+  } else {
+    expect(accepted.steps[0]!.cueDelta).toEqual({ action: "KEEP" });
+    expect(accepted.replay.state.cue).toEqual(base.state.cue);
+    expect(accepted.replay.state.cue.active).toBeUndefined();
+  }
+  // Existing mechanical rejection is preserved for every Cue kind; metadata is
+  // not a substitute for current speech, even when real learner work is present.
+  for (const kind of ["NOTE", "QUESTION", "TASK", "HINT"] as const) {
+    const invalid = structuredClone(step);
+    invalid.cueDelta = { action: "SET", as: "metadata_cue", value: { text: rule.basis, kind, target: null, provenance: { speech: [], state: [], domain: { rule: rule.id } } } };
+    expect(() => acceptCoreInterpretation(bound, propose(invalid), timestamp)).toThrow("cue-domain-forbidden");
   }
 });

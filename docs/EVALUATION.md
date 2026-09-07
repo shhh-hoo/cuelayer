@@ -46,7 +46,7 @@ The Core evaluator is separate from the frozen legacy evaluator above:
 - Corpus: `resources/semantics/core/corpus.jsonl`; identity `core-interpretation-corpus-v1`. The adjacent manifest pins its hash and split counts.
 - Evaluator: `server/teaching/core/semantic-evaluation.ts`; identity `core-interpretation-evaluator-v1`.
 - CLI: `scripts/evaluate-core-semantics.ts`.
-- Provider schema: `core-interpretation-proposal-v1`; policy: `alpha-core-interpretation-v3`.
+- Provider schema: `core-interpretation-proposal-v1`; policy: `alpha-core-interpretation-v4`.
 - Context: `core-interpretation-context-v2`. Durable events remain `lesson-event-v5-core`.
 
 Synthetic exemplars are authored independently for PR review. They are neither translated legacy gold nor outputs from a model run. Corpus validation checks strict case schemas, identity/hash, development/holdout presence, scenario coverage, reference selector resolution, actual Core normalization/acceptance, expected semantic predicates and deterministic replay. It does not establish that a model can produce those exemplars. Human review of corpus semantics remains part of PR review.
@@ -93,11 +93,13 @@ The separate eight-case set in `resources/semantics/core/postfix-holdout.jsonl`,
 npm run eval:core:validate -- --fresh-holdout
 ```
 
-The default dataset remains the original 24 cases. `--fresh-holdout` explicitly selects the separate set; only deterministic exemplar validation of that frozen holdout is authorized here. Context semantics remain v2; policy v3 clarifies resolution of visible accepted factual referents; proposal schema, durable event schema, evaluator scoring and baseline corpus identities remain unchanged.
+The default dataset remains the original 24 cases. `--fresh-holdout` explicitly selects the separate set; only deterministic exemplar validation of that frozen holdout is authorized here. Context semantics remain v2; policy v4 additionally separates domain-augmentation authority from speech-established Cue; proposal schema, durable event schema, evaluator scoring and baseline corpus identities remain unchanged.
 
 Live evaluation journals each raw provider response to a unique ignored `.cuelayer/evaluations/core-calls-*.jsonl` **before** incomplete-status, JSON/schema or semantic validation. Available response ID, request ID, actual model, usage, output content, start time and elapsed milliseconds are retained. Final case results retain the same diagnostic and any parsed proposal even on rejection. Transport errors retain timing/error metadata without invented output. These are evaluation artifacts, not production trace or durable state; request settings, reasoning, token limits and zero-retry behavior are unchanged. The first run's missing rejected raw proposal cannot be recovered retrospectively.
 
 Policy v2 distinguishes an unfinished current phrase (normally accepted no-op, with recent evidence available for continuation) from required missing earlier context (NEEDS_CONTEXT). A distinct self-contained explanatory mainline can require a new Core without transition words; unresolved Cue does not force Core continuity. Exact boundary heuristics remain open. A visible current shell cannot identify omitted specific content, and staying current requires no refocus operation. Policy v3 additionally directs interpretation to use a complete visible `factual_basis` unit when the current reference actually resolves to it; prior-state origin is not itself missing context. Availability does not imply relevance. The policy identity changes because this clarifies the model's PROPOSE/NEEDS_CONTEXT decision; context projection, capability enforcement, evaluator scoring, proposal schema and durable schema are unchanged.
+
+Policy v4 explicitly treats domain-rule text, descriptions, metadata, labels, permissions and rationale as knowledge-augmentation data, never teacher speech or learner work. Their presence cannot create NOTE/QUESTION/TASK/HINT. Exact authorized domain facts remain permitted; an actual current teacher instruction can independently establish Cue with speech provenance. The policy identity changes to distinguish this model-facing authority clarification in evaluation evidence. Context, validator, proposal schema, provider settings and budgets are unchanged. Paired deterministic tests prove acceptance of domain augmentation with Cue KEEP and with a legitimate speech-grounded Cue, and preserve rejection of domain metadata as Cue provenance. They do not prove that a model will never misinterpret speech; no live evaluation is implied.
 
 ### Authoring semantic predicates
 
