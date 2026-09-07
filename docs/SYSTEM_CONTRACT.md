@@ -41,13 +41,17 @@ The target Board domain is a conceptually unbounded Canvas of persistent Cores. 
 The durable model must support the functional equivalents of:
 
 ```text
-LessonKnowledgeState
-├── cores[]
-│   ├── semantic objects / propositions
-│   ├── semantic relations
-│   └── supports[]
-├── currentCoreId
-└── Teaching Cue state
+TeachingState
+├── knowledge
+│   ├── revision
+│   ├── cores[]
+│   │   ├── semantic objects / propositions
+│   │   ├── semantic relations
+│   │   └── supports[]
+│   └── currentCoreId
+└── cue
+    ├── revision
+    └── active?
 ```
 
 Exact type names and wire shapes are implementation details. The following semantics are not optional:
@@ -60,6 +64,8 @@ Exact type names and wire shapes are implementation details. The following seman
 6. A non-current established Core is a Parked Core by role relative to `currentCoreId`. A separate persisted `parked` flag is not required.
 7. Returning to an earlier mainline must be able to continue the existing Core rather than creating a duplicate Core.
 8. Semantic knowledge must not have a fixed product-level capacity merely because the viewport is finite.
+9. Every independently mutable or referenceable semantic entity must have stable lesson-scoped identity that survives content revision. Text content, array position, renderer-local IDs, coordinates, and screen position are not semantic identity.
+10. Knowledge and Teaching Cue remain independent revision and conflict domains; a knowledge-only change must not create an unrelated Cue conflict, and vice versa.
 
 ## Semantic change contract
 
@@ -74,6 +80,8 @@ The implementation must support functional equivalents of:
 - attaching or revising Support;
 - changing the current Core identity;
 - superseding or invalidating knowledge when an explicit correction requires it.
+
+One accepted interpretation step may contain zero or more ordered knowledge mutations together with its Cue mutation. The step must validate against one accepted base state and publish atomically; renderer-visible authority must not pass through partially applied intermediate semantic states. A valid accepted no-op may consume evidence without changing knowledge or Cue when nothing useful changed.
 
 Exact event names such as `UPDATE`, `SUPERSEDE`, or `INVALIDATE` are repository-level design choices. Historical auditability must not be confused with destructive deletion.
 
@@ -98,7 +106,9 @@ Structural priors are optional. CueLayer must remain usable from teaching eviden
 
 Provider context remains bounded even though lesson knowledge is conceptually unbounded.
 
-The request may project the subset of historical evidence and durable state needed to interpret the new evidence safely. Omission from a provider request does not delete lesson knowledge or imply that historical content no longer exists.
+The complete authoritative lesson state is not required to fit into or be serialized wholesale into a provider request. The request receives a bounded interpretation projection of the historical evidence and durable state needed to interpret the new evidence safely. Omission from that projection does not delete lesson knowledge or imply that historical content no longer exists.
+
+Provider operations may reference existing semantic entities only when those identities are included in the request's writable/referenceable projection, plus entities created within the current proposal. Context-budget pressure must never be solved by deleting accepted lesson knowledge or reverting to fixed semantic capacities.
 
 Current production budgets, retry rules, batching, compact-reference codecs, and provider envelopes are implementation configuration and must remain explicit in code/tests. Changing those values requires scoped review; do not use semantic deletion or renderer eviction as a context-budget shortcut.
 
@@ -137,13 +147,13 @@ Broader autonomous correction, proactive learner actions, intervention controls,
 
 ## Teaching Cue
 
-Board and Teaching Cue are sibling channels with independent lifecycle.
+Board and Teaching Cue are sibling channels with independent lifecycle, revision, and conflict domains.
 
 Board answers what knowledge the teacher is building. Teaching Cue answers what the learner still needs to do, think about, compare, answer, notice, or remember now.
 
 Board change must not automatically resolve Cue. Cue resolution must not clear Board knowledge.
 
-Cue targeting may eventually reference a Core, semantic object, relation, comparison, or lesson-level action. Exact target types belong in the implementation contract when introduced.
+Cue targeting may reference a Core, semantic object, relation, comparison, or lesson-level action once the Core-domain reference contract is introduced. Core-domain Cue targets must not depend on legacy `BOARD_ITEM` identity after cutover. Exact target types belong in the implementation contract when introduced.
 
 ## Attention and rendering
 
@@ -181,7 +191,9 @@ Canonical transcript remains available where needed for grounding, debugging, ac
 
 Accepted lesson events must be persisted before speculative state becomes learner-visible authority. Reload reconstructs durable lesson knowledge deterministically from replayable events without calling the provider.
 
-Legacy event versions required for replay compatibility remain supported deliberately until a reviewed migration or retirement removes them. Do not silently rewrite old accepted events into new semantics.
+Legacy event versions required for replay compatibility remain supported deliberately until a reviewed migration or retirement removes them. A legacy Board-domain session must replay through its legacy schema/reducer generation; it must not be silently translated into Core semantics during normal replay. A Core-domain session uses its own versioned event/state generation. Do not mix accepted legacy Board-domain and Core-domain semantic events within one lesson session.
+
+At runtime, exactly one lesson-domain model is authoritative for a session. Temporary one-way projections/adapters from that authority are allowed for compatibility; dual-writing the same new evidence into legacy Board state and Core state as competing semantic truths is not.
 
 The next Board-domain migration must introduce a versioned event/state contract rather than reusing legacy `SET_ACTIVE` / bounded `Retained` semantics under new names.
 
