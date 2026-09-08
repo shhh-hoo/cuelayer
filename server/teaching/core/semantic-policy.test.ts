@@ -22,7 +22,7 @@ it("versions the autonomy authority without a classifier or frozen-case wording"
     "without an explicit transition phrase", "unresolved active Cue does not imply", "Exact Core-boundary heuristics remain open", "lone visible Core shell does not identify",
     "use it as accepted-state provenance", "availability, not automatic relevance", "Model confidence alone is never sufficient factual authority",
     "NEEDS_VERIFICATION", "candidateEvidence is only a lead for verification", "aiCorrection.evidenceRule", "AI correction is knowledge authority only",
-    "autonomously initiated by CueLayer", "origin.trigger", "Intervention Governor", "Interaction count is not a product success metric",
+    "autonomously initiated by CueLayer", "origin.trigger", "Intervention Governor", "do not optimize for interaction count",
     "common learner-visible path must not wait"
   ]) expect(CORE_INTERPRETATION_POLICY).toContain(principle);
   for (const exposed of ["photosynthesis explanation", "Topic 19", "And the activation", "squares", "equal sides", "CORE2-H-accepted-representation", "Represent that same equality", "All prime numbers are odd"]) expect(CORE_INTERPRETATION_POLICY).not.toContain(exposed);

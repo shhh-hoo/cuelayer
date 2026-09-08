@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { CoreInterpretationBinding } from "../../../src/lesson-stream/core/interpretation-context.ts";
-import { coreProposalSchema } from "../../../src/lesson-stream/core/interpretation-proposal.ts";
+import { providerCoreProposalSchema } from "../../../src/lesson-stream/core/interpretation-proposal.ts";
 import { coreProviderRequest, coreProviderIdentity, CORE_PROVIDER_BUDGET } from "./provider-contract.ts";
 
 export type CoreProviderTransport = (request: ReturnType<typeof coreProviderRequest> & { model: string }, signal?: AbortSignal) => Promise<{ output_text: string; status?: string; model?: string; id?: string; requestId?: string | null; usage?: unknown; output?: unknown }>;
@@ -24,7 +24,7 @@ export async function interpretCore(binding: CoreInterpretationBinding, model: s
   record?.({ requestedModel: model, startedAt, elapsedMs: performance.now() - started, response });
   signal?.throwIfAborted();
   if (response.status && response.status !== "completed") throw new Error("core-provider-incomplete");
-  const proposal = coreProposalSchema.parse(JSON.parse(response.output_text));
+  const proposal = providerCoreProposalSchema.parse(JSON.parse(response.output_text));
   return { proposal, identity: coreProviderIdentity, requestedModel: model, actualModel: response.model };
 }
 /** Called only by separately authorized offline evaluation; never imported by production routes. */

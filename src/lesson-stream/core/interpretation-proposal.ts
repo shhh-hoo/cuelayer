@@ -47,18 +47,31 @@ const cueOrigin = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("TEACHER"), evidence: handle }).strict(),
   z.object({ kind: z.literal("AI"), trigger: handle, rationale: text }).strict(),
 ]);
+// Internal compatibility schema accepts historical omission (and provider null).
+// OpenAI Structured Outputs uses the separate provider schema below, where every
+// field is required and origin is explicitly nullable.
 const cueValue = fact.extend({
   kind: z.enum(["NOTE", "QUESTION", "TASK", "HINT"]),
   target: ref.nullable(),
-  // Optional only for compatibility with reviewed frozen v1 exemplars. New
-  // provider output should state whether the action is teacher-established or AI-initiated.
-  origin: cueOrigin.optional(),
+  origin: cueOrigin.nullable().optional(),
+}).strict();
+const providerCueValue = fact.extend({
+  kind: z.enum(["NOTE", "QUESTION", "TASK", "HINT"]),
+  target: ref.nullable(),
+  origin: cueOrigin.nullable(),
 }).strict();
 const cue = z.discriminatedUnion("action", [
   z.object({ action: z.literal("KEEP") }).strict(),
   z.object({ action: z.literal("SET"), as: handle, value: cueValue }).strict(),
   z.object({ action: z.literal("REVISE"), target: ref, value: cueValue }).strict(),
   z.object({ action: z.literal("REPLACE"), target: ref, as: handle, value: cueValue, evidence: handle }).strict(),
+  z.object({ action: z.literal("RESOLVE"), target: ref, evidence: handle }).strict(),
+]);
+const providerCue = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("KEEP") }).strict(),
+  z.object({ action: z.literal("SET"), as: handle, value: providerCueValue }).strict(),
+  z.object({ action: z.literal("REVISE"), target: ref, value: providerCueValue }).strict(),
+  z.object({ action: z.literal("REPLACE"), target: ref, as: handle, value: providerCueValue, evidence: handle }).strict(),
   z.object({ action: z.literal("RESOLVE"), target: ref, evidence: handle }).strict(),
 ]);
 export const proposalStepSchema = z.object({
@@ -68,15 +81,24 @@ export const proposalStepSchema = z.object({
   reads: z.object({ knowledge: z.boolean(), cue: z.boolean() }).strict(),
   warnings: z.array(z.string().min(1).max(160)).max(4),
 }).strict();
-// The object envelope is compatible with Structured Outputs' object-root requirement.
-export const coreProposalSchema = z.object({ outcome: z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("PROPOSE"), steps: z.array(proposalStepSchema).min(1).max(CORE_PROPOSAL_LIMITS.steps) }).strict(),
+const providerProposalStepSchema = z.object({
+  consumes: evidence.min(1), knowledgeOps: z.array(proposalOperationSchema).max(CORE_PROPOSAL_LIMITS.operations),
+  cueDelta: providerCue, evidenceRefs: evidence, readRefs: refs,
+  reads: z.object({ knowledge: z.boolean(), cue: z.boolean() }).strict(),
+  warnings: z.array(z.string().min(1).max(160)).max(4),
+}).strict();
+const outcomeFor = <T extends z.ZodTypeAny>(stepSchema: T) => z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("PROPOSE"), steps: z.array(stepSchema).min(1).max(CORE_PROPOSAL_LIMITS.steps) }).strict(),
   z.object({ kind: z.literal("NEEDS_CONTEXT"), evidence: evidence.min(1), query: text }).strict(),
   // Non-accepting side-path request. candidateEvidence is a model-surfaced lead,
   // not factual authority. A verifier/host must independently validate it before
   // any later correction can cite a trusted evidenceRule.
   z.object({ kind: z.literal("NEEDS_VERIFICATION"), evidence: evidence.min(1), query: text, claim: text, candidateEvidence: text }).strict(),
-]) }).strict();
+]);
+// Internal/exemplar schema intentionally retains historical compatibility.
+export const coreProposalSchema = z.object({ outcome: outcomeFor(proposalStepSchema) }).strict();
+// Provider wire schema is fully Structured-Outputs-compatible: no optional fields.
+export const providerCoreProposalSchema = z.object({ outcome: outcomeFor(providerProposalStepSchema) }).strict();
 export type ProposalReference = z.infer<typeof ref>;
 export type ProposalProvenance = z.infer<typeof provenance>;
 export type ProposalStep = z.infer<typeof proposalStepSchema>;
