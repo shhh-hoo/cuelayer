@@ -17,12 +17,22 @@ export const cueTargetSchema = z.union([coreReference, objectOrRelationReference
 export const semanticReferenceSchema = z.union([knowledgeReferenceSchema, z.object({ kind: z.literal("CUE"), id }).strict()]);
 // revision identifies the accepted knowledge/Cue snapshot, not a mutable entity counter.
 const stateReference = z.object({ target: semanticReferenceSchema, revision }).strict();
+const aiCorrection = z.object({
+  trigger: speechReferenceSchema,
+  rationale: text,
+  confidence: z.literal("high"),
+}).strict();
 export const provenanceSchema = z.object({
   speechRefs: z.array(speechReferenceSchema),
   stateRefs: z.array(stateReference),
-  // Explicit attribution supplied by an offline author; this is not a domain-knowledge oracle.
+  // Explicit host-authorized domain attribution; not a hidden domain oracle.
   domainBasis: text.optional(),
-}).strict().refine(p => p.speechRefs.length > 0 || p.stateRefs.length > 0 || p.domainBasis !== undefined, "provenance-required");
+  // Autonomous factual correction is a distinct, auditable basis. The triggering
+  // teacher evidence is not itself claimed as factual support for the corrected content.
+  aiCorrection: aiCorrection.optional(),
+}).strict()
+  .refine(p => p.speechRefs.length > 0 || p.stateRefs.length > 0 || p.domainBasis !== undefined || p.aiCorrection !== undefined, "provenance-required")
+  .refine(p => !p.aiCorrection || (p.speechRefs.length === 0 && p.stateRefs.length === 0 && p.domainBasis === undefined), "ai-correction-provenance-exclusive");
 const fact = z.object({ text, provenance: provenanceSchema }).strict();
 // A stated relationship between identified objects, with no taxonomy or rendering vocabulary.
 const relation = fact.extend({ fromObjectId: id, toObjectId: id }).strict();

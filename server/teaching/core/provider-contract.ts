@@ -8,7 +8,7 @@ export function coreProviderRequest(binding: CoreInterpretationBinding) {
   const request = {
     reasoning: { effort: "low" as const }, max_output_tokens: CORE_PROVIDER_BUDGET.outputTokens,
     input: [{ role: "system" as const, content: CORE_INTERPRETATION_POLICY }, { role: "user" as const, content: JSON.stringify(binding.context) }],
-    text: { format: zodTextFormat(coreProposalSchema, "core_interpretation_v1") },
+    text: { format: zodTextFormat(coreProposalSchema, "core_interpretation_v2") },
   };
   if (Math.ceil(JSON.stringify(request).length / 4) + request.max_output_tokens > CORE_PROVIDER_BUDGET.maxEstimatedTokens) throw new Error("core-provider-envelope-budget-exceeded");
   return request;

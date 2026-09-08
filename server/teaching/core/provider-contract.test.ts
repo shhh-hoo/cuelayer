@@ -10,9 +10,10 @@ it("uses a strict Core schema with no legacy identity or display ontology", () =
   const wire = coreProviderRequest(request());
   const schema = JSON.stringify(wire.text.format);
   for (const forbidden of ["SET_ACTIVE", "BOARD_ITEM", "targetBoardItemId", "Retained", "TRANSFORM", "ATTACH_HINT", "baseKnowledgeRevision", "acceptedAt"]) expect(schema).not.toContain(forbidden);
-  expect(schema).toContain("NEEDS_CONTEXT"); expect(schema).toContain("CREATE_CORE");
+  expect(schema).toContain("NEEDS_CONTEXT"); expect(schema).toContain("CREATE_CORE"); expect(schema).toContain("aiCorrection");
   expect(wire.input[1]!.content).not.toContain("synthetic-lesson");
-  expect(CORE_INTERPRETATION_POLICY).toContain("Do not choose no-op solely because of suspected teacher error");
+  expect(CORE_INTERPRETATION_POLICY).toContain("Autonomous factual correction is allowed only");
+  expect(CORE_INTERPRETATION_POLICY).toContain("correction threshold is deliberately higher");
 });
 it("parses injected provider output without a model call and rejects incomplete/invalid output", async () => {
   const transport = vi.fn(async () => ({ output_text: JSON.stringify({ outcome: { kind: "NEEDS_CONTEXT", evidence: ["e0"], query: "Compare A" } }), status: "completed" }));

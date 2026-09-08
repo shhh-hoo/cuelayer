@@ -14,11 +14,12 @@ function commit(base: CoreReplay, text: string) {
 }
 const noop = (): ProposalStep => ({ consumes: ["e0"], knowledgeOps: [], cueDelta: { action: "KEEP" }, evidenceRefs: [], readRefs: [], reads: { knowledge: false, cue: false }, warnings: [] });
 const propose = (step: ProposalStep) => ({ outcome: { kind: "PROPOSE", steps: [step] } });
-it("versions the changed context and policy without a classifier or holdout wording", () => {
-  expect(CORE_CONTEXT_VERSION).toBe("core-interpretation-context-v2");
-  expect(CORE_POLICY_VERSION).toBe("alpha-core-interpretation-v4");
-  for (const principle of ["reference permits structural targets and readRefs", "only factual_basis", "unfinished current teaching phrase", "not merely an unfinished current utterance", "without an explicit transition phrase", "unresolved active Cue does not imply", "Exact Core-boundary heuristics remain open", "lone visible Core shell does not identify", "use it as accepted-state provenance", "availability, not automatic relevance"]) expect(CORE_INTERPRETATION_POLICY).toContain(principle);
-  for (const exposed of ["photosynthesis explanation", "Topic 19", "And the activation", "squares", "equal sides", "CORE2-H-accepted-representation", "Represent that same equality"]) expect(CORE_INTERPRETATION_POLICY).not.toContain(exposed);
+it("versions the changed context and policy without a classifier or frozen-case wording", () => {
+  expect(CORE_CONTEXT_VERSION).toBe("core-interpretation-context-v3");
+  expect(CORE_POLICY_VERSION).toBe("alpha-core-interpretation-v5");
+  for (const principle of ["reference permits structural targets and readRefs", "only factual_basis", "unfinished current teaching phrase", "not merely an unfinished current utterance", "without an explicit transition phrase", "unresolved active Cue does not imply", "Exact Core-boundary heuristics remain open", "lone visible Core shell does not identify", "use it as accepted-state provenance", "availability, not automatic relevance", "Autonomous factual correction is allowed only", "correction threshold is deliberately higher", "aiCorrection provenance", "AI correction is knowledge authority only", "Explicit teacher self-correction remains a normal speech-grounded local revision"] ) expect(CORE_INTERPRETATION_POLICY).toContain(principle);
+  for (const exposed of ["photosynthesis explanation", "Topic 19", "And the activation", "squares", "equal sides", "CORE2-H-accepted-representation", "Represent that same equality", "All prime numbers are odd"]) expect(CORE_INTERPRETATION_POLICY).not.toContain(exposed);
+  for (const obsolete of ["Do not autonomously correct, substitute model-preferred truth", "Retraction, contradiction, invalidation and supersession require current explicit correction evidence"]) expect(CORE_INTERPRETATION_POLICY).not.toContain(obsolete);
 });
 it("accepts an unfinished phrase as no-op and supplies its immutable evidence on continuation", () => {
   const f = foundation(), fragment = "The additional condition is...";
@@ -83,7 +84,7 @@ it.each([true, false])("distinguishes available accepted factual content from an
     const result = acceptCoreInterpretation(bound, propose(step), timestamp);
     expect(result.kind).toBe("PROPOSE");
     expect(result.events).toHaveLength(1);
-    expect(result.steps[0]!.knowledgeOps[0]).toMatchObject({ value: { provenance: { speechRefs: [], stateRefs: [{ target, revision: 1 }] } } });
+    expect(result.steps[0]!.knowledgeOps[0]).toMatchObject({ value: { provenance: { stateRefs: [{ target, revision: 1 }], speechRefs: [] } } });
   } else {
     expect(bound.context.entities).toHaveLength(1);
     expect(bound.context.entities[0]).toMatchObject({ kind: "CORE", contents: "partial", capabilities: ["reference", "append"] });
@@ -96,7 +97,7 @@ it.each([true, false])("distinguishes available accepted factual content from an
 });
 
 it("keeps domain authority limited to knowledge without importing benchmark-specific policy", () => {
-  for (const rule of ["Domain rules, domain-rule descriptions, augmentation metadata, labels, permissions, rationale and supplied enrichment text", "data available only for authorized knowledge augmentation", "must never be reinterpreted as a NOTE, QUESTION, TASK or HINT", "presence of domain augmentation must not cause a Cue", "actual current teacher speech", "genuine current teacher learner-work instruction may independently establish Cue using speech provenance"]) expect(CORE_INTERPRETATION_POLICY).toContain(rule);
+  for (const rule of ["Domain rules, domain-rule descriptions, augmentation metadata, labels, permissions, rationale and supplied enrichment text", "data available only for authorized knowledge augmentation", "must never be reinterpreted as a NOTE, QUESTION, TASK or HINT", "presence of domain augmentation or AI correction must not cause a Cue", "actual current teacher speech", "genuine current teacher learner-work instruction may independently establish Cue using speech provenance", "Do not use domain augmentation as a disguised autonomous correction"]) expect(CORE_INTERPRETATION_POLICY).toContain(rule);
   for (const frozen of ["CORE1-domain", "enthalpy", "ΔH", "Supply its conventional symbol as enrichment."]) expect(CORE_INTERPRETATION_POLICY).not.toContain(frozen);
 });
 
@@ -127,6 +128,7 @@ it.each([false, true])("keeps authorized domain knowledge independent of teacher
   if (learnerWork) {
     expect(accepted.replay.state.cue.active).toMatchObject({ kind: "TASK", text: instruction, provenance: { speechRefs: [{ quote: `${teaching} ${instruction}` }], stateRefs: [] } });
     expect(accepted.replay.state.cue.active!.provenance.domainBasis).toBeUndefined();
+    expect(accepted.replay.state.cue.active!.provenance.aiCorrection).toBeUndefined();
     const withoutCue = structuredClone(step); withoutCue.cueDelta = { action: "KEEP" };
     expect(acceptCoreInterpretation(bound, propose(withoutCue), timestamp).replay.state.knowledge).toEqual(accepted.replay.state.knowledge);
     // The teacher instruction can establish Cue even when augmentation is omitted.

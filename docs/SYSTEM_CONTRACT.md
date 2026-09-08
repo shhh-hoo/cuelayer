@@ -79,7 +79,7 @@ The implementation must support functional equivalents of:
 - adding or revising semantic relations;
 - attaching or revising Support;
 - changing the current Core identity;
-- superseding or invalidating knowledge when an explicit correction requires it.
+- superseding or invalidating knowledge when a teacher correction or an authorized high-confidence AI correction requires it.
 
 One accepted interpretation step may contain zero or more ordered knowledge mutations together with its Cue mutation. The step must validate against one accepted base state and publish atomically; renderer-visible authority must not pass through partially applied intermediate semantic states. A valid accepted no-op may consume evidence without changing knowledge or Cue when nothing useful changed.
 
@@ -87,7 +87,7 @@ A provider response may contain multiple ordered semantic steps. Request batchin
 
 Exact event names such as `UPDATE`, `SUPERSEDE`, or `INVALIDATE` are repository-level design choices. Historical auditability must not be confused with destructive deletion.
 
-Explicit teacher self-correction may revise the affected semantic unit. Alpha does not autonomously correct an uncorrected teacher subject-matter claim.
+Explicit teacher self-correction may revise the affected semantic unit with normal speech-grounded provenance. CueLayer may also autonomously correct a concrete factual teacher error when confidence is high and the correction is materially useful, contextually relevant, timely, attributable, reversible, and does not destroy unresolved productive learner work. The autonomous-correction threshold must be materially stricter than ordinary representation or speech reconstruction. Ambiguous, disputed, opinion-based, uncertain, scoped-approximation, or assumption-dependent claims must not be silently corrected.
 
 ## Semantic Working Window
 
@@ -122,9 +122,11 @@ Canonical speech checkpoints and grounding remain immutable replayable evidence.
 
 Provenance must be attributable to the semantic fact or relationship it supports at sufficient granularity for local correction, replay, and audit. The product does not require one fixed field shape such as `node.provenance`; provenance may attach to a semantic object, proposition, relation, Support item, property, correction, or another sufficiently precise unit.
 
-A later deterministic system or reviewer must be able to identify why accepted lesson knowledge exists and whether its basis is speech evidence, prior accepted state, permitted domain knowledge, or an allowed combination.
+A later deterministic system or reviewer must be able to identify why accepted lesson knowledge exists and whether its basis is speech evidence, prior accepted state, permitted domain knowledge, an autonomous AI correction, or an allowed combination.
 
-Claimed speech evidence must resolve to immutable committed lesson evidence. Do not manufacture speech provenance for domain/state-derived content.
+Claimed speech evidence must resolve to immutable committed lesson evidence. Do not manufacture speech provenance for domain/state-derived content or for AI-corrected factual content that the teacher did not actually say.
+
+Autonomous AI correction must use an explicit correction provenance distinct from speech and domain attribution. It must identify the immutable current teacher evidence that triggered the correction, record a concise rationale, and record the high-confidence authority level. The trigger shows what was corrected; it is not false factual support for the corrected proposition. Correction provenance must remain replayable and auditable so later teacher correction, AI revision, or review can reverse or supersede it without losing the original speech evidence.
 
 ## Alpha authority
 
@@ -134,6 +136,7 @@ Alpha may:
 - reconstruct damaged speech expressions when intended teaching meaning is sufficiently grounded;
 - reorganize or represent established propositions without changing their meaning;
 - use narrowly validated domain knowledge for useful Board augmentation with honest provenance;
+- autonomously correct concrete high-confidence factual teacher errors when the correction meets the stricter correction gate and is honestly attributed;
 - maintain and locally revise Core structure across teaching turns;
 - infer same-Core continuity versus topic shift from evidence and state;
 - represent teacher-established learner actions as Teaching Cue;
@@ -141,15 +144,16 @@ Alpha may:
 
 Alpha must not yet:
 
-- autonomously correct an uncorrected teacher subject-matter claim;
+- silently correct ambiguous, disputed, opinion-based, uncertain, scoped-approximation, or assumption-dependent teacher claims;
+- use autonomous correction without explicit AI-correction provenance and a current teacher-evidence trigger;
 - originate arbitrary learner tasks, questions, or hints that are not established by current classroom evidence;
 - disclose complete answers that destroy unresolved productive learner work;
 - use hidden syllabus assumptions as if they were teacher evidence;
 - require teacher micromanagement for ordinary Board updates.
 
-Sufficiently speech-grounded teacher-established claims must be represented faithfully with honest provenance even when the model suspects teacher error. Suspicion alone does not justify suppression, substitution with model-preferred truth, or contradiction through domain augmentation. Later explicit teacher self-correction may change the affected knowledge.
+Teacher speech remains the primary evidence of what was taught, but not an infallible truth boundary. When a claim is not eligible for autonomous correction, represent it faithfully with honest speech provenance rather than silently substituting model-preferred truth. When the correction gate is met, the learner-facing knowledge may contain the corrected proposition with explicit AI-correction attribution while the immutable speech evidence preserves exactly what the teacher said. Explicit teacher self-correction remains the ordinary local correction path and does not require AI-correction provenance.
 
-Broader autonomous correction, proactive learner actions, intervention controls, teacher approval/override UI, personality/avatar/voice, and cross-lesson memory are future authority, not Alpha requirements.
+Broader autonomous pedagogy, proactive learner actions, intervention controls, teacher approval/override UI, personality/avatar/voice, and cross-lesson memory are future authority, not Alpha requirements.
 
 ## Teaching Cue
 
@@ -160,6 +164,8 @@ Board answers what knowledge the teacher is building. Teaching Cue answers what 
 Board change must not automatically resolve Cue. Cue resolution must not clear Board knowledge.
 
 Cue targeting may reference a Core, semantic object, relation, comparison, or lesson-level action once the Core-domain reference contract is introduced. Core-domain Cue targets must not depend on legacy `BOARD_ITEM` identity after cutover. Exact target types belong in the implementation contract when introduced.
+
+Autonomous AI correction is knowledge authority, not learner-action authority. A correction must not itself create a NOTE, QUESTION, TASK, or HINT unless current teacher speech independently establishes that learner work.
 
 ## Attention and rendering
 
@@ -224,7 +230,7 @@ Repository changes that affect live teaching must preserve or deliberately migra
 - immutable committed evidence and ordered consumption;
 - deterministic replay without provider calls;
 - provider output validation before accepted state publication;
-- explicit provenance and grounding;
+- explicit provenance and grounding, including distinct attribution for autonomous AI correction;
 - Board/Cue lifecycle independence;
 - no automatic ordinary transcript on the normal presentationless surface;
 - last valid learner state preserved on failure;

@@ -78,6 +78,11 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
       return { target, revision: target.kind === "CUE" ? cueRevision : knowledgeRevision };
     };
     const provenance = (p: ProposalProvenance, text?: string): Provenance => {
+      if ("aiCorrection" in p) {
+        const trigger = speech(p.aiCorrection.trigger, true);
+        if (p.speech.length || p.state.length || p.domain !== null) throw new Error("core-proposal-ai-correction-provenance-invalid");
+        return { speechRefs: [], stateRefs: [], aiCorrection: { trigger, rationale: p.aiCorrection.rationale, confidence: "high" } };
+      }
       if (p.domain && p.speech.length) throw new Error("core-proposal-domain-not-speech");
       const stateRefs = p.state.map(ref => source(ref, "factual_basis"));
       if (stateRefs.some(r => r.target.kind === "CORE")) throw new Error("core-proposal-core-container-not-factual-basis");
@@ -102,6 +107,7 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
     const knowledgeOps: KnowledgeOperation[] = [];
     for (const [index, op] of proposed.knowledgeOps.entries()) {
       if (op.action === "CREATE_CORE") {
+        if ("aiCorrection" in op.provenance) throw new Error("core-proposal-ai-correction-core-forbidden");
         const p = provenance(op.provenance);
         knowledgeOps.push({ action: op.action, id: create(op.as, "CORE", index), provenance: p }); continue;
       }
@@ -117,7 +123,9 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
       const kind = op.action.endsWith("OBJECT") ? "OBJECT" : op.action.endsWith("RELATION") ? "RELATION" : "SUPPORT";
       const target = "core" in op ? requireKind(op.core, "CORE", "append") : requireKind(op.target, kind, "revise");
       const coreId = "core" in op ? target.id : (target as UnitReference).coreId;
-      const value: Record<string, unknown> = { text: op.value.text, provenance: provenance(op.value.provenance, op.value.text) };
+      const normalizedProvenance = provenance(op.value.provenance, op.value.text);
+      if (normalizedProvenance.aiCorrection && kind === "SUPPORT") throw new Error("core-proposal-ai-correction-support-forbidden");
+      const value: Record<string, unknown> = { text: op.value.text, provenance: normalizedProvenance };
       if ("from" in op.value) {
         const from = unit(op.value.from), to = unit(op.value.to);
         if (from.kind !== "OBJECT" || to.kind !== "OBJECT" || from.coreId !== coreId || to.coreId !== coreId) throw new Error("core-proposal-relation-endpoints-invalid");
@@ -139,6 +147,7 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
       const targetCueId = "target" in cue ? requireKind(cue.target, "CUE", "revise").id : undefined;
       if (cue.action === "RESOLVE") cueDelta = { action: "RESOLVE", targetCueId: targetCueId!, evidence: speech(cue.evidence, true) };
       else {
+        if ("aiCorrection" in cue.value.provenance) throw new Error("core-proposal-cue-ai-correction-forbidden");
         if (cue.value.provenance.domain) throw new Error("core-proposal-cue-domain-forbidden");
         const p = provenance(cue.value.provenance, cue.value.text);
         if (!p.speechRefs.some(r => consumes.includes(r.checkpointId))) throw new Error("core-proposal-cue-current-speech-required");

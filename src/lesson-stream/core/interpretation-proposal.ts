@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const CORE_PROPOSAL_VERSION = "core-interpretation-proposal-v1";
+export const CORE_PROPOSAL_VERSION = "core-interpretation-proposal-v2";
 export const CORE_PROPOSAL_LIMITS = Object.freeze({ steps: 8, operations: 24, text: 1200, references: 16 });
 const handle = z.string().regex(/^[a-z][a-z0-9_]{0,39}$/);
 const text = z.string().min(1).max(CORE_PROPOSAL_LIMITS.text);
@@ -10,10 +10,21 @@ export const proposalReferenceSchema = z.union([
 const ref = proposalReferenceSchema;
 const refs = z.array(ref).max(CORE_PROPOSAL_LIMITS.references);
 const evidence = z.array(handle).max(CORE_PROPOSAL_LIMITS.references);
-const provenance = z.object({
+const standardProvenance = z.object({
   speech: evidence, state: refs,
   domain: z.object({ rule: handle }).strict().nullable(),
 }).strict();
+const aiCorrectionProvenance = z.object({
+  speech: z.array(handle).max(0),
+  state: z.array(ref).max(0),
+  domain: z.null(),
+  aiCorrection: z.object({
+    trigger: handle,
+    rationale: text,
+    confidence: z.literal("high"),
+  }).strict(),
+}).strict();
+const provenance = z.union([standardProvenance, aiCorrectionProvenance]);
 const fact = z.object({ text, provenance }).strict();
 const relation = fact.extend({ from: ref, to: ref }).strict();
 const support = fact.extend({ target: ref }).strict();

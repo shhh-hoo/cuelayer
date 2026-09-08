@@ -41,6 +41,11 @@ function validateStepBase(state: CoreTeachingState, step: CoreStep, checkpoints:
   const sources = provenances(step);
   const stateRefs = [...step.stateRefs, ...sources.flatMap(p => p.stateRefs)];
   const cue = step.cueDelta;
+  if ("value" in cue && cue.value.provenance.aiCorrection) throw new Error("core-cue-ai-correction-forbidden");
+  for (const op of step.knowledgeOps) {
+    if (op.action === "CREATE_CORE" && op.provenance.aiCorrection) throw new Error("core-ai-correction-core-forbidden");
+    if ("value" in op && op.action.endsWith("SUPPORT") && op.value.provenance.aiCorrection) throw new Error("core-ai-correction-support-forbidden");
+  }
   const readsKnowledge = stateRefs.some(r => r.target.kind !== "CUE") || ("value" in cue && cue.value.target !== undefined);
   const readsCue = stateRefs.some(r => r.target.kind === "CUE");
   if (step.baseKnowledgeRevision > state.knowledge.revision || step.baseCueRevision > state.cue.revision) throw new Error("core-base-revision-ahead");
@@ -54,7 +59,10 @@ function validateStepBase(state: CoreTeachingState, step: CoreStep, checkpoints:
     requireReference(state, ref.target);
   }
   step.evidenceRefs.forEach(ref => speech(ref));
-  sources.forEach(p => p.speechRefs.forEach(ref => speech(ref)));
+  sources.forEach(p => {
+    p.speechRefs.forEach(ref => speech(ref));
+    if (p.aiCorrection) speech(p.aiCorrection.trigger, true);
+  });
   if ((step.knowledgeOps.length > 0 || cue.action !== "KEEP") && !step.evidenceRefs.some(r => current.has(r.checkpointId))) throw new Error("core-current-trigger-required");
   for (const op of step.knowledgeOps) if ("correctionEvidence" in op && op.correctionEvidence) speech(op.correctionEvidence, true);
   if ("value" in cue && !cue.value.provenance.speechRefs.some(r => current.has(r.checkpointId))) throw new Error("core-cue-current-speech-required");

@@ -3,7 +3,7 @@ import type { CoreTeachingState, Provenance, SemanticReference } from "./contrac
 import { appendCoreEvent, createCoreReplay, type CoreReplay } from "./replay.ts";
 import { resolveSemanticReference } from "./teaching-state.ts";
 
-export const CORE_CONTEXT_VERSION = "core-interpretation-context-v2";
+export const CORE_CONTEXT_VERSION = "core-interpretation-context-v3";
 export const CORE_CONTEXT_BUDGETS = Object.freeze({ maxCharacters: 32_000, maxEntities: 48, candidateCores: 3, optionalRoots: 18, recentEvidence: 6, recentChanges: 4, unresolved: 8, priors: 4, domainRules: 8 });
 export type Capability = "reference" | "factual_basis" | "append" | "refocus" | "revise" | "invalidate" | "supersede";
 export type DomainRule = { id: string; text: string; basis: string };
@@ -56,6 +56,11 @@ export function historicalSources(base: CoreReplay) {
       result.add("speech");
     }
     if (p.domainBasis !== undefined) result.add("domain");
+    if (p.aiCorrection) {
+      const ref = p.aiCorrection.trigger;
+      if (!base.checkpoints.find(c => c.checkpointId === ref.checkpointId)?.text.includes(ref.quote) || !ref.quote.trim()) throw new Error("core-context-source-evidence-missing");
+      result.add("ai_correction");
+    }
     for (const ref of p.stateRefs) {
       const source = resolve(ref.target, ref.revision);
       result.add("accepted_state");

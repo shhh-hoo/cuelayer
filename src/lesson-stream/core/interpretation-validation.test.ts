@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildCoreInterpretationContext } from "./interpretation-context.ts";
 import { acceptCoreInterpretation } from "./interpretation-validation.ts";
 import { coreProposalSchema, type ProposalStep } from "./interpretation-proposal.ts";
-import { appendCoreEvent, replayCoreEvents } from "./replay.ts";
+import { appendCoreEvent, replayCoreEvents, type CoreReplay } from "./replay.ts";
 import { evidence, expire, foundation, start, timestamp } from "./test-fixtures.ts";
 
 const p = (speech = ["e0"]) => ({ speech, state: [], domain: null });
@@ -18,6 +18,12 @@ function growth(): ProposalStep {
     { action: "ADD_RELATION", core: created("main"), as: "rel", value: { ...value("A relates to B"), from: created("a"), to: created("b") } },
     { action: "SET_CURRENT_CORE", core: created("main") },
   ] };
+}
+function commitText(base: CoreReplay, text: string) {
+  const event = evidence(base).events.at(-1)!;
+  if (event.type !== "evidence.checkpoint_committed") throw new Error("fixture");
+  event.checkpoint.text = text;
+  return appendCoreEvent(base, event);
 }
 const propose = (...steps: ProposalStep[]) => ({ outcome: { kind: "PROPOSE", steps } });
 const binding = (two = false) => { let base = evidence(start()); if (two) base = evidence(base); return buildCoreInterpretationContext(base, { requestId: "req", newEvidence: base.checkpoints }); };
@@ -117,6 +123,39 @@ describe("Core provider normalization", () => {
     const denied = binding(); expect(() => acceptCoreInterpretation(denied, propose(step), timestamp)).toThrow("not-authorized");
     const last = step.knowledgeOps.at(-1)!; if ("value" in last) last.value.provenance.speech = ["e0"];
     expect(() => acceptCoreInterpretation(request, propose(step), timestamp)).toThrow("domain-not-speech");
+  });
+  it("normalizes high-confidence AI correction as distinct attributable knowledge provenance", () => {
+    const wrong = "A triangle has four sides.", corrected = "A triangle has three sides.";
+    const base = commitText(start(), wrong);
+    const request = buildCoreInterpretationContext(base, { requestId: "ai-correct", newEvidence: base.checkpoints });
+    const step = empty(); step.evidenceRefs = ["e0"];
+    step.knowledgeOps = [
+      { action: "CREATE_CORE", as: "geometry", provenance: p() },
+      { action: "ADD_OBJECT", core: created("geometry"), as: "corrected", value: { text: corrected, provenance: { speech: [], state: [], domain: null, aiCorrection: { trigger: "e0", rationale: "A triangle is defined by three sides.", confidence: "high" } } } },
+      { action: "SET_CURRENT_CORE", core: created("geometry") },
+    ];
+    const accepted = acceptCoreInterpretation(request, propose(step), timestamp);
+    const op = accepted.steps[0]!.knowledgeOps[1]!;
+    expect(op).toMatchObject({ action: "ADD_OBJECT", value: { text: corrected, provenance: { speechRefs: [], stateRefs: [], aiCorrection: { trigger: { quote: wrong }, confidence: "high" } } } });
+    if (op.action !== "ADD_OBJECT") throw new Error("fixture");
+    expect(op.value.provenance.domainBasis).toBeUndefined();
+    const next = commitText(accepted.replay, "Continue with the example.");
+    const target = { kind: "OBJECT" as const, coreId: op.coreId, id: op.id };
+    const projected = buildCoreInterpretationContext(next, { requestId: "ai-origin", newEvidence: [next.checkpoints.at(-1)!], required: [target] });
+    expect(projected.context.entities.find(e => e.text === corrected)?.origins).toEqual(["ai_correction"]);
+
+    const historical = projected.context.evidence.find(e => e.text === wrong)!;
+    const stale = empty(); stale.evidenceRefs = ["e0"];
+    stale.knowledgeOps = [{ action: "ADD_OBJECT", core: { existing: projected.context.knowledge.current! }, as: "stale_correction", value: { text: "Another correction.", provenance: { speech: [], state: [], domain: null, aiCorrection: { trigger: historical.handle, rationale: "Historical trigger must not authorize a fresh correction.", confidence: "high" } } } }];
+    expect(() => acceptCoreInterpretation(projected, propose(stale), timestamp)).toThrow("speech-unavailable");
+
+    const cue = empty(); cue.evidenceRefs = ["e0"];
+    cue.cueDelta = { action: "SET", as: "bad_cue", value: { text: "Do something.", kind: "TASK", target: null, provenance: { speech: [], state: [], domain: null, aiCorrection: { trigger: "e0", rationale: "Correction cannot create learner work.", confidence: "high" } } } };
+    expect(() => acceptCoreInterpretation(request, propose(cue), timestamp)).toThrow("cue-ai-correction-forbidden");
+
+    const raw = structuredClone(propose(step)) as any;
+    raw.outcome.steps[0].knowledgeOps[1].value.provenance.aiCorrection.confidence = "medium";
+    expect(coreProposalSchema.safeParse(raw).success).toBe(false);
   });
   it.each(["OBJECT", "RELATION", "SUPPORT"] as const)("revises and supersedes projected %s without changing unrelated identities", kind => {
     const f = foundation(), base = evidence(f.replay), request = buildCoreInterpretationContext(base, { requestId: "local", newEvidence: [base.checkpoints.at(-1)!], writable: [{ kind, coreId: f.coreId, id: kind === "OBJECT" ? f.a : kind === "RELATION" ? f.relationId : f.supportId }] });
