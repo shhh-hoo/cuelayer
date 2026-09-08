@@ -28,13 +28,16 @@ export type CoreLiveOptions = {
   deadlineMs?: number; finalizationMs?: number; verificationTimeoutMs?: number;
 };
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error)).slice(0, 2_048);
-function failureCategory(error: unknown, signal?: AbortSignal): InterpretationFailure {
+type RequestStage = "provider" | "normalization" | "validation" | "persistence";
+function failureCategory(error: unknown, stage: RequestStage, signal?: AbortSignal): InterpretationFailure {
   const reason = message(error);
   if (signal?.reason === "core-provider-timeout") return "timeout";
   if (signal?.aborted || reason === "core-stale-result") return "cancelled";
   if (/core-(knowledge|cue)-conflict/.test(reason) || reason.includes("pending-prefix")) return "conflict";
   if (reason.includes("budget")) return "budget";
-  if (error instanceof ZodError || error instanceof SyntaxError || /core-proposal-|core-reference-|core-speech-|core-cue-/.test(reason)) return "validation";
+  // The provider adapter can parse JSON/schema before the outer stage advances.
+  if (error instanceof ZodError || error instanceof SyntaxError) return "validation";
+  if (stage === "normalization" || stage === "validation") return "validation";
   return "provider";
 }
 
@@ -147,7 +150,7 @@ export class CoreLiveSession {
     const current = () => !this.closed && generation === this.generation && this.scheduler.currentWork?.requestId === schedulerRequestId;
     const deadline = setTimeout(() => controller.abort("core-provider-timeout"), this.options.deadlineMs ?? interpretationDeadlines().clientMs);
     let validated = false;
-    let stage: "provider" | "normalization" | "validation" | "persistence" = "provider";
+    let stage: RequestStage = "provider";
     try {
       this.trace.record("core.request", () => ({ requestId: binding.requestId, checkpointIds: binding.newEvidenceIds,
         diagnostics: coreContextDiagnostics(binding), context: binding.context,
@@ -215,7 +218,7 @@ export class CoreLiveSession {
       // If another accepted Core writer won, never reopen its consumed evidence.
       const remaining = new Set(this.runtime.pending.map(checkpoint => checkpoint.checkpointId));
       if (this.scheduler.pendingCheckpoints.some(checkpoint => !remaining.has(checkpoint.checkpointId))) this.scheduler.restore(this.runtime.pending);
-      const category = failureCategory(error, controller.signal);
+      const category = failureCategory(error, stage, controller.signal);
       this.trace.record("core.request_failed", () => ({ reason: message(error), category: stage === "persistence" && !controller.signal.aborted ? "persistence" : category, stage, pendingCount: this.scheduler.pendingCount }), correlation);
       if (!validated && stage === "validation") this.trace.record("core.validation", () => ({ status: "rejected", reason: message(error),
         knowledgeRevision: this.state.knowledge.revision, cueRevision: this.state.cue.revision }), correlation);

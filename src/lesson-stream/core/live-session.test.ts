@@ -81,7 +81,50 @@ describe("controlled Core live pipeline", () => {
     expect(store.events).toHaveLength(eventCount);
     expect(traces.filter(t => t.type === "core.provider_response")).toHaveLength(2);
     expect(session.health.paused).toBe(kind !== "transport");
+    expect(traces.filter(t => t.type === "core.request_failed").at(-1)?.payload).toMatchObject({
+      category: kind === "transport" ? "provider" : "validation", stage: kind === "semantic" ? "validation" : "provider",
+    });
+    if (kind !== "transport") {
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(traces.filter(t => t.type === "core.provider_response")).toHaveLength(2);
+    }
     fail = false; session.resume(); await finish(session); expect(session.health.pendingCount).toBe(0);
+  });
+  it("pauses a missing current trigger as validation until explicit resume", async () => {
+    let invalid = true;
+    const interpreter = vi.fn<CoreLiveOptions["interpreter"]>(async binding => {
+      const proposal = addCue(proposalFor(binding, true), "OBJECT");
+      if (invalid) proposedStep(proposal).evidenceRefs = [];
+      return proposal;
+    });
+    const { session, store, traces } = await setup({ interpreter });
+    const before = structuredClone(session.state);
+    const checkpoint = await session.commitClosedSpan(closedSpan());
+    await finish(session);
+    expect(interpreter).toHaveBeenCalledOnce();
+    expect(session.health).toMatchObject({ paused: true, consecutiveFailures: 1, pendingCount: 1, error: "core-current-trigger-required" });
+    expect(traces.filter(t => t.type === "core.request_failed").map(t => t.payload)).toEqual([
+      { stage: "validation", category: "validation", reason: "core-current-trigger-required", pendingCount: 1 },
+    ]);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(interpreter).toHaveBeenCalledOnce();
+    expect(session.health.paused).toBe(true);
+    expect(session.runtime.pending).toEqual([checkpoint]);
+    expect(session.state).toEqual(before);
+    expect(session.state.knowledge).toEqual(before.knowledge);
+    expect(session.state.cue).toEqual(before.cue);
+    expect(store.events.filter(e => e.type === "core.step_accepted")).toHaveLength(0);
+    expect(traces.filter(t => t.type === "core.published")).toHaveLength(0);
+
+    invalid = false; session.resume(); await finish(session);
+    expect(interpreter).toHaveBeenCalledTimes(2);
+    expect(session.health).toMatchObject({ paused: false, pendingCount: 0 });
+    expect(session.runtime.pending).toEqual([]);
+    expect(session.state.processedThroughSequence).toBe(checkpoint!.lessonSequence);
+    expect(session.state.knowledge.revision).toBe(1);
+    expect(session.state.cue.active).toBeDefined();
+    expect(store.events.filter(e => e.type === "core.step_accepted")).toHaveLength(1);
+    expect(traces.filter(t => t.type === "core.published")).toHaveLength(1);
   });
   it("bounds repeated transport retries and new evidence cannot bypass backoff", async () => {
     const interpreter = vi.fn(async () => { throw new Error("unavailable"); });
