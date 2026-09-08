@@ -30,6 +30,7 @@ export function appendCoreEvent(base: CoreReplay, input: unknown): CoreReplay {
   if (!base.events.length && event.type !== "lesson.started") throw new Error("core-lesson-not-started");
   if (base.events.length && event.type === "lesson.started") throw new Error("core-lesson-already-started");
 
+  if (event.type === "speech.run_allocated" && base.events.some(e => e.type === "speech.run_allocated" && e.runId === event.runId)) throw new Error("core-speech-run-identity-collision");
   let next = base;
   if (event.type === "evidence.checkpoint_committed") {
     const { checkpoint, grounding } = event;

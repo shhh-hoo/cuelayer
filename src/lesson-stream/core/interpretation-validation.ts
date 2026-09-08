@@ -6,7 +6,7 @@ import { CORE_PROPOSAL_LIMITS, coreProposalSchema, verificationRequestSchema, ty
 import type { CoreReplay } from "./replay.ts";
 import { resolveSemanticReference } from "./teaching-state.ts";
 
-/** Offline candidates only. No persistence, provider calls, publication or retry orchestration. */
+/** Pure candidates only. Live callers must use CoreLessonStreamRuntime for durable acceptance. */
 export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw: unknown, acceptedAt: string, acceptedBase: CoreReplay = binding.base) {
   const proposal = coreProposalSchema.parse(raw).outcome;
   if (acceptedBase.state.sessionId !== binding.base.state.sessionId) throw new Error("core-proposal-session-mismatch");
@@ -27,6 +27,20 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
   const aliases = new Map<string, { target: SemanticReference; step: number; operation: number }>();
   const steps: CoreStep[] = [], events: ReturnType<typeof acceptCoreStep>["event"][] = [];
   for (const [stepIndex, proposed] of proposal.steps.entries()) {
+    // Check actual channel dependencies before resolving a now-expired/changed
+    // reference. Such results are retryable channel conflicts, not malformed
+    // proposals. Sidecar investigation leads never participate in this check.
+    const sources = [...proposed.knowledgeOps.flatMap(op => "value" in op ? [op.value.provenance] : "provenance" in op ? [op.provenance] : []),
+      ...("value" in proposed.cueDelta ? [proposed.cueDelta.value.provenance] : [])];
+    const dependencies = [...proposed.readRefs, ...sources.flatMap(p => p.state)].map(ref =>
+      "existing" in ref ? binding.entities.get(ref.existing)?.target.kind : aliases.get(ref.created)?.target.kind);
+    const readsKnowledge = proposed.reads.knowledge || proposed.knowledgeOps.length > 0
+      || dependencies.some(kind => kind !== undefined && kind !== "CUE")
+      || ("value" in proposed.cueDelta && proposed.cueDelta.value.target !== null);
+    const readsCue = proposed.reads.cue || proposed.cueDelta.action !== "KEEP" || dependencies.includes("CUE")
+      || sources.some(p => p.domain !== null || "aiCorrection" in p);
+    if (readsKnowledge && knowledgeRevision !== replay.state.knowledge.revision) throw new Error("core-knowledge-conflict");
+    if (readsCue && cueRevision !== replay.state.cue.revision) throw new Error("core-cue-conflict");
     const consumes = proposed.consumes.map(h => {
       const checkpoint = binding.evidence.get(h);
       if (!checkpoint) throw new Error("core-proposal-evidence-unknown");
