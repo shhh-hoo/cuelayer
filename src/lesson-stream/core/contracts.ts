@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { CompactEvidenceCheckpoint, GroundingRecord } from "../contracts.ts";
 
-/** Offline semantic generation; never change the production legacy version here. */
+/** Core semantic generation; normal production sessions still use legacy. */
 export const CORE_EVENT_SCHEMA_VERSION = "lesson-event-v5-core";
 const id = z.string().min(1);
 const text = z.string().refine(value => value.trim().length > 0, "empty-text");
@@ -112,6 +112,7 @@ export type CoreTeachingState = {
 type Identity = { schemaVersion: typeof CORE_EVENT_SCHEMA_VERSION; eventId: string; sessionId: string; sequence: number };
 export type CoreEvent = Identity & (
   | { type: "lesson.started"; timestamp: string }
+  | { type: "speech.run_allocated"; timestamp: string; runId: string }
   | { type: "evidence.checkpoint_committed"; timestamp: string; checkpoint: CompactEvidenceCheckpoint; grounding: GroundingRecord }
   | { type: "core.step_accepted"; step: CoreStep }
   | { type: "teaching_cue.expired"; cueId: string; baseCueRevision: number; timestamp: string }

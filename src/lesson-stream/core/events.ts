@@ -19,6 +19,7 @@ const identity = { schemaVersion: z.literal(CORE_EVENT_SCHEMA_VERSION), eventId:
 const timestamp = z.iso.datetime();
 export const coreEventSchema = z.discriminatedUnion("type", [
   z.object({ ...identity, type: z.literal("lesson.started"), timestamp }).strict(),
+  z.object({ ...identity, type: z.literal("speech.run_allocated"), timestamp, runId: id }).strict(),
   z.object({ ...identity, type: z.literal("evidence.checkpoint_committed"), timestamp, checkpoint, grounding }).strict(),
   z.object({ ...identity, type: z.literal("core.step_accepted"), step: coreStepSchema }).strict(),
   z.object({ ...identity, type: z.literal("teaching_cue.expired"), cueId: id, baseCueRevision: natural, timestamp }).strict(),

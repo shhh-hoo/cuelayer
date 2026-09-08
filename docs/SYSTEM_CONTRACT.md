@@ -179,7 +179,7 @@ Alpha must not:
 
 Teacher speech is the primary classroom signal and immutable evidence of what was said, but not an infallible learner-visible truth boundary. AI controls the learner-facing surface by default; ordinary interventions do not require teacher approval. That autonomy remains contestable: later teaching may clarify, reject, revise, or supersede the AI's interpretation.
 
-Current M2 code is deliberately narrower than the full product authority where no honest provenance mechanism exists yet. In particular, free-form model belief is not accepted as a common-knowledge factual basis, and settled AI correction currently requires a host-verified trusted rule/evidence handle. Do not weaken provenance to simulate product completeness; add reviewed authority seams before production cutover.
+Current Core code is deliberately narrower than the full product authority where no honest provenance mechanism exists yet. In particular, free-form model belief is not accepted as a common-knowledge factual basis, and settled AI correction currently requires a host-verified trusted rule/evidence handle. Do not weaken provenance to simulate product completeness; add reviewed authority seams before production cutover.
 
 ## Teaching Cue
 
@@ -269,6 +269,20 @@ The scheduler must preserve ordered unprocessed evidence. Provider, semantic val
 A transient semantic-path failure preserves the last accepted Board and Cue surface until a later valid change is accepted. Independent failure domains should degrade independently wherever technically possible. Verification/Governor side-path failures must not roll back already accepted semantic state, re-open already consumed evidence, or block unrelated subsequent checkpoints. A verification side request is not an accepted lesson event or learner truth; only a later independently verified correction may change durable state.
 
 Exact queue bounds, retry counts, deadlines, context budgets, request envelopes, batching, cooldowns and conflict policy remain executable configuration owned by code and tests.
+
+## Controlled Core live boundary
+
+Normal `/session` remains legacy until the production cutover. The internal `CoreLiveSession` API requires explicit `lessonDomain: "core"` and an injected interpreter. It consumes closed canonical speech spans through the shared checkpoint converter and lossless scheduler, using the reviewed Core context/proposal/validation contracts directly. It provides authoritative Core state to a host; no compatibility renderer or Canvas layout is introduced here.
+
+The local event store records an immutable domain claim for each session, including empty sessions. Historical v3/v4 sessions are validated and claimed as legacy without conversion. A mismatched domain, mixed event generation, overwritten event identity or competing event sequence is rejected. Core sessions retain the v5 Core event generation, with additive persisted speech-run allocation events.
+
+Core runtime writes are serialized. Each acceptance validates against the current replay using the original request binding, folds the entire event batch, atomically persists it, publishes once, and only then settles semantic scheduling. An abort before commit rejects the transaction and leaves the prior state/pending evidence intact. Once storage reports a durable commit, publication and consumption complete even if cancellation arrives too late to undo that commit. Observer exceptions cannot reverse this outcome.
+
+Knowledge and Cue writes, explicit channel reads and semantic reference/provenance dependencies determine conflicts. Dependency checks occur before dereferencing an expired or changed entity so stale reads are classified as channel conflicts. Domain augmentation and verified correction also depend on the Cue context used to protect current learner work. There is no global semantic revision guard.
+
+`NEEDS_CONTEXT` pauses with the prefix pending and no accepted event. Explicit host resume rebuilds bounded context with its grounded retrieval phrase; new evidence cannot bypass the pause. Provider/storage failures use bounded backoff, while validation/budget failures pause. Finalization drains committed evidence and the closed speech tail before appending `lesson.ended`. Incomplete drains remain unended and reloadable. Pre-existing Core logs that ended with pending evidence are reported as an error, never silently dropped or rewritten.
+
+Normalized verification requests leave the semantic path only after durable acceptance and scheduler settlement. The bounded side dispatcher has no event-store/reducer access and treats candidate evidence only as an investigation lead. Missing sink, pressure, timeout, cancellation or failure affects diagnostics only. Semantic finalization cancels remaining side work without waiting for it.
 
 ## Diagnostic trace
 

@@ -28,7 +28,7 @@ function durableLine(event: SessionTraceEvent) {
   const latency = typeof payload.latencyMs === "number" ? ` · ${payload.latencyMs}ms` : "";
   const state = typeof payload.state === "string" ? ` · ${payload.state}` : "";
   const decision = typeof payload.decision === "string" ? ` · ${payload.decision}` : "";
-  const identity = event.correlation?.cueId ?? event.correlation?.plannerRequestId ?? event.correlation?.spanId ?? event.correlation?.finalId ?? event.correlation?.speechEventId;
+  const identity = event.correlation?.coreRequestId ?? event.correlation?.cueId ?? event.correlation?.plannerRequestId ?? event.correlation?.spanId ?? event.correlation?.finalId ?? event.correlation?.speechEventId;
   return `${clock(event.occurredAt)} · ${event.type}${state}${decision}${identity ? ` · ${identity}` : ""}${latency}${transcript}`;
 }
 

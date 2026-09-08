@@ -2,8 +2,8 @@ import { coreStepSchema } from "./contracts.ts";
 import { coreAcceptedEvent } from "./events.ts";
 import { appendCoreEvent, type CoreReplay } from "./replay.ts";
 
-/** Offline only. A successful return is a candidate, not a durably published runtime state.
- * Storage, serialization across concurrent writers and publication belong to M3.
+/** Pure candidate only. CoreLessonStreamRuntime owns storage, serialized writes
+ * and publication; a successful return here is not a durable acceptance.
  */
 export function acceptCoreStep(base: CoreReplay, input: unknown) {
   const step = coreStepSchema.parse(input);

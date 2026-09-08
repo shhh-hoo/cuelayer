@@ -8,8 +8,9 @@ export type CoreCallDiagnostic = {
   requestedModel: string; startedAt: string; elapsedMs: number;
   response?: Awaited<ReturnType<CoreProviderTransport>>; transportError?: string;
 };
-/** Evaluation-only adapter. Explicit injection makes deterministic tests incapable of accidental calls. */
+/** Explicit injection supports offline validation and controlled Core live hosts. */
 export async function interpretCore(binding: CoreInterpretationBinding, model: string, transport: CoreProviderTransport, signal?: AbortSignal, record?: (diagnostic: CoreCallDiagnostic) => void) {
+  const observe = (diagnostic: CoreCallDiagnostic) => { try { record?.(diagnostic); } catch { /* Diagnostics never alter the provider result. */ } };
   const request = { ...coreProviderRequest(binding), model };
   if (!model.trim() || Math.ceil(JSON.stringify(request).length / 4) + request.max_output_tokens > CORE_PROVIDER_BUDGET.maxEstimatedTokens) throw new Error("core-provider-envelope-budget-exceeded");
   signal?.throwIfAborted();
@@ -17,13 +18,14 @@ export async function interpretCore(binding: CoreInterpretationBinding, model: s
   let response: Awaited<ReturnType<CoreProviderTransport>>;
   try { response = await transport(request, signal); }
   catch (error) {
-    record?.({ requestedModel: model, startedAt, elapsedMs: performance.now() - started, transportError: error instanceof Error ? error.message : String(error) });
+    observe({ requestedModel: model, startedAt, elapsedMs: performance.now() - started, transportError: error instanceof Error ? error.message : String(error) });
     throw error;
   }
   // Capture the exact response before incomplete status, JSON/schema, or semantic rejection.
-  record?.({ requestedModel: model, startedAt, elapsedMs: performance.now() - started, response });
+  observe({ requestedModel: model, startedAt, elapsedMs: performance.now() - started, response });
   signal?.throwIfAborted();
   if (response.status && response.status !== "completed") throw new Error("core-provider-incomplete");
+  if (response.output_text.length > 131_072) throw new Error("core-provider-output-budget-exceeded");
   const proposal = providerCoreProposalSchema.parse(JSON.parse(response.output_text));
   return { proposal, identity: coreProviderIdentity, requestedModel: model, actualModel: response.model };
 }
