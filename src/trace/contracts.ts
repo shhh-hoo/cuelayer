@@ -1,3 +1,4 @@
+import type { CoreTracePayloads } from "./core-contracts.ts";
 import type { SpeechRunId } from "../session/speech-types.ts";
 import type { LessonEvent, TeachingInterpretationProposal, TeachingInterpretationRequest, TeachingStateSnapshot } from "../lesson-stream/contracts.ts";
 import type { JsonValue } from "./audit.ts";
@@ -18,6 +19,11 @@ export type TraceCorrelation = {
   spanId?: string;
   spanRevision?: number;
   plannerRequestId?: string;
+  coreRequestId?: string;
+  knowledgeRevision?: number;
+  coreId?: string;
+  entityId?: string;
+  verificationRequestIndex?: number;
   checkpointId?: string;
   interpretationId?: string;
   lessonEventId?: string;
@@ -50,7 +56,7 @@ export type AcceptedContributionAudit = {
   warnings: Array<{ code: string; detail?: string }>;
 };
 
-export type SessionTracePayloads = {
+export type SessionTracePayloads = CoreTracePayloads & {
   "latency.stage": import("./learner-latency").LatencyStage;
   "latency.checkpoint": import("./learner-latency").LearnerLatencyRecord & { derived: ReturnType<typeof import("./learner-latency").latencyDerived>; clock: string; unavailable: string };
   "latency.gap": { reason: string; checkpointId: string };
@@ -258,6 +264,7 @@ const SECRET_KEY = /^(?:authorization|api[_-]?key|access[_-]?token|refresh[_-]?t
 const AUDIO_KEY = /^(?:audio(?:data|frames?|blob|buffer)?|pcm(?:data|frames?|buffer)?|microphone(?:data|frames?)?|recording|waveform|binary|blob|buffer)$/i;
 const SECRET_TEXT = /(?:bearer\s+[a-z0-9._~+/=-]+|sk-[a-z0-9_-]{8,}|eyJ[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+)/gi;
 const AUDIT_EVENT_TYPES = new Set<SessionTraceEventType>([
+  "core.request", "core.provider_request", "core.provider_response", "core.proposal_normalized", "core.validation", "core.accepted", "core.published", "core.verification",
   "interpretation.request_snapshot", "provider.contract_snapshot", "provider.request_snapshot", "provider.response_snapshot", "interpretation.proposal_normalized", "interpretation.validation_result", "interpretation.step_accepted", "teaching_surface.rendered",
 ]);
 
