@@ -18,6 +18,7 @@ jobs:
       - run: npm run test
       - run: npm run build
       - run: npm run eval:semantics:validate
+      - run: npm run eval:core:validate
       - run: npm run check:repo -- --clean
       - name: Upload visual-review build
         uses: actions/upload-artifact@v4

@@ -150,3 +150,9 @@ When the production Board domain migrates from legacy `SET_ACTIVE` / bounded `Re
 3. review new gold rather than mechanically translating old slot-based expectations;
 4. keep renderer/layout/attention evaluation separate from semantic interpretation evaluation where possible;
 5. record run output outside tracked source.
+
+## Core live runtime regression gate
+
+M3 runtime correctness is checked separately from the frozen semantic model corpora. Deterministic tests inject transports and exercise the real Core provider envelope/parser, bounded context, normalizer/validator, lossless scheduler, atomic event persistence, replay, Cue references, verification dispatcher, finalization and trace writer. The live runtime does not use the offline exemplar adapter as a persistence boundary.
+
+CI runs `npm run eval:core:validate` in addition to the legacy frozen validator and full test/build/hygiene checks. The optional `--fresh-holdout` validation is also deterministic. Both commands report `mode: exemplar-contract` and `modelCalls: 0`; passing the 24-case and eight-case fixture contracts is not a model score. The frozen historical 19/24, 5/8 and 21/24 model results remain unchanged and must not be rescored.

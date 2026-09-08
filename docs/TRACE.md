@@ -122,3 +122,28 @@ Trace changes must preserve these guarantees:
 8. trace data never becomes replay authority.
 
 Manual session playback and export procedures live in `docs/RUNBOOK.md`.
+
+## Core live trace (M3)
+
+The existing v3 trace envelope gains additive `core.*` event types and optional `coreRequestId`, `knowledgeRevision`, Core/entity identity and `verificationRequestIndex` correlation. Legacy v2/v3 records and Board event names retain their original meaning. The trace viewer displays Core request identity and the full expandable record; Core authority never emits legacy Board state aliases.
+
+The controlled Core host passes its existing trace emitter to `CoreLiveSession`. The reconstructable chain is:
+
+```text
+core.checkpoint_committed
+→ core.request (bounded context, reference map, diagnostics/digest)
+→ core.provider_request (contract/policy identity, exact safe envelope/digest)
+→ core.provider_response (raw output text, provider metadata/digest)
+→ core.proposal_normalized
+→ core.validation
+→ core.accepted (persisted steps, operations, Cue delta, full event IDs/digest)
+→ core.published (independent revisions, processed sequence, state digest)
+```
+
+`core.published` identifies `core-authority` and explicitly records that no compatibility projection is present. Entity IDs are carried in the bounded request reference map and accepted operations/events; provider handles never become durable identity. Publication records exist only after event persistence. `core.request_failed` records the provider/normalization/validation/persistence stage separately from failure category; an upstream failure does not pretend semantic validation ran. `core.context_blocked` records failed mandatory closure/budget admission. `core.finalization` distinguishes draining, incomplete and ended.
+
+Context diagnostics record version, characters/token estimate, Core/candidate/entity/evidence counts, Cue presence, optional clipping and both base revisions. Context is bounded by the reviewed builder, never a second state store. Raw provider text is capped at 65,536 characters with an explicit truncation flag; responses above 131,072 characters are rejected before parsing. Trace preserves full bounded accepted DTOs/provenance and their safe digests. Malformed internal sidecar diagnostics are bounded independently. Credential/media sanitization runs before Core observers and again at trace persistence.
+
+Verification has its own `core.verification` records correlated by session ID, Core request ID and original request index. States are enqueued, started, completed, failed, timeout, cancelled or dropped; unconfigured sinks and queue pressure have explicit reasons. `core.verification_dropped` records normalization drops after semantic acceptance. None of these records is a lesson event, evidence rule or scheduler pending checkpoint.
+
+Payload construction, sanitization and listener failures are isolated from domain behavior. The existing bounded asynchronous `TraceWriter` remains the persistence path; no Core trace work is added to PCM/audio delivery. Missing/gapped trace cannot change replay or acceptance.
