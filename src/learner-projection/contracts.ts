@@ -47,6 +47,29 @@ export type EphemeralWorkSurface = {
   blocks: WorkBlock[];
 };
 
+/**
+ * Grounded, non-authoritative surface candidates supplied by the host/runtime.
+ * M4A does not define their producer. A later producer may be deterministic,
+ * teacher-controlled or model-assisted, but every transient candidate must be
+ * tied to committed evidence and can be ignored by the learner projection.
+ */
+export type ProjectionCandidate =
+  | {
+      candidateType: "REPRESENTATION";
+      id: string;
+      representationKind: RepresentationKind;
+      target?: SemanticReference;
+      evidenceCheckpointIds: string[];
+    }
+  | {
+      candidateType: "WORK";
+      id: string;
+      workKind: WorkBlockKind;
+      status: WorkBlock["status"];
+      semanticRefs: SemanticReference[];
+      evidenceCheckpointIds: string[];
+    };
+
 export type ProjectionTransition = {
   /** Whether learner-visible knowledge advances or the established context is held. */
   knowledge: "PRESERVE" | "ADVANCE";
@@ -73,6 +96,8 @@ export type RecentSemanticChange = {
 export type LearnerProjectionInput = {
   state: CoreTeachingState;
   recentChanges: RecentSemanticChange[];
+  /** Optional transient candidates are inputs, never accepted lesson state. */
+  candidates?: ProjectionCandidate[];
   presentationMode: PresentationMode;
   navigation: LearnerNavigationState;
   viewport: { width: number; height: number };
@@ -105,6 +130,7 @@ export type ForbiddenProjectionBehavior =
   | "YANK_FROM_HISTORY_INSPECTION"
   | "LEAK_ANSWER_DURING_PRODUCTIVE_STRUGGLE"
   | "PERSIST_WORK_AS_KNOWLEDGE"
+  | "INVENT_UNGROUNDED_SURFACE"
   | "SHOW_ALL_AVAILABLE_REPRESENTATIONS"
   | "INFER_LEARNER_EMOTION";
 
@@ -147,6 +173,16 @@ function projectionRefs(projection: LearnerProjection) {
   return refs;
 }
 
+function candidateRefs(candidate: ProjectionCandidate) {
+  if (candidate.candidateType === "REPRESENTATION") return candidate.target ? [candidate.target] : [];
+  return candidate.semanticRefs;
+}
+
+function sameRef(a: SemanticReference | undefined, b: SemanticReference | undefined) {
+  if (!a || !b) return a === b;
+  return refKey(a) === refKey(b);
+}
+
 function illegalProjectionKeys(value: unknown, path = "projection"): string[] {
   if (!value || typeof value !== "object") return [];
   const forbidden = new Set(["active", "retained", "focusId", "x", "y", "opacity", "html", "svg", "teachingStyle"]);
@@ -164,6 +200,7 @@ export function learnerProjectionFixtureErrors(fixture: LearnerProjectionFixture
   const errors: string[] = [];
   const { state } = fixture.input;
   const { expected } = fixture;
+  const candidates = fixture.input.candidates ?? [];
 
   for (const change of fixture.input.recentChanges) {
     if (!semanticReferenceExists(state, change.ref)) errors.push(`unknown recent change ${refKey(change.ref)}`);
@@ -171,6 +208,13 @@ export function learnerProjectionFixtureErrors(fixture: LearnerProjectionFixture
   for (const ref of projectionRefs(expected)) {
     if (!semanticReferenceExists(state, ref)) errors.push(`unknown projected reference ${refKey(ref)}`);
   }
+  for (const candidate of candidates) {
+    if (!candidate.evidenceCheckpointIds.length) errors.push(`candidate ${candidate.id} lacks committed-evidence identity`);
+    for (const ref of candidateRefs(candidate)) {
+      if (!semanticReferenceExists(state, ref)) errors.push(`candidate ${candidate.id} references unknown semantic unit ${refKey(ref)}`);
+    }
+  }
+  if (new Set(candidates.map(candidate => candidate.id)).size !== candidates.length) errors.push("duplicate projection candidate id");
 
   const attentionRoleRefs = [
     ...(expected.attention.anchor ? [expected.attention.anchor] : []),
@@ -184,6 +228,26 @@ export function learnerProjectionFixtureErrors(fixture: LearnerProjectionFixture
 
   const dominantRepresentations = expected.attention.representations.filter(item => item.role === "dominant");
   if (dominantRepresentations.length > 1) errors.push("more than one dominant representation");
+  for (const representation of expected.attention.representations) {
+    const candidate = candidates.find(item => item.id === representation.id && item.candidateType === "REPRESENTATION");
+    if (!candidate || candidate.candidateType !== "REPRESENTATION") {
+      errors.push(`representation ${representation.id} has no grounded transient candidate`);
+      continue;
+    }
+    if (candidate.representationKind !== representation.kind || !sameRef(candidate.target, representation.target)) {
+      errors.push(`representation ${representation.id} does not match its candidate`);
+    }
+  }
+
+  for (const block of expected.workSurface?.blocks ?? []) {
+    const candidate = candidates.find(item => item.id === block.id && item.candidateType === "WORK");
+    if (!candidate || candidate.candidateType !== "WORK") {
+      errors.push(`work block ${block.id} has no grounded transient candidate`);
+      continue;
+    }
+    const sameRefs = JSON.stringify(candidate.semanticRefs.map(refKey)) === JSON.stringify(block.semanticRefs.map(refKey));
+    if (candidate.workKind !== block.kind || candidate.status !== block.status || !sameRefs) errors.push(`work block ${block.id} does not match its candidate`);
+  }
 
   if (expected.attention.cue && state.cue.active?.id !== expected.attention.cue.cueId) errors.push("projected Cue is not current Cue");
 
