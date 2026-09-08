@@ -19,16 +19,17 @@ export const semanticReferenceSchema = z.union([knowledgeReferenceSchema, z.obje
 const stateReference = z.object({ target: semanticReferenceSchema, revision }).strict();
 const aiCorrection = z.object({
   trigger: speechReferenceSchema,
+  evidenceBasis: text,
   rationale: text,
-  confidence: z.literal("high"),
 }).strict();
 export const provenanceSchema = z.object({
   speechRefs: z.array(speechReferenceSchema),
   stateRefs: z.array(stateReference),
   // Explicit host-authorized domain attribution; not a hidden domain oracle.
   domainBasis: text.optional(),
-  // Autonomous factual correction is a distinct, auditable basis. The triggering
-  // teacher evidence is not itself claimed as factual support for the corrected content.
+  // A settled autonomous correction carries a host-verified evidence basis.
+  // The triggering teacher evidence identifies what was challenged; it is not
+  // falsely attributed as factual support for the corrected proposition.
   aiCorrection: aiCorrection.optional(),
 }).strict()
   .refine(p => p.speechRefs.length > 0 || p.stateRefs.length > 0 || p.domainBasis !== undefined || p.aiCorrection !== undefined, "provenance-required")
@@ -50,7 +51,17 @@ export const knowledgeOperationSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("INVALIDATE"), target: unitReferenceSchema, ...correction }).strict(),
   z.object({ action: z.literal("SUPERSEDE"), target: unitReferenceSchema, replacement: unitReferenceSchema, ...correction }).strict(),
 ]);
-const cueValue = fact.extend({ kind: z.enum(["NOTE", "QUESTION", "TASK", "HINT"]), target: cueTargetSchema.optional() }).strict();
+const cueOrigin = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("TEACHER"), evidence: speechReferenceSchema }).strict(),
+  z.object({ kind: z.literal("AI"), trigger: speechReferenceSchema, rationale: text }).strict(),
+]);
+const cueValue = fact.extend({
+  kind: z.enum(["NOTE", "QUESTION", "TASK", "HINT"]),
+  target: cueTargetSchema.optional(),
+  // Optional for replay compatibility with pre-M2.2 Core events. New provider
+  // proposals should populate it so learner-action authority is auditable.
+  origin: cueOrigin.optional(),
+}).strict();
 export const cueMutationSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("KEEP") }).strict(),
   z.object({ action: z.literal("SET"), id, value: cueValue }).strict(),

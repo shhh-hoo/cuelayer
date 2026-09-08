@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const CORE_PROPOSAL_VERSION = "core-interpretation-proposal-v2";
+export const CORE_PROPOSAL_VERSION = "core-interpretation-proposal-v3";
 export const CORE_PROPOSAL_LIMITS = Object.freeze({ steps: 8, operations: 24, text: 1200, references: 16 });
 const handle = z.string().regex(/^[a-z][a-z0-9_]{0,39}$/);
 const text = z.string().min(1).max(CORE_PROPOSAL_LIMITS.text);
@@ -20,8 +20,10 @@ const aiCorrectionProvenance = z.object({
   domain: z.null(),
   aiCorrection: z.object({
     trigger: handle,
+    // Must resolve to a host-supplied trusted evidence/domain rule. The model
+    // cannot mint its own settled factual authority by writing prose here.
+    evidenceRule: handle,
     rationale: text,
-    confidence: z.literal("high"),
   }).strict(),
 }).strict();
 const provenance = z.union([standardProvenance, aiCorrectionProvenance]);
@@ -41,7 +43,17 @@ export const proposalOperationSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("INVALIDATE"), target: ref, correctionEvidence: handle }).strict(),
   z.object({ action: z.literal("SUPERSEDE"), target: ref, replacement: ref, correctionEvidence: handle }).strict(),
 ]);
-const cueValue = fact.extend({ kind: z.enum(["NOTE", "QUESTION", "TASK", "HINT"]), target: ref.nullable() }).strict();
+const cueOrigin = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("TEACHER"), evidence: handle }).strict(),
+  z.object({ kind: z.literal("AI"), trigger: handle, rationale: text }).strict(),
+]);
+const cueValue = fact.extend({
+  kind: z.enum(["NOTE", "QUESTION", "TASK", "HINT"]),
+  target: ref.nullable(),
+  // Optional only for compatibility with reviewed frozen v1 exemplars. New
+  // provider output should state whether the action is teacher-established or AI-initiated.
+  origin: cueOrigin.optional(),
+}).strict();
 const cue = z.discriminatedUnion("action", [
   z.object({ action: z.literal("KEEP") }).strict(),
   z.object({ action: z.literal("SET"), as: handle, value: cueValue }).strict(),
@@ -60,6 +72,10 @@ export const proposalStepSchema = z.object({
 export const coreProposalSchema = z.object({ outcome: z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("PROPOSE"), steps: z.array(proposalStepSchema).min(1).max(CORE_PROPOSAL_LIMITS.steps) }).strict(),
   z.object({ kind: z.literal("NEEDS_CONTEXT"), evidence: evidence.min(1), query: text }).strict(),
+  // Non-accepting side-path request. candidateEvidence is a model-surfaced lead,
+  // not factual authority. A verifier/host must independently validate it before
+  // any later correction can cite a trusted evidenceRule.
+  z.object({ kind: z.literal("NEEDS_VERIFICATION"), evidence: evidence.min(1), query: text, claim: text, candidateEvidence: text }).strict(),
 ]) }).strict();
 export type ProposalReference = z.infer<typeof ref>;
 export type ProposalProvenance = z.infer<typeof provenance>;

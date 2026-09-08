@@ -10,7 +10,7 @@ The current branch still contains legacy Board-slot implementation in parts of t
 
 ## Execution model
 
-CueLayer uses four distinct authorities:
+CueLayer preserves a durable authority chain:
 
 ```text
 immutable lesson evidence
@@ -24,14 +24,31 @@ attention / spatial projection
 learner surface
 ```
 
-Separately, the diagnostic trace records execution evidence but never drives domain state.
+AI decision-making has three logically separate responsibilities:
+
+```text
+Semantic Interpreter
+→ what is happening and what might be useful?
+
+Intervention Governor
+→ does this useful candidate deserve learner attention now?
+
+Evidence Verifier (conditional side path)
+→ is there enough independently checkable evidence to elevate an AI claim into learner-visible truth?
+```
+
+These are logical roles, not a requirement for three serial model calls. The common learner-visible path must not wait on auxiliary intelligence by default. Evidence verification is conditional and may resolve later into a marked correction or clarification without blocking ordinary teaching updates.
+
+Separately, diagnostic trace records execution evidence but never drives domain state.
 
 The system must preserve these boundaries:
 
 - lesson evidence records what the teacher actually said and what the speech pipeline committed;
+- semantic interpretation proposes meaning-bearing knowledge/intervention changes;
 - accepted domain events record what CueLayer accepted as lesson-state change;
 - deterministic reduction reconstructs durable lesson knowledge without provider calls;
-- attention and rendering decide what subset of that knowledge is visually dominant now;
+- attention/intervention policy decides what deserves learner attention now;
+- rendering realizes the selected projection;
 - trace explains execution but is never replay authority.
 
 ## Durable lesson knowledge
@@ -79,7 +96,7 @@ The implementation must support functional equivalents of:
 - adding or revising semantic relations;
 - attaching or revising Support;
 - changing the current Core identity;
-- superseding or invalidating knowledge when a teacher correction or an authorized high-confidence AI correction requires it.
+- superseding or invalidating knowledge when a teacher correction or an authorized evidence-backed AI correction requires it.
 
 One accepted interpretation step may contain zero or more ordered knowledge mutations together with its Cue mutation. The step must validate against one accepted base state and publish atomically; renderer-visible authority must not pass through partially applied intermediate semantic states. A valid accepted no-op may consume evidence without changing knowledge or Cue when nothing useful changed.
 
@@ -87,7 +104,9 @@ A provider response may contain multiple ordered semantic steps. Request batchin
 
 Exact event names such as `UPDATE`, `SUPERSEDE`, or `INVALIDATE` are repository-level design choices. Historical auditability must not be confused with destructive deletion.
 
-Explicit teacher self-correction may revise the affected semantic unit with normal speech-grounded provenance. CueLayer may also autonomously correct a concrete factual teacher error when confidence is high and the correction is materially useful, contextually relevant, timely, attributable, reversible, and does not destroy unresolved productive learner work. The autonomous-correction threshold must be materially stricter than ordinary representation or speech reconstruction. Ambiguous, disputed, opinion-based, uncertain, scoped-approximation, or assumption-dependent claims must not be silently corrected.
+Explicit teacher self-correction may revise the affected semantic unit with normal speech-grounded provenance. Autonomous AI correction is different: model confidence may trigger verification but is not factual authority. A settled AI correction requires a trusted or independently checkable evidence basis, must be materially useful and contextually relevant/timely, must preserve productive learner work, and must remain explicitly attributable and reversible. Ambiguous, disputed, opinion-based, uncertain, scoped-approximation, or assumption-dependent claims must not be silently corrected.
+
+When a factual conflict is plausible but evidence is insufficient, the system must preserve contestability rather than force an overwrite. A non-accepting verification request or an explicitly marked learner-facing question/challenge/clarification may be used while later teaching resolves the disagreement.
 
 ## Semantic Working Window
 
@@ -103,6 +122,8 @@ The Context Window controls how much evidence and state a provider request recei
 The semantic decision may use recent committed evidence, current Core structure, nearby accepted semantic changes, unresolved references, and optional structural priors such as lesson outline, teacher plan, syllabus concept map, or course structure.
 
 Structural priors are optional. CueLayer must remain usable from teaching evidence alone and must not be hard-coupled to one course or syllabus.
+
+Syllabus is a soft pedagogical boundary for augmentation, not a factual whitelist. Low-risk common knowledge that is directly useful, compatible with the teaching scope, and low in cognitive cost may extend slightly beyond syllabus wording. Advanced, niche, tangential, or higher-risk knowledge normally requires stronger trusted grounding and higher intervention value.
 
 ## Context projection
 
@@ -122,11 +143,13 @@ Canonical speech checkpoints and grounding remain immutable replayable evidence.
 
 Provenance must be attributable to the semantic fact or relationship it supports at sufficient granularity for local correction, replay, and audit. The product does not require one fixed field shape such as `node.provenance`; provenance may attach to a semantic object, proposition, relation, Support item, property, correction, or another sufficiently precise unit.
 
-A later deterministic system or reviewer must be able to identify why accepted lesson knowledge exists and whether its basis is speech evidence, prior accepted state, permitted domain knowledge, an autonomous AI correction, or an allowed combination.
+A later deterministic system or reviewer must be able to identify why accepted lesson knowledge exists and whether its basis is speech evidence, prior accepted state, permitted/trusted domain knowledge, an evidence-backed autonomous AI correction, or an allowed combination.
 
 Claimed speech evidence must resolve to immutable committed lesson evidence. Do not manufacture speech provenance for domain/state-derived content or for AI-corrected factual content that the teacher did not actually say.
 
-Autonomous AI correction must use an explicit correction provenance distinct from speech and domain attribution. It must identify the immutable current teacher evidence that triggered the correction, record a concise rationale, and record the high-confidence authority level. The trigger shows what was corrected; it is not false factual support for the corrected proposition. Correction provenance must remain replayable and auditable so later teacher correction, AI revision, or review can reverse or supersede it without losing the original speech evidence.
+A settled autonomous AI correction must use explicit correction provenance distinct from speech attribution. It must identify the current immutable teacher evidence being challenged, the independently checkable/trusted evidence basis that authorized the corrected proposition, and a concise rationale. The trigger shows what was corrected; it is not false factual support for the corrected proposition. Model self-confidence is not a provenance basis. Correction provenance must remain replayable and auditable so later teacher correction, AI revision, or review can reverse or supersede it without losing the original speech evidence.
+
+Learner-action origin is separate from factual provenance. A Cue may be teacher-established or AI-initiated; the origin records who initiated the pedagogical action, while the Cue's factual/content provenance records what knowledge/evidence grounds its wording.
 
 ## Alpha authority
 
@@ -135,41 +158,46 @@ Alpha may:
 - interpret natural teaching into semantic structure;
 - reconstruct damaged speech expressions when intended teaching meaning is sufficiently grounded;
 - reorganize or represent established propositions without changing their meaning;
-- use narrowly validated domain knowledge for useful Board augmentation with honest provenance;
-- autonomously correct concrete high-confidence factual teacher errors when the correction meets the stricter correction gate and is honestly attributed;
+- use trusted domain knowledge for useful Board augmentation with honest provenance;
+- autonomously add low-risk common/syllabus-compatible knowledge when the reviewed provenance path can represent its authority honestly;
+- detect possible factual conflicts and request independent verification without consuming evidence or overwriting accepted truth;
+- autonomously correct concrete factual teacher errors when the correction meets the evidence-backed correction gate and is honestly attributed;
 - maintain and locally revise Core structure across teaching turns;
 - infer same-Core continuity versus topic shift from evidence and state;
-- represent teacher-established learner actions as Teaching Cue;
-- remain quiet when no change is useful.
+- autonomously initiate NOTE, QUESTION, TASK or HINT when relevant, well-timed, pedagogically useful, and protective of productive learner work;
+- remain quiet when no change or intervention is useful.
 
-Alpha must not yet:
+Alpha must not:
 
-- silently correct ambiguous, disputed, opinion-based, uncertain, scoped-approximation, or assumption-dependent teacher claims;
-- use autonomous correction without explicit AI-correction provenance and a current teacher-evidence trigger;
-- originate arbitrary learner tasks, questions, or hints that are not established by current classroom evidence;
+- convert unsupported model belief or self-reported confidence into learner-visible truth;
+- silently correct ambiguous, disputed, opinion-based, uncertain, scoped-approximation, or assumption-dependent teacher claims without sufficient evidence;
+- falsely attribute an AI-initiated intervention to teacher speech;
+- originate weakly relevant, poorly timed, low-value or answer-leaking learner interventions merely to increase interaction;
 - disclose complete answers that destroy unresolved productive learner work;
 - use hidden syllabus assumptions as if they were teacher evidence;
-- require teacher micromanagement for ordinary Board updates.
+- require teacher approval or micromanagement for ordinary learner-surface updates.
 
-Teacher speech remains the primary evidence of what was taught, but not an infallible truth boundary. When a claim is not eligible for autonomous correction, represent it faithfully with honest speech provenance rather than silently substituting model-preferred truth. When the correction gate is met, the learner-facing knowledge may contain the corrected proposition with explicit AI-correction attribution while the immutable speech evidence preserves exactly what the teacher said. Explicit teacher self-correction remains the ordinary local correction path and does not require AI-correction provenance.
+Teacher speech is the primary classroom signal and immutable evidence of what was said, but not an infallible learner-visible truth boundary. AI controls the learner-facing surface by default; ordinary interventions do not require teacher approval. That autonomy remains contestable: later teaching may clarify, reject, revise, or supersede the AI's interpretation.
 
-Broader autonomous pedagogy, proactive learner actions, intervention controls, teacher approval/override UI, personality/avatar/voice, and cross-lesson memory are future authority, not Alpha requirements.
+Current M2 code is deliberately narrower than the full product authority where no honest provenance mechanism exists yet. In particular, free-form model belief is not accepted as a common-knowledge factual basis, and settled AI correction currently requires a host-verified trusted rule/evidence handle. Do not weaken provenance to simulate product completeness; add reviewed authority seams before production cutover.
 
 ## Teaching Cue
 
 Board and Teaching Cue are sibling channels with independent lifecycle, revision, and conflict domains.
 
-Board answers what knowledge the teacher is building. Teaching Cue answers what the learner still needs to do, think about, compare, answer, notice, or remember now.
+Board answers what knowledge the teaching is building. Teaching Cue answers what the learner should do, think about, compare, answer, notice, or remember now.
+
+Teaching Cue may be teacher-established or autonomously initiated by CueLayer. AI initiation does not require teacher speech to establish the learner action. It does require a current contextual trigger plus a relevance/timing/pedagogical-value/productive-work gate. The trigger is not a false claim that the teacher requested the action.
 
 Board change must not automatically resolve Cue. Cue resolution must not clear Board knowledge.
 
 Cue targeting may reference a Core, semantic object, relation, comparison, or lesson-level action once the Core-domain reference contract is introduced. Core-domain Cue targets must not depend on legacy `BOARD_ITEM` identity after cutover. Exact target types belong in the implementation contract when introduced.
 
-Autonomous AI correction is knowledge authority, not learner-action authority. A correction must not itself create a NOTE, QUESTION, TASK, or HINT unless current teacher speech independently establishes that learner work.
+A correction does not automatically create a Cue. Conversely, an evidence-insufficient factual disagreement may independently justify an AI-origin QUESTION/HINT when that is the pedagogically appropriate way to preserve dialogue rather than overwrite truth.
 
-## Attention and rendering
+## Attention and intervention
 
-Durable semantic state and visual attention are separate.
+Durable semantic state and learner attention are separate. A candidate can be semantically useful without deserving immediate display.
 
 Alpha does not require persistent `Active`, `Retained`, or `focusId` semantic state merely to tell the renderer what to emphasize. Attention should normally be derived from:
 
@@ -183,6 +211,10 @@ current Core
 + learner inspection state
 ```
 
+The Intervention Governor additionally considers teaching phase and natural boundaries, pacing, semantic density, current Cue, recent intervention history/cooldown, learner inspection, presentation mode, intervention urgency, expected pedagogical value, productive-struggle risk, and interruption cost. Its conceptual decisions are `SHOW_NOW | DEFER | MERGE | DROP | QUIET`.
+
+The Governor should combine deterministic budgets/hard suppression rules with model judgment only where timing is genuinely ambiguous. Interaction count is not a product success metric. Calibration should start conservatively and be tuned from real lesson traces rather than a universal interventions-per-minute rule.
+
 Previously established knowledge may remain visible because current understanding depends on it. That is dynamic necessary context, not a `RETAINED` semantic status.
 
 Parked Cores remain spatially revisitable but default to low or zero attention and may be outside the current viewport. Exact coordinates, measurements, drag state, zoom, viewport, and inspection state belong to Canvas/UI state rather than lesson knowledge.
@@ -190,6 +222,27 @@ Parked Cores remain spatially revisitable but default to low or zero attention a
 The renderer may virtualize old Cores or Support. Virtualization must not delete semantic history.
 
 Renderer vocabulary such as text emphasis, relation layouts, arrows, equations, transforms, grouping, or compact notation is presentation vocabulary, not semantic ontology.
+
+## Latency boundary
+
+Auxiliary intelligence must not sit serially on the common learner-visible critical path unless measured evidence shows that its added pedagogical value justifies the latency.
+
+Default direction:
+
+```text
+common path:
+teaching evidence
+→ Semantic Interpreter
+→ deterministic acceptance / attention budget
+→ learner surface
+
+conditional side path:
+possible factual conflict
+→ Evidence Verifier
+→ later marked correction or clarification
+```
+
+A future model-based Governor may be added only if real evidence shows that its timing quality exceeds its latency and complexity cost. Verification latency may be slower than ordinary teaching latency; it must not stall unrelated Core/Cue updates.
 
 ## Presentation modes
 
@@ -211,15 +264,15 @@ The next Board-domain migration must introduce a versioned event/state contract 
 
 ## Scheduling and failure recovery
 
-The scheduler must preserve ordered unprocessed evidence. Provider, validation, storage, timeout, and conflict failures must not silently consume evidence or erase accepted learner state.
+The scheduler must preserve ordered unprocessed evidence. Provider, validation, storage, timeout, conflict, verification or Governor failures must not silently consume evidence or erase accepted learner state.
 
-A transient failure preserves the last accepted Board and Cue surface until a later valid change is accepted. Independent failure domains should degrade independently wherever technically possible.
+A transient failure preserves the last accepted Board and Cue surface until a later valid change is accepted. Independent failure domains should degrade independently wherever technically possible. A verification request is non-accepting until evidence has been independently validated and a later accepted correction is persisted.
 
-Exact queue bounds, retry counts, deadlines, context budgets, request envelopes, batching, and conflict policy remain executable configuration owned by code and tests.
+Exact queue bounds, retry counts, deadlines, context budgets, request envelopes, batching, cooldowns and conflict policy remain executable configuration owned by code and tests.
 
 ## Diagnostic trace
 
-Trace is diagnostic authority only. It may record speech, checkpoint, request, provider, validation, accepted-event, reduced-state, render, and latency facts, but it must never become domain replay authority or enter the audio hot path in a way that changes product execution.
+Trace is diagnostic authority only. It may record speech, checkpoint, request, provider, verification, Governor decision, validation, accepted-event, reduced-state, render, and latency facts, but it must never become domain replay authority or enter the audio hot path in a way that changes product execution.
 
 See `docs/TRACE.md`.
 
@@ -230,13 +283,16 @@ Repository changes that affect live teaching must preserve or deliberately migra
 - immutable committed evidence and ordered consumption;
 - deterministic replay without provider calls;
 - provider output validation before accepted state publication;
-- explicit provenance and grounding, including distinct attribution for autonomous AI correction;
+- explicit provenance and grounding, including distinct evidence attribution for autonomous AI correction;
+- distinct teacher-established versus AI-initiated Cue authority where applicable;
+- non-accepting verification requests do not consume evidence or mutate learner truth;
 - Board/Cue lifecycle independence;
 - no automatic ordinary transcript on the normal presentationless surface;
 - last valid learner state preserved on failure;
 - trace isolation from domain truth and the speech hot path;
 - current semantic state not bounded by viewport capacity;
-- renderer attention policy not silently deleting semantic knowledge.
+- attention policy not silently deleting semantic knowledge;
+- auxiliary intelligence not unnecessarily extending the common learner-visible critical path.
 
 Engineering checks, offline evaluation, and synthetic browser fixtures do not by themselves establish real-lesson acceptance.
 

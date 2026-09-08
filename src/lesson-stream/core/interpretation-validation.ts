@@ -12,14 +12,18 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
   if (acceptedBase.state.sessionId !== binding.base.state.sessionId) throw new Error("core-proposal-session-mismatch");
   const initialPending = acceptedBase.checkpoints.filter(c => c.lessonSequence > acceptedBase.state.processedThroughSequence);
   if (binding.newEvidenceIds.some((id, i) => initialPending[i]?.checkpointId !== id)) throw new Error("core-proposal-pending-prefix-invalid");
-  if (proposal.kind === "NEEDS_CONTEXT") {
+  if (proposal.kind === "NEEDS_CONTEXT" || proposal.kind === "NEEDS_VERIFICATION") {
     const evidence = proposal.evidence.map(h => {
       const cp = binding.evidence.get(h);
       if (!cp || !binding.newEvidenceIds.includes(cp.checkpointId)) throw new Error("core-proposal-context-evidence-invalid");
       return cp;
     });
-    // A retrieval query is a teacher phrase, never a model-generated identity or hidden fact.
+    // Retrieval/verification queries are teacher phrases, never model-generated IDs or hidden facts.
     if (!proposal.query.trim() || !evidence.some(cp => cp.text.includes(proposal.query))) throw new Error("core-proposal-context-query-not-evidence");
+    if (proposal.kind === "NEEDS_VERIFICATION") {
+      return { kind: "NEEDS_VERIFICATION" as const, query: proposal.query, claim: proposal.claim, candidateEvidence: proposal.candidateEvidence,
+        checkpointIds: evidence.map(c => c.checkpointId), steps: [], events: [], replay: acceptedBase };
+    }
     return { kind: "NEEDS_CONTEXT" as const, query: proposal.query, checkpointIds: evidence.map(c => c.checkpointId), steps: [], events: [], replay: acceptedBase };
   }
   let replay = acceptedBase, offset = 0;
@@ -77,11 +81,15 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
       }
       return { target, revision: target.kind === "CUE" ? cueRevision : knowledgeRevision };
     };
-    const provenance = (p: ProposalProvenance, text?: string): Provenance => {
+    const provenance = (p: ProposalProvenance, valueText?: string): Provenance => {
       if ("aiCorrection" in p) {
         const trigger = speech(p.aiCorrection.trigger, true);
         if (p.speech.length || p.state.length || p.domain !== null) throw new Error("core-proposal-ai-correction-provenance-invalid");
-        return { speechRefs: [], stateRefs: [], aiCorrection: { trigger, rationale: p.aiCorrection.rationale, confidence: "high" } };
+        if (binding.context.cue.presence === "omitted") throw new Error("core-proposal-ai-correction-needs-cue-context");
+        const rule = binding.domainRules.find(r => r.id === p.aiCorrection.evidenceRule);
+        if (!rule) throw new Error("core-proposal-ai-correction-evidence-not-verified");
+        if (valueText !== rule.text) throw new Error("core-proposal-ai-correction-evidence-mismatch");
+        return { speechRefs: [], stateRefs: [], aiCorrection: { trigger, evidenceBasis: `${rule.id}: ${rule.basis}`, rationale: p.aiCorrection.rationale } };
       }
       if (p.domain && p.speech.length) throw new Error("core-proposal-domain-not-speech");
       const stateRefs = p.state.map(ref => source(ref, "factual_basis"));
@@ -90,7 +98,7 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
       if (p.domain) {
         if (binding.context.cue.presence === "omitted") throw new Error("core-proposal-domain-needs-cue-context");
         const rule = binding.domainRules.find(r => r.id === p.domain!.rule);
-        if (!rule || text !== rule.text) throw new Error("core-proposal-domain-rule-not-authorized");
+        if (!rule || valueText !== rule.text) throw new Error("core-proposal-domain-rule-not-authorized");
         domainBasis = `${rule.id}: ${rule.basis}`;
       }
       if (!p.speech.length && !stateRefs.length && !domainBasis) throw new Error("core-proposal-provenance-required");
@@ -125,6 +133,7 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
       const coreId = "core" in op ? target.id : (target as UnitReference).coreId;
       const normalizedProvenance = provenance(op.value.provenance, op.value.text);
       if (normalizedProvenance.aiCorrection && kind === "SUPPORT") throw new Error("core-proposal-ai-correction-support-forbidden");
+      if (normalizedProvenance.aiCorrection && "correctionEvidence" in op && op.correctionEvidence !== null) throw new Error("core-proposal-ai-correction-teacher-evidence-conflict");
       const value: Record<string, unknown> = { text: op.value.text, provenance: normalizedProvenance };
       if ("from" in op.value) {
         const from = unit(op.value.from), to = unit(op.value.to);
@@ -150,10 +159,22 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
         if ("aiCorrection" in cue.value.provenance) throw new Error("core-proposal-cue-ai-correction-forbidden");
         if (cue.value.provenance.domain) throw new Error("core-proposal-cue-domain-forbidden");
         const p = provenance(cue.value.provenance, cue.value.text);
-        if (!p.speechRefs.some(r => consumes.includes(r.checkpointId))) throw new Error("core-proposal-cue-current-speech-required");
+        let origin: NonNullable<Extract<CoreStep["cueDelta"], { value: unknown }>["value"]>["origin"] | undefined;
+        if (cue.value.origin?.kind === "TEACHER") {
+          const evidence = speech(cue.value.origin.evidence, true);
+          if (!p.speechRefs.some(r => r.checkpointId === evidence.checkpointId)) throw new Error("core-proposal-cue-teacher-origin-not-grounded");
+          origin = { kind: "TEACHER", evidence };
+        } else if (cue.value.origin?.kind === "AI") {
+          origin = { kind: "AI", trigger: speech(cue.value.origin.trigger, true), rationale: cue.value.origin.rationale };
+        } else if (!p.speechRefs.some(r => consumes.includes(r.checkpointId))) {
+          // Backward compatibility for reviewed frozen v1 exemplars: absent origin
+          // retains the previous teacher-established requirement.
+          throw new Error("core-proposal-cue-current-speech-required");
+        }
         const target = cue.value.target ? resolve(cue.value.target) : undefined;
         if (target && !["CORE", "OBJECT", "RELATION"].includes(target.kind)) throw new Error("core-proposal-cue-target-invalid");
-        const value = { text: cue.value.text, provenance: p, kind: cue.value.kind, ...(target ? { target: target as Exclude<SemanticReference, { kind: "CUE" }> } : {}) };
+        const value = { text: cue.value.text, provenance: p, kind: cue.value.kind,
+          ...(target ? { target: target as Exclude<SemanticReference, { kind: "CUE" }> } : {}), ...(origin ? { origin } : {}) };
         const id = "as" in cue ? create(cue.as, "CUE", knowledgeOps.length) : targetCueId!;
         cueDelta = (cue.action === "SET" ? { action: "SET", id, value } : cue.action === "REVISE" ? { action: "REVISE", targetCueId, value }
           : { action: "REPLACE", targetCueId, id, value, evidence: speech(cue.evidence, true) }) as CoreStep["cueDelta"];
