@@ -43,15 +43,32 @@ describe("M4A learner projection contract fixtures", () => {
     }
   });
 
-  it("requires every representation and Work Surface block to come from grounded transient candidates", () => {
+  it("requires every representation and Work Surface block to come from committed-evidence candidates", () => {
     for (const fixture of fixtures) {
       const projectedIds = [
         ...fixture.expected.attention.representations.map(item => item.id),
         ...(fixture.expected.workSurface?.blocks.map(block => block.id) ?? []),
       ];
-      const candidateIds = fixture.input.candidates?.map(candidate => candidate.id) ?? [];
+      const candidates = fixture.input.candidates ?? [];
+      const candidateIds = candidates.map(candidate => candidate.id);
+      const committed = new Set(fixture.input.committedEvidenceCheckpointIds ?? []);
       expect(candidateIds).toEqual(projectedIds);
+      for (const candidate of candidates) {
+        expect(candidate.evidenceCheckpointIds.length).toBeGreaterThan(0);
+        expect(candidate.evidenceCheckpointIds.every(checkpointId => committed.has(checkpointId))).toBe(true);
+      }
       if (projectedIds.length) expect(fixture.mustNot).toContain("INVENT_UNGROUNDED_SURFACE");
+    }
+  });
+
+  it("rejects research expectations as executable inputs until transient surfaces are grounded", () => {
+    const requiringCandidates = RESEARCH_FIXTURES.filter(fixture =>
+      fixture.expected.attention.representations.length > 0 || Boolean(fixture.expected.workSurface?.blocks.length),
+    );
+    expect(requiringCandidates.length).toBeGreaterThan(0);
+    for (const fixture of requiringCandidates) {
+      const errors = learnerProjectionFixtureErrors(fixture);
+      expect(errors.some(error => error.includes("no grounded transient candidate"))).toBe(true);
     }
   });
 

@@ -29,9 +29,13 @@ function groundedCandidates(fixture: LearnerProjectionFixture): ProjectionCandid
 
 export const M4A_GROUNDED_LEARNER_PROJECTION_FIXTURES: LearnerProjectionFixture[] = RESEARCH_FIXTURES.map(fixture => {
   const candidates = groundedCandidates(fixture);
+  const committedEvidenceCheckpointIds = [...new Set(candidates.flatMap(candidate => candidate.evidenceCheckpointIds))];
   return {
     ...fixture,
-    input: { ...fixture.input, ...(candidates.length ? { candidates } : {}) },
+    input: {
+      ...fixture.input,
+      ...(candidates.length ? { candidates, committedEvidenceCheckpointIds } : {}),
+    },
     mustNot: candidates.length && !fixture.mustNot.includes("INVENT_UNGROUNDED_SURFACE")
       ? [...fixture.mustNot, "INVENT_UNGROUNDED_SURFACE"]
       : fixture.mustNot,

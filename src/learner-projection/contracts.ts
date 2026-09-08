@@ -96,6 +96,8 @@ export type RecentSemanticChange = {
 export type LearnerProjectionInput = {
   state: CoreTeachingState;
   recentChanges: RecentSemanticChange[];
+  /** Exact committed evidence identities available to this projection turn. */
+  committedEvidenceCheckpointIds?: string[];
   /** Optional transient candidates are inputs, never accepted lesson state. */
   candidates?: ProjectionCandidate[];
   presentationMode: PresentationMode;
@@ -201,6 +203,7 @@ export function learnerProjectionFixtureErrors(fixture: LearnerProjectionFixture
   const { state } = fixture.input;
   const { expected } = fixture;
   const candidates = fixture.input.candidates ?? [];
+  const committedEvidence = new Set(fixture.input.committedEvidenceCheckpointIds ?? []);
 
   for (const change of fixture.input.recentChanges) {
     if (!semanticReferenceExists(state, change.ref)) errors.push(`unknown recent change ${refKey(change.ref)}`);
@@ -208,8 +211,12 @@ export function learnerProjectionFixtureErrors(fixture: LearnerProjectionFixture
   for (const ref of projectionRefs(expected)) {
     if (!semanticReferenceExists(state, ref)) errors.push(`unknown projected reference ${refKey(ref)}`);
   }
+  if (candidates.length && !committedEvidence.size) errors.push("transient candidates supplied without committed evidence identities");
   for (const candidate of candidates) {
     if (!candidate.evidenceCheckpointIds.length) errors.push(`candidate ${candidate.id} lacks committed-evidence identity`);
+    for (const checkpointId of candidate.evidenceCheckpointIds) {
+      if (!committedEvidence.has(checkpointId)) errors.push(`candidate ${candidate.id} references uncommitted evidence ${checkpointId}`);
+    }
     for (const ref of candidateRefs(candidate)) {
       if (!semanticReferenceExists(state, ref)) errors.push(`candidate ${candidate.id} references unknown semantic unit ${refKey(ref)}`);
     }
