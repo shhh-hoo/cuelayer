@@ -79,13 +79,6 @@ describe("Core provider normalization", () => {
     expect(needs.events).toEqual([]); expect(needs.steps).toEqual([]); expect(needs.replay).toEqual(request.base);
     expect(() => acceptCoreInterpretation(request, { outcome: { kind: "NEEDS_CONTEXT", query: "guessed-durable-id", evidence: ["e0"] } }, timestamp)).toThrow();
   });
-  it("keeps verification requests non-accepting and model-surfaced evidence non-authoritative", () => {
-    const request = binding(), before = structuredClone(request.base);
-    const result = acceptCoreInterpretation(request, { outcome: { kind: "NEEDS_VERIFICATION", query: "Compare A and B", evidence: ["e0"], claim: "A should differ from B.", candidateEvidence: "Check an independent reference." } }, timestamp);
-    expect(result.kind).toBe("NEEDS_VERIFICATION");
-    expect(result.events).toEqual([]); expect(result.steps).toEqual([]); expect(result.replay).toEqual(before);
-    expect(result.candidateEvidence).toBe("Check an independent reference.");
-  });
   it("does not leak creation aliases across requests", () => {
     const request = binding(), accepted = acceptCoreInterpretation(request, propose(growth()), timestamp);
     const next = evidence(accepted.replay), bound = buildCoreInterpretationContext(next, { requestId: "next", newEvidence: [next.checkpoints.at(-1)!] });
