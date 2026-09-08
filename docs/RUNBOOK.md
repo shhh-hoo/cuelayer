@@ -119,3 +119,11 @@ Use:
 - this file — operational procedures.
 
 PR descriptions, spike reports, benchmark run reports, and historical notes are not authority documents.
+
+## Controlled Core runtime (M3)
+
+Normal `/session` remains on the legacy runtime. Core live orchestration is an explicit internal host API, with a Core interpreter supplied by the caller and the same closed canonical speech spans used by the existing checkpoint pipeline. It is exercised with deterministic injected transports; opening a Core runtime does not activate a provider or microphone.
+
+Each stored session has one fixed semantic domain. A domain mismatch must fail restoration rather than convert events or start a second semantic authority. Core finalization must drain committed semantic evidence before ending the lesson; incomplete drains remain reloadable and retryable. Verification side work is best-effort and does not delay semantic finalization.
+
+No learner compatibility projection or production Canvas renderer is part of this boundary. Production route selection and learner attention/rendering remain later migration work.
