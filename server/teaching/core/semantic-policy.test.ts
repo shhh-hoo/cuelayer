@@ -14,19 +14,20 @@ function commit(base: CoreReplay, text: string) {
 }
 const noop = (): ProposalStep => ({ consumes: ["e0"], knowledgeOps: [], cueDelta: { action: "KEEP" }, evidenceRefs: [], readRefs: [], reads: { knowledge: false, cue: false }, warnings: [] });
 const propose = (step: ProposalStep) => ({ outcome: { kind: "PROPOSE", steps: [step] } });
-it("versions the autonomy authority without a classifier or frozen-case wording", () => {
+it("versions the non-blocking verification authority without a classifier or frozen-case wording", () => {
   expect(CORE_CONTEXT_VERSION).toBe("core-interpretation-context-v3");
-  expect(CORE_POLICY_VERSION).toBe("alpha-core-interpretation-v6");
+  expect(CORE_POLICY_VERSION).toBe("alpha-core-interpretation-v7");
   for (const principle of [
     "reference permits structural targets and readRefs", "only factual_basis", "unfinished current teaching phrase", "not merely an unfinished current utterance",
     "without an explicit transition phrase", "unresolved active Cue does not imply", "Exact Core-boundary heuristics remain open", "lone visible Core shell does not identify",
     "use it as accepted-state provenance", "availability, not automatic relevance", "Model confidence alone is never sufficient factual authority",
-    "NEEDS_VERIFICATION", "candidateEvidence is only a lead for verification", "aiCorrection.evidenceRule", "AI correction is knowledge authority only",
-    "autonomously initiated by CueLayer", "origin.trigger", "Intervention Governor", "do not optimize for interaction count",
-    "common learner-visible path must not wait"
+    "verificationRequests sidecar", "candidateEvidence is only a lead for verification", "not lesson truth, accepted semantic events, or durable state",
+    "aiCorrection.evidenceRule", "AI correction is knowledge authority only", "autonomously initiated by CueLayer", "origin.trigger", "Intervention Governor",
+    "interaction count is not a product success metric", "common learner-visible path must not wait", "only top-level non-accepting outcome",
+    "malformed or ungrounded side requests may be dropped"
   ]) expect(CORE_INTERPRETATION_POLICY).toContain(principle);
   for (const exposed of ["photosynthesis explanation", "Topic 19", "And the activation", "squares", "equal sides", "CORE2-H-accepted-representation", "Represent that same equality", "All prime numbers are odd"]) expect(CORE_INTERPRETATION_POLICY).not.toContain(exposed);
-  for (const obsolete of ["confidence=high", "Cue lifecycle depends only on learner work actually established by current teacher speech", "Never invent tasks/questions/hints"]) expect(CORE_INTERPRETATION_POLICY).not.toContain(obsolete);
+  for (const obsolete of ["NEEDS_VERIFICATION", "confidence=high", "Cue lifecycle depends only on learner work actually established by current teacher speech", "Never invent tasks/questions/hints"]) expect(CORE_INTERPRETATION_POLICY).not.toContain(obsolete);
 });
 it("accepts an unfinished phrase as no-op and supplies its immutable evidence on continuation", () => {
   const f = foundation(), fragment = "The additional condition is...";

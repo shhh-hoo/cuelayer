@@ -2,7 +2,7 @@ import { acceptCoreStep } from "./accepted-steps.ts";
 import { coreStepSchema, type CoreStep, type KnowledgeOperation, type Provenance, type SemanticReference, type UnitReference } from "./contracts.ts";
 import { coreEntityId } from "./events.ts";
 import type { Capability, CoreInterpretationBinding } from "./interpretation-context.ts";
-import { coreProposalSchema, type ProposalProvenance, type ProposalReference } from "./interpretation-proposal.ts";
+import { CORE_PROPOSAL_LIMITS, coreProposalSchema, verificationRequestSchema, type ProposalProvenance, type ProposalReference } from "./interpretation-proposal.ts";
 import type { CoreReplay } from "./replay.ts";
 import { resolveSemanticReference } from "./teaching-state.ts";
 
@@ -12,18 +12,14 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
   if (acceptedBase.state.sessionId !== binding.base.state.sessionId) throw new Error("core-proposal-session-mismatch");
   const initialPending = acceptedBase.checkpoints.filter(c => c.lessonSequence > acceptedBase.state.processedThroughSequence);
   if (binding.newEvidenceIds.some((id, i) => initialPending[i]?.checkpointId !== id)) throw new Error("core-proposal-pending-prefix-invalid");
-  if (proposal.kind === "NEEDS_CONTEXT" || proposal.kind === "NEEDS_VERIFICATION") {
+  if (proposal.kind === "NEEDS_CONTEXT") {
     const evidence = proposal.evidence.map(h => {
       const cp = binding.evidence.get(h);
       if (!cp || !binding.newEvidenceIds.includes(cp.checkpointId)) throw new Error("core-proposal-context-evidence-invalid");
       return cp;
     });
-    // Retrieval/verification queries are teacher phrases, never model-generated IDs or hidden facts.
+    // Retrieval queries are teacher phrases, never model-generated IDs or hidden facts.
     if (!proposal.query.trim() || !evidence.some(cp => cp.text.includes(proposal.query))) throw new Error("core-proposal-context-query-not-evidence");
-    if (proposal.kind === "NEEDS_VERIFICATION") {
-      return { kind: "NEEDS_VERIFICATION" as const, query: proposal.query, claim: proposal.claim, candidateEvidence: proposal.candidateEvidence,
-        checkpointIds: evidence.map(c => c.checkpointId), steps: [], events: [], replay: acceptedBase };
-    }
     return { kind: "NEEDS_CONTEXT" as const, query: proposal.query, checkpointIds: evidence.map(c => c.checkpointId), steps: [], events: [], replay: acceptedBase };
   }
   let replay = acceptedBase, offset = 0;
@@ -193,5 +189,22 @@ export function acceptCoreInterpretation(binding: CoreInterpretationBinding, raw
     steps.push(step); events.push(accepted.event);
   }
   if (offset !== binding.newEvidenceIds.length) throw new Error("core-proposal-coverage-invalid");
-  return { kind: "PROPOSE" as const, steps, events, replay };
+
+  // Verification is best-effort orchestration, not part of the semantic transaction.
+  // Provider wire output is strict, but internal normalization deliberately drops
+  // malformed/ungrounded side requests instead of rolling back accepted steps.
+  const rawVerificationRequests = Array.isArray(proposal.verificationRequests) ? proposal.verificationRequests : [];
+  const verificationRequests = rawVerificationRequests.slice(0, CORE_PROPOSAL_LIMITS.verificationRequests).flatMap((rawRequest, requestIndex) => {
+    const parsed = verificationRequestSchema.safeParse(rawRequest);
+    if (!parsed.success) return [];
+    const request = parsed.data;
+    const checkpoints = request.evidence.map(handle => binding.evidence.get(handle));
+    if (checkpoints.some(cp => !cp || !binding.newEvidenceIds.includes(cp.checkpointId))) return [];
+    const grounded = checkpoints as NonNullable<(typeof checkpoints)[number]>[];
+    if (!request.query.trim() || !grounded.some(cp => cp.text.includes(request.query))) return [];
+    return [{ requestIndex, query: request.query, claim: request.claim, candidateEvidence: request.candidateEvidence,
+      checkpointIds: grounded.map(cp => cp.checkpointId) }];
+  });
+
+  return { kind: "PROPOSE" as const, steps, events, replay, verificationRequests };
 }

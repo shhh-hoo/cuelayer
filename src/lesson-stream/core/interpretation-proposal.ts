@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-export const CORE_PROPOSAL_VERSION = "core-interpretation-proposal-v3";
-export const CORE_PROPOSAL_LIMITS = Object.freeze({ steps: 8, operations: 24, text: 1200, references: 16 });
+export const CORE_PROPOSAL_VERSION = "core-interpretation-proposal-v4";
+export const CORE_PROPOSAL_LIMITS = Object.freeze({ steps: 8, operations: 24, text: 1200, references: 16, verificationRequests: 4 });
 const handle = z.string().regex(/^[a-z][a-z0-9_]{0,39}$/);
 const text = z.string().min(1).max(CORE_PROPOSAL_LIMITS.text);
 export const proposalReferenceSchema = z.union([
@@ -87,19 +87,35 @@ const providerProposalStepSchema = z.object({
   reads: z.object({ knowledge: z.boolean(), cue: z.boolean() }).strict(),
   warnings: z.array(z.string().min(1).max(160)).max(4),
 }).strict();
-const outcomeFor = <T extends z.ZodTypeAny>(stepSchema: T) => z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("PROPOSE"), steps: z.array(stepSchema).min(1).max(CORE_PROPOSAL_LIMITS.steps) }).strict(),
+export const verificationRequestSchema = z.object({
+  evidence: evidence.min(1),
+  query: text,
+  claim: text,
+  candidateEvidence: text,
+}).strict();
+// Internal/exemplar parsing deliberately treats the sidecar as untrusted/best-effort.
+// A malformed sidecar must not make otherwise valid semantic steps non-accepting.
+const internalOutcome = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("PROPOSE"),
+    steps: z.array(proposalStepSchema).min(1).max(CORE_PROPOSAL_LIMITS.steps),
+    verificationRequests: z.unknown().optional().default([]),
+  }).strict(),
   z.object({ kind: z.literal("NEEDS_CONTEXT"), evidence: evidence.min(1), query: text }).strict(),
-  // Non-accepting side-path request. candidateEvidence is a model-surfaced lead,
-  // not factual authority. A verifier/host must independently validate it before
-  // any later correction can cite a trusted evidenceRule.
-  z.object({ kind: z.literal("NEEDS_VERIFICATION"), evidence: evidence.min(1), query: text, claim: text, candidateEvidence: text }).strict(),
 ]);
-// Internal/exemplar schema intentionally retains historical compatibility.
-export const coreProposalSchema = z.object({ outcome: outcomeFor(proposalStepSchema) }).strict();
-// Provider wire schema is fully Structured-Outputs-compatible: no optional fields.
-export const providerCoreProposalSchema = z.object({ outcome: outcomeFor(providerProposalStepSchema) }).strict();
+const providerOutcome = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("PROPOSE"),
+    steps: z.array(providerProposalStepSchema).min(1).max(CORE_PROPOSAL_LIMITS.steps),
+    // Required on the wire (use [] when none) so Structured Outputs has no optional fields.
+    verificationRequests: z.array(verificationRequestSchema).max(CORE_PROPOSAL_LIMITS.verificationRequests),
+  }).strict(),
+  z.object({ kind: z.literal("NEEDS_CONTEXT"), evidence: evidence.min(1), query: text }).strict(),
+]);
+export const coreProposalSchema = z.object({ outcome: internalOutcome }).strict();
+export const providerCoreProposalSchema = z.object({ outcome: providerOutcome }).strict();
 export type ProposalReference = z.infer<typeof ref>;
 export type ProposalProvenance = z.infer<typeof provenance>;
 export type ProposalStep = z.infer<typeof proposalStepSchema>;
+export type VerificationRequest = z.infer<typeof verificationRequestSchema>;
 export type CoreProposal = z.infer<typeof coreProposalSchema>;

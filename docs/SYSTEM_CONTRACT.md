@@ -106,7 +106,7 @@ Exact event names such as `UPDATE`, `SUPERSEDE`, or `INVALIDATE` are repository-
 
 Explicit teacher self-correction may revise the affected semantic unit with normal speech-grounded provenance. Autonomous AI correction is different: model confidence may trigger verification but is not factual authority. A settled AI correction requires a trusted or independently checkable evidence basis, must be materially useful and contextually relevant/timely, must preserve productive learner work, and must remain explicitly attributable and reversible. Ambiguous, disputed, opinion-based, uncertain, scoped-approximation, or assumption-dependent claims must not be silently corrected.
 
-When a factual conflict is plausible but evidence is insufficient, the system must preserve contestability rather than force an overwrite. A non-accepting verification request or an explicitly marked learner-facing question/challenge/clarification may be used while later teaching resolves the disagreement.
+When a factual conflict is plausible but evidence is insufficient, the system must preserve contestability rather than force an overwrite. A best-effort verification side request may accompany an otherwise accepted semantic interpretation, or an explicitly marked learner-facing question/challenge/clarification may be used while later teaching resolves the disagreement. A verification side request is orchestration/diagnostic data only: it is not lesson truth, semantic state, or an accepted lesson event, and it must not block or roll back otherwise valid semantic acceptance.
 
 ## Semantic Working Window
 
@@ -160,7 +160,7 @@ Alpha may:
 - reorganize or represent established propositions without changing their meaning;
 - use trusted domain knowledge for useful Board augmentation with honest provenance;
 - autonomously add low-risk common/syllabus-compatible knowledge when the reviewed provenance path can represent its authority honestly;
-- detect possible factual conflicts and request independent verification without consuming evidence or overwriting accepted truth;
+- detect possible factual conflicts and emit best-effort verification side requests while ordinary semantic steps continue to consume evidence; the side request itself does not consume, revise, or establish lesson truth;
 - autonomously correct concrete factual teacher errors when the correction meets the evidence-backed correction gate and is honestly attributed;
 - maintain and locally revise Core structure across teaching turns;
 - infer same-Core continuity versus topic shift from evidence and state;
@@ -264,9 +264,9 @@ The next Board-domain migration must introduce a versioned event/state contract 
 
 ## Scheduling and failure recovery
 
-The scheduler must preserve ordered unprocessed evidence. Provider, validation, storage, timeout, conflict, verification or Governor failures must not silently consume evidence or erase accepted learner state.
+The scheduler must preserve ordered unprocessed evidence. Provider, semantic validation, storage, timeout, cancellation, stale-result, and conflict failures on the common semantic path must not silently consume evidence or erase accepted learner state.
 
-A transient failure preserves the last accepted Board and Cue surface until a later valid change is accepted. Independent failure domains should degrade independently wherever technically possible. A verification request is non-accepting until evidence has been independently validated and a later accepted correction is persisted.
+A transient semantic-path failure preserves the last accepted Board and Cue surface until a later valid change is accepted. Independent failure domains should degrade independently wherever technically possible. Verification/Governor side-path failures must not roll back already accepted semantic state, re-open already consumed evidence, or block unrelated subsequent checkpoints. A verification side request is not an accepted lesson event or learner truth; only a later independently verified correction may change durable state.
 
 Exact queue bounds, retry counts, deadlines, context budgets, request envelopes, batching, cooldowns and conflict policy remain executable configuration owned by code and tests.
 
@@ -285,7 +285,7 @@ Repository changes that affect live teaching must preserve or deliberately migra
 - provider output validation before accepted state publication;
 - explicit provenance and grounding, including distinct evidence attribution for autonomous AI correction;
 - distinct teacher-established versus AI-initiated Cue authority where applicable;
-- non-accepting verification requests do not consume evidence or mutate learner truth;
+- verification side requests do not become semantic events/truth and cannot block or roll back otherwise valid semantic evidence consumption;
 - Board/Cue lifecycle independence;
 - no automatic ordinary transcript on the normal presentationless surface;
 - last valid learner state preserved on failure;
