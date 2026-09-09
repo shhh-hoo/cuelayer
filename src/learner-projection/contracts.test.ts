@@ -1,17 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { learnerProjectionFixtureErrors } from "./contracts.ts";
-import { M4A_LEARNER_PROJECTION_FIXTURES as RESEARCH_FIXTURES } from "./fixtures.ts";
-import { M4A_GROUNDED_LEARNER_PROJECTION_FIXTURES } from "./grounded-fixtures.ts";
+import { M4A_CROSS_DISCIPLINE_FIXTURES } from "./cross-discipline-fixtures.ts";
+import {
+  M4A_GROUNDED_LEARNER_PROJECTION_FIXTURES,
+  M4A_RESEARCH_LEARNER_PROJECTION_FIXTURES,
+} from "./grounded-fixtures.ts";
 
 const fixtures = M4A_GROUNDED_LEARNER_PROJECTION_FIXTURES;
+const researchFixtures = M4A_RESEARCH_LEARNER_PROJECTION_FIXTURES;
 
 describe("M4A learner projection contract fixtures", () => {
-  it("keeps the first review corpus intentionally small and diverse", () => {
-    expect(fixtures).toHaveLength(15);
-    expect(RESEARCH_FIXTURES).toHaveLength(15);
+  it("uses a Chemistry foundation plus a deliberately adversarial cross-discipline corpus", () => {
+    expect(fixtures).toHaveLength(31);
+    expect(researchFixtures).toHaveLength(31);
+    expect(M4A_CROSS_DISCIPLINE_FIXTURES).toHaveLength(16);
     expect(new Set(fixtures.map(fixture => fixture.source.family))).toEqual(
       new Set(["CAMBRIDGE", "RSC", "MIT_OCW"]),
     );
+    expect(new Set(M4A_CROSS_DISCIPLINE_FIXTURES.map(fixture => fixture.source.subject))).toEqual(new Set([
+      "MATHEMATICS", "PHYSICS", "BIOLOGY", "COMPUTER_SCIENCE", "ECONOMICS", "HISTORY", "ENGLISH_LANGUAGE", "GEOGRAPHY",
+    ]));
   });
 
   it.each(fixtures)("$id satisfies projection hard invariants", fixture => {
@@ -28,6 +36,7 @@ describe("M4A learner projection contract fixtures", () => {
     expect(serialized).not.toContain('"LECTURE"');
     expect(serialized).not.toContain('"INQUIRY"');
     expect(serialized).not.toContain('"PRACTICAL"');
+    expect(serialized).not.toContain('"learnerEmotion"');
   });
 
   it("distinguishes focused teaching, comparison and deliberate review widening", () => {
@@ -41,6 +50,11 @@ describe("M4A learner projection contract fixtures", () => {
     for (const fixture of fixtures) {
       expect(fixture.expected.attention.representations.filter(item => item.role === "dominant").length).toBeLessThanOrEqual(1);
     }
+  });
+
+  it("generalizes domain-native representations rather than forcing every subject into a concept graph", () => {
+    const kinds = new Set(M4A_CROSS_DISCIPLINE_FIXTURES.flatMap(fixture => fixture.expected.attention.representations.map(item => item.kind)));
+    for (const required of ["PLOT", "CODE", "SOURCE_TEXT", "IMAGE", "MAP", "TIMELINE"]) expect(kinds).toContain(required);
   });
 
   it("requires every representation and Work Surface block to come from committed-evidence candidates", () => {
@@ -62,7 +76,7 @@ describe("M4A learner projection contract fixtures", () => {
   });
 
   it("rejects research expectations as executable inputs until transient surfaces are grounded", () => {
-    const requiringCandidates = RESEARCH_FIXTURES.filter(fixture =>
+    const requiringCandidates = researchFixtures.filter(fixture =>
       fixture.expected.attention.representations.length > 0 || Boolean(fixture.expected.workSurface?.blocks.length),
     );
     expect(requiringCandidates.length).toBeGreaterThan(0);
@@ -74,7 +88,7 @@ describe("M4A learner projection contract fixtures", () => {
 
   it("keeps calculation, practical and learner-generated work explicitly ephemeral", () => {
     const withWork = fixtures.filter(fixture => fixture.expected.workSurface);
-    expect(withWork.length).toBeGreaterThanOrEqual(7);
+    expect(withWork.length).toBeGreaterThanOrEqual(20);
     for (const fixture of withWork) {
       expect(fixture.expected.workSurface?.lifecycle).toBe("EPHEMERAL");
       expect(fixture.mustNot).toContain("PERSIST_WORK_AS_KNOWLEDGE");
@@ -111,5 +125,31 @@ describe("M4A learner projection contract fixtures", () => {
     const tangent = fixtures.find(fixture => fixture.id === "mit-free-tangent-and-return");
     expect(tangent?.expected.transition).toEqual({ knowledge: "PRESERVE", framing: "FOCUS", representation: "KEEP" });
     expect(tangent?.mustNot).toContain("CREATE_DUPLICATE_CORE");
+  });
+
+  it("allows History to compare competing interpretations without collapsing them into one answer", () => {
+    const history = fixtures.find(fixture => fixture.id === "history-contemporary-sources-competing-interpretations");
+    expect(history?.expected.transition.framing).toBe("COMPARE");
+    expect(history?.expected.attention.emphasis).toHaveLength(2);
+    expect(history?.mustNot).toContain("COLLAPSE_COMPETING_INTERPRETATIONS");
+  });
+
+  it("keeps primary source text visible in English rather than replacing it with an AI summary", () => {
+    const english = fixtures.find(fixture => fixture.id === "english-original-rewrite-comparison");
+    expect(english?.expected.attention.representations.map(item => item.kind)).toEqual(["SOURCE_TEXT", "SOURCE_TEXT"]);
+    expect(english?.mustNot).toContain("REPLACE_PRIMARY_SOURCE_WITH_SUMMARY");
+  });
+
+  it("keeps a Computer Science dry run as ephemeral execution state", () => {
+    const cs = fixtures.find(fixture => fixture.id === "cs-algorithm-code-dry-run");
+    expect(cs?.expected.attention.representations[0]?.kind).toBe("CODE");
+    expect(cs?.expected.workSurface?.blocks[0]).toMatchObject({ id: "dry-run-table", kind: "TABLE", status: "IN_PROGRESS" });
+    expect(cs?.mustNot).toContain("PERSIST_WORK_AS_KNOWLEDGE");
+  });
+
+  it("treats maps as content representations rather than Canvas geometry", () => {
+    const geography = fixtures.find(fixture => fixture.id === "geography-biome-map-climate-plot");
+    expect(geography?.expected.attention.representations.map(item => item.kind)).toEqual(["MAP", "PLOT"]);
+    expect(geography?.mustNot).toContain("WRITE_VISUAL_STATE_TO_SEMANTICS");
   });
 });
