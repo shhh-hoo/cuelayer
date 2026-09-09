@@ -13,6 +13,7 @@ export function m4bDevEntry(): Plugin {
       handler(html, context) {
         // SPA fallback changes path to /index.html; originalUrl retains the route.
         const path = (context.originalUrl ?? context.path).split("?")[0];
+        if (path === "/dev/teaching-representation") return html.replace('src="/src/main.tsx"', 'src="/src/dev/teaching-representation/main.tsx"');
         return path === "/dev/m4b-canvas"
           ? html.replace('src="/src/main.tsx"', 'src="/src/dev/m4b-canvas/main.tsx"') : html;
       },

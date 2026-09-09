@@ -156,3 +156,77 @@ When the production Board domain migrates from legacy `SET_ACTIVE` / bounded `Re
 M3 runtime correctness is checked separately from the frozen semantic model corpora. Deterministic tests inject transports and exercise the real Core provider envelope/parser, bounded context, normalizer/validator, lossless scheduler, atomic event persistence, replay, Cue references, verification dispatcher, finalization and trace writer. The live runtime does not use the offline exemplar adapter as a persistence boundary.
 
 CI runs `npm run eval:core:validate` in addition to the legacy frozen validator and full test/build/hygiene checks. The optional `--fresh-holdout` validation is also deterministic. Both commands report `mode: exemplar-contract` and `modelCalls: 0`; passing the 24-case and eight-case fixture contracts is not a model score. The frozen historical 19/24, 5/8 and 21/24 model results remain unchanged and must not be rescored.
+
+## Teaching representation evaluation
+
+The development-only `src/dev/teaching-representation/lesson.ts` is an authored
+Catalyst sequence accepted through the unchanged Core reducer. It is separate from
+the frozen semantic interpretation corpora. Its 14 checkpoints cover definition,
+pathway, two-node chain, successful fraction, rate, qualitative energy profile,
+PAIR, Arrhenius equation, fixed-A/temperature consequence, WIDEN, COMPARE, return,
+tangent and explicit relation withdrawal.
+
+Run `npm exec vitest run src/dev/teaching-representation` for grounding, lifecycle,
+attention, home preservation, negative plans and development-entry checks. Full
+repository gates remain required. Browser review at 1280×720 should capture every
+checkpoint in GOLD and the recorded AI mode, check actual text rectangles and
+mounted identities, and inspect the diagnostic home map before/after choreography.
+Check Play/Pause, Previous, Reset and diagnostic separation. Synthetic browser fit
+does not establish classroom comprehension or milestone acceptance.
+
+The producer maps PROPOSITION→TEXT, RELATION_CHAIN→DIAGRAM, EQUATION→MATH,
+PLOT→PLOT and COMPARE→DIAGRAM using M4A's existing candidate/producer seam.
+Payloads remain host input, keyed by candidate identity, outside Core and M4A.
+Only selected candidates enter presentation history. A growing chain retains its
+candidate identity; new plot/equation/comparison artifacts use separate identities.
+Every historical payload is revalidated against current accepted state, including
+PRESERVE and fallback. Invalid relations cannot remain visible. Arrow direction
+requires accepted endpoints plus a reviewed causal relation meaning; other valid
+relation wording gets a neutral connector. Plot/equation grammar is deliberately
+limited to exact reviewed accepted statements in the Catalyst fixture, with no
+numerical plot data. Semantic interpretations or new grammar require separate review.
+
+The host uses small authored presentation-aware home rows, immutable once placed,
+and PR #27's unchanged measured baseline, temporary placement, motion planner and
+relation router for WIDEN/COMPARE. Plot attachments are a separate discardable host
+map, never durable semantic objects. This does not evaluate a new general allocator.
+
+The independent GOLD-only `trig-lesson.ts` holdout has seven checkpoints: base sine
+equation, accepted domain/initial graph, amplitude family and a=2 equation, accepted
+amplitude comparison/second curve, M4A COMPARE, vertical shift c=1, and consolidation.
+`FUNCTION_2D` is a host PLOT subtype; M4A still receives MATH and PLOT candidates,
+with two dominant MATH intents and a companion graph in COMPARE. A finite strict
+sine payload admits only (amplitude, shift) = (1,0), (2,0), (1,1), gated by exact
+accepted equations, values, rules, comparison endpoints and committed evidence.
+The same `trig-function-plot` artifact grows from one to three deterministic curves.
+Axes, ticks, sampling and stroke styles are renderer grammar; comparative claims
+and parameter labels remain accepted knowledge. No general expression execution exists.
+
+Math browser review uses the seven checkpoints at 1280×720, plus diagnostics. Check
+equation/graph readability, geometry overlap and clipping, canonical mounted IDs,
+curve provenance, and unchanged homes through COMPARE/return. Placement is explicitly
+authored for this small development fixture; the existing M4B compositor, relation
+router, motion planner and camera execution are reused. Focused tests include exact
+starting Core/M4A and Catalyst GOLD digests, deterministic sampling, unsupported
+expressions, co-primary attention, and reducer-driven stale-curve removal. Withdrawal
+is an adversarial test, not an eighth learner checkpoint. Preserve prior AI evidence;
+the holdout does not authorize a new provider experiment or change production policy.
+
+`compareAI` reports form matches/expected selected forms, grounding validity,
+structured-output validity, unnecessary proposals, missed visual opportunities,
+prose warnings, adjacent artifact stability, candidate churn, latency and fallback.
+Rejected proposals receive zero form credit; displayed fallback matches are a
+separate metric. Churn counts additions/removals in adjacent raw proposal sets;
+normal topic changes and an empty tangent plan can therefore count as churn.
+Unnecessary proposals are those outside the authored current target set; they are
+a review signal, not proof of pedagogical harm. No-op retention can receive form
+credit only with valid output and valid historical payloads. The prose warning
+uses accepted relation structure as well as prose shape, never word count alone.
+
+Compare original raw proposals without manual repair. Fallbacks are explicitly
+marked and may preserve still-valid history or use exact accepted propositions;
+they do not silently substitute GOLD's richer form choices. A model's arbitrary
+HTML/SVG/CSS/coordinates/factual text is rejected by the strict plan schema.
+Human review must judge useful form choice, visual timing, continuity, paragraph
+reduction and whether any M4A insufficiency was actually demonstrated. Automatic
+metrics cannot establish those product judgments.
