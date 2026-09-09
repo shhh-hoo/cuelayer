@@ -6,7 +6,8 @@ import { solvePresentation } from '../m4b-choreography/solvers.ts';
 import type { LessonStep } from './lesson.ts';
 import { textOf, unit, type Production, type TeachingPresentationPayload } from './producer.ts';
 
-export type Visual = TeachingItem & { reference?: SemanticReference; payload?: TeachingPresentationPayload; title?: boolean; origin: string };
+export type Visual = TeachingItem & { reference?: SemanticReference; payload?: TeachingPresentationPayload; title?: boolean; origin: string;
+  width?: number; presentationWidth?: number; fixturePosition?: Point };
 export const visualId = (reference: SemanticReference) => `accepted:${reference.id}`;
 export function canvasCatalog(step: LessonStep, production: Production, projection: LearnerProjection): { items: Visual[]; scene: TeachingScene; links: Extract<TeachingPresentationPayload, { kind: 'RELATION_CHAIN' }>['links'] } {
   const items = new Map<string, Visual>();
@@ -62,11 +63,11 @@ export function establishHomes(previous: HomeGeometry, items: Visual[], sizes: H
   const homes = structuredClone(previous);
   for (const item of items.filter(i => i.durable)) {
     const core = item.coreId!;
-    homes.coreOrigins[core] ??= { x: item.origin === 'Catalyst' ? 0 : 1600, y: 0 };
+    homes.coreOrigins[core] ??= item.fixturePosition ?? { x: item.origin === 'Catalyst' ? 0 : 1600, y: 0 };
     if (!homes.positions[item.id]) {
       const sameCore = items.filter(i => i.coreId === core && homes.positions[i.id]);
       const bottom = Math.max(0, ...sameCore.map(i => homes.positions[i.id].y + homes.sizes[i.id].height + (i.title ? 24 : 30)));
-      homes.positions[item.id] = { x: homes.coreOrigins[core].x, y: bottom };
+      homes.positions[item.id] = item.fixturePosition ?? { x: homes.coreOrigins[core].x, y: bottom };
     }
     homes.sizes[item.id] = sizes[item.id];
   }
@@ -76,7 +77,7 @@ export function establishHomes(previous: HomeGeometry, items: Visual[], sizes: H
 export async function presentationPositions(scene: TeachingScene, homes: HomeGeometry, sizes: HomeGeometry['sizes'], width: number, height: number) {
   if (scene.framing !== 'WIDEN' && scene.framing !== 'COMPARE') return { positions: {} as Record<string, Point>, solveMs: 0 };
   const selected = scene.items.filter(item => scene.required.includes(item.id));
-  const result = await solvePresentation('baseline', { nodes: selected.map(item => ({ id: item.id, ...sizes[item.id], home: homes.positions[item.id], role: item.role === 'primary' ? 'primary' : 'context' })),
+  const result = await solvePresentation('baseline', { nodes: selected.map(item => ({ id: item.id, ...sizes[item.id], home: homes.positions[item.id] ?? plotAttachment(homes, item as Visual), role: item.role === 'primary' ? 'primary' : 'context' })),
     edges: [], viewport: { width: width - 100, height: height - 80 }, gap: 48, orientation: 'horizontal' });
   return { positions: temporaryPlacement(result, selected, sizes, homes, scene), solveMs: result.elapsedMs };
 }
@@ -86,4 +87,4 @@ export function cameraFor(scene: TeachingScene, positions: Record<string, Point>
   return { x: composing ? (width - area.width) / 2 - area.x : 52 - area.x,
     y: composing ? (height - area.height) / 2 - area.y : 24 - area.y, zoom: 1 };
 }
-export const plotAttachment = (homes: HomeGeometry, item: Visual): Point => ({ x: (homes.coreOrigins[item.coreId!]?.x ?? 0) + 580, y: 175 });
+export const plotAttachment = (homes: HomeGeometry, item: Visual): Point => item.fixturePosition ?? ({ x: (homes.coreOrigins[item.coreId!]?.x ?? 0) + 580, y: 175 });

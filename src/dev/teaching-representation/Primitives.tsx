@@ -2,7 +2,7 @@ import { createElement, type ReactNode } from 'react';
 import type { CoreTeachingState, SemanticReference } from '../../lesson-stream/core/contracts.ts';
 import { textOf, type TeachingPresentationPayload } from './producer.ts';
 
-type Plot = Extract<TeachingPresentationPayload, { kind: 'PLOT' }>;
+type Plot = Extract<TeachingPresentationPayload, { plotKind: 'ENERGY_PROFILE' }>;
 /** Fixed qualitative grammar, no data coordinates accepted from a producer.
  * Shared endpoints and exothermic ordering are explicitly grounded prerequisites.
  * Curve widths, smoothness and peak positions are illustrative, not kinetics data.

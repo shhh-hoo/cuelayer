@@ -164,7 +164,7 @@ Catalyst sequence accepted through the unchanged Core reducer. It is separate fr
 the frozen semantic interpretation corpora. Its 14 checkpoints cover definition,
 pathway, two-node chain, successful fraction, rate, qualitative energy profile,
 PAIR, Arrhenius equation, fixed-A/temperature consequence, WIDEN, COMPARE, return,
-tangent and explicit relation withdrawal. No cross-discipline holdout is included.
+tangent and explicit relation withdrawal.
 
 Run `npm exec vitest run src/dev/teaching-representation` for grounding, lifecycle,
 attention, home preservation, negative plans and development-entry checks. Full
@@ -183,13 +183,34 @@ Every historical payload is revalidated against current accepted state, includin
 PRESERVE and fallback. Invalid relations cannot remain visible. Arrow direction
 requires accepted endpoints plus a reviewed causal relation meaning; other valid
 relation wording gets a neutral connector. Plot/equation grammar is deliberately
-limited to exact reviewed accepted statements in this fixture, with no numerical
-plot data. Semantic interpretations or new grammar require separate review.
+limited to exact reviewed accepted statements in the Catalyst fixture, with no
+numerical plot data. Semantic interpretations or new grammar require separate review.
 
 The host uses small authored presentation-aware home rows, immutable once placed,
 and PR #27's unchanged measured baseline, temporary placement, motion planner and
 relation router for WIDEN/COMPARE. Plot attachments are a separate discardable host
 map, never durable semantic objects. This does not evaluate a new general allocator.
+
+The independent GOLD-only `trig-lesson.ts` holdout has seven checkpoints: base sine
+equation, accepted domain/initial graph, amplitude family and a=2 equation, accepted
+amplitude comparison/second curve, M4A COMPARE, vertical shift c=1, and consolidation.
+`FUNCTION_2D` is a host PLOT subtype; M4A still receives MATH and PLOT candidates,
+with two dominant MATH intents and a companion graph in COMPARE. A finite strict
+sine payload admits only (amplitude, shift) = (1,0), (2,0), (1,1), gated by exact
+accepted equations, values, rules, comparison endpoints and committed evidence.
+The same `trig-function-plot` artifact grows from one to three deterministic curves.
+Axes, ticks, sampling and stroke styles are renderer grammar; comparative claims
+and parameter labels remain accepted knowledge. No general expression execution exists.
+
+Math browser review uses the seven checkpoints at 1280×720, plus diagnostics. Check
+equation/graph readability, geometry overlap and clipping, canonical mounted IDs,
+curve provenance, and unchanged homes through COMPARE/return. Placement is explicitly
+authored for this small development fixture; the existing M4B compositor, relation
+router, motion planner and camera execution are reused. Focused tests include exact
+starting Core/M4A and Catalyst GOLD digests, deterministic sampling, unsupported
+expressions, co-primary attention, and reducer-driven stale-curve removal. Withdrawal
+is an adversarial test, not an eighth learner checkpoint. Preserve prior AI evidence;
+the holdout does not authorize a new provider experiment or change production policy.
 
 `compareAI` reports form matches/expected selected forms, grounding validity,
 structured-output validity, unnecessary proposals, missed visual opportunities,

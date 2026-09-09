@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { createServer } from 'vite';
+import { build, createServer } from 'vite';
 import { m4bDevEntry } from '../m4b-canvas/entry.ts';
 import { teachingAIEntry } from './ai-server.ts';
 
@@ -18,4 +18,12 @@ it('serves the teaching entry only at its isolated development route', async () 
 it('keeps the AI endpoint out of production and the ordinary server configuration', () => {
   expect(teachingAIEntry({}).apply).toBe('serve');
   expect(readFileSync(new URL('../../../vite.config.ts', import.meta.url), 'utf8')).not.toContain('teachingAIEntry');
+});
+it('excludes both Teaching Representation stories and spatial dependencies from the actual production bundle', async () => {
+  const modules: string[] = [];
+  await build({ logLevel: 'silent', build: { write: false }, plugins: [{ name: 'assert-production-isolation',
+    generateBundle(_options, bundle) { for (const item of Object.values(bundle)) if (item.type === 'chunk') modules.push(...Object.keys(item.modules)); },
+  }] });
+  expect(modules.some(id => id.endsWith('/src/main.tsx'))).toBe(true);
+  expect(modules.filter(id => /src\/dev\/|@xyflow|@dagrejs|webcola|elkjs/.test(id))).toEqual([]);
 });

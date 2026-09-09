@@ -11,13 +11,16 @@ import { cameraFor, canvasCatalog, establishHomes, plotAttachment, presentationP
 import type { LessonStep } from './lesson.ts';
 import type { Production } from './producer.ts';
 import { EnergyProfile, Equation } from './Primitives.tsx';
+import { FunctionPlot, TrigEquation } from './TrigPrimitives.tsx';
 
 type VisualData = Visual & { step: LessonStep; suppressed: boolean; presentation: boolean };
 function VisualContent({ data }: { data: VisualData }) {
   return <article className="tr-atom" data-role={data.role} data-kind={data.kind} data-title={data.title || undefined}>
     {data.presentation && <div className="tr-origin">{data.origin}</div>}
-    {data.payload?.kind === 'PLOT' ? <EnergyProfile state={data.step.state} payload={data.payload} />
-      : data.payload?.kind === 'EQUATION' ? <Equation state={data.step.state} reference={data.payload.equation} />
+    {data.payload?.kind === 'PLOT' ? data.payload.plotKind === 'FUNCTION_2D'
+      ? <FunctionPlot state={data.step.state} payload={data.payload} /> : <EnergyProfile state={data.step.state} payload={data.payload} />
+      : data.payload?.kind === 'EQUATION' ? data.payload.format === 'TRIG'
+        ? <TrigEquation state={data.step.state} payload={data.payload} comparing={data.presentation} /> : <Equation state={data.step.state} reference={data.payload.equation} />
         : data.title ? <h1 data-semantic-id={data.reference?.id}>{data.text}</h1> : <p data-semantic-id={data.reference?.id}>{data.text}</p>}
   </article>;
 }
@@ -34,7 +37,8 @@ function measure(items: Visual[], step: LessonStep, composing: boolean): HomeGeo
   document.body.append(host);
   try {
     return Object.fromEntries(items.map(item => {
-      const width = item.kind === 'REPRESENTATION' ? 560 : item.title ? 1080 : item.reference?.id === step.refs.definition.id ? 1080 : 500;
+      const width = (composing ? item.presentationWidth : undefined) ?? item.width
+        ?? (item.kind === 'REPRESENTATION' ? 560 : item.title ? 1080 : item.reference?.id === step.refs.definition?.id ? 1080 : 500);
       const probe = document.createElement('div'); probe.style.width = `${width}px`;
       probe.innerHTML = renderToStaticMarkup(<VisualContent data={{ ...item, step, suppressed: false, presentation: composing && item.role !== 'history' }} />);
       host.append(probe); const height = Math.ceil(probe.getBoundingClientRect().height); probe.remove();
@@ -43,11 +47,11 @@ function measure(items: Visual[], step: LessonStep, composing: boolean): HomeGeo
   } finally { host.remove(); }
 }
 export type CanvasEvidence = { homes: HomeGeometry; positions: MotionBoxes; camera: { x: number; y: number; zoom: number }; moving: boolean; motionSafe: boolean; projection: LearnerProjection };
-function CanvasPane({ step, production, projection, onEvidence }: { step: LessonStep; production: Production; projection: LearnerProjection; onEvidence: (e: CanvasEvidence) => void }) {
+function CanvasPane({ step, production, projection, onEvidence, catalogFor = canvasCatalog }: { step: LessonStep; production: Production; projection: LearnerProjection; onEvidence: (e: CanvasEvidence) => void; catalogFor?: typeof canvasCatalog }) {
   const container = useRef<HTMLDivElement>(null);
   const homes = useRef<HomeGeometry>(emptyHomes());
   const [surface, setSurface] = useState({ width: 1280, height: 640 });
-  const catalog = useMemo(() => canvasCatalog(step, production, projection), [step, production, projection]);
+  const catalog = useMemo(() => catalogFor(step, production, projection), [step, production, projection, catalogFor]);
   const rendered = useRef<MotionBoxes>({});
   const [geometry, setGeometry] = useState<MotionBoxes>({});
   const [frame, setFrame] = useState<TeachingFrame>();
@@ -118,9 +122,10 @@ function CanvasPane({ step, production, projection, onEvidence }: { step: Lesson
     return [{ id: link.ref.id, arrow: link.connector === 'arrow', path: `M${x},${from.y + from.height + 7} L${x},${to.y - 8}` }];
   }) : [];
   const composing = projection.transition.framing === 'WIDEN' || projection.transition.framing === 'COMPARE';
-  if (!moving && composing && catalog.scene.required.length === 2) {
-    const [a, b] = catalog.scene.required.map(id => ({ id, ...geometry[id] }));
-    if (a.width && b.width) { const route = routeRelation(a, b, [a, b]); if (route) connectors.push({ id: 'visual-proximity-only', arrow: false, path: route.path }); }
+  const comparisonTargets = catalog.scene.required.filter(id => catalog.items.find(i => i.id === id)?.kind !== 'REPRESENTATION');
+  if (!moving && composing && comparisonTargets.length === 2) {
+    const [a, b] = comparisonTargets.map(id => ({ id, ...geometry[id] }));
+    if (a.width && b.width) { const route = routeRelation(a, b, catalog.scene.required.map(id => ({ id, ...geometry[id] }))); if (route) connectors.push({ id: 'visual-proximity-only', arrow: false, path: route.path }); }
   }
   return <div ref={container} className="tr-projector" aria-label="Simulated learner projector" data-step={step.id} data-moving={moving}>
     {failure && <p role="alert">Canvas unavailable: {failure}</p>}

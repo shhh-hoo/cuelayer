@@ -3,6 +3,7 @@ import type { CoreTeachingState, SemanticReference } from '../../lesson-stream/c
 import { resolveSemanticReference } from '../../lesson-stream/core/teaching-state.ts';
 import { learnerProjectionFixtureErrors, type LearnerProjection, type ProjectionCandidate, type RepresentationKind } from '../../learner-projection/contracts.ts';
 import { RELATIONS, WORDS, type LessonStep } from './lesson.ts';
+import type { FunctionPlot, TrigEquation } from './trig-payload.ts';
 
 export const KINDS = ['PROPOSITION', 'RELATION_CHAIN', 'EQUATION', 'PLOT', 'COMPARE'] as const;
 export type PayloadKind = typeof KINDS[number];
@@ -17,6 +18,7 @@ export type TeachingPresentationPayload = Grounding & (
   | { kind: 'RELATION_CHAIN'; nodes: SemanticReference[]; links: { ref: SemanticReference; from: SemanticReference; to: SemanticReference; connector: 'arrow' | 'neutral' }[] }
   | { kind: 'EQUATION'; equation: SemanticReference; format: 'ARRHENIUS' }
   | { kind: 'PLOT'; plotKind: 'ENERGY_PROFILE'; labels: Record<string, SemanticReference> }
+  | TrigEquation | FunctionPlot
   | { kind: 'COMPARE'; targets: SemanticReference[] }
 );
 export type Production = { registry: Record<string, TeachingPresentationPayload>; candidates: ProjectionCandidate[]; errors: string[]; warnings: string[] };

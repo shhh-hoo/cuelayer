@@ -185,3 +185,13 @@ fixture fingerprint. The AI selector replays that run without further model call
 **Run AI again** explicitly starts a new paid run; it never overwrites earlier runs.
 No microphone, production session, accepted event schema or Core interpreter is used
 by this optional presentation provider. Its only output is a strict form/ref plan.
+
+For the independent Mathematics holdout, use ordinary `npm run dev -- --host
+127.0.0.1 --port 5183 --strictPort` and open
+`/dev/teaching-representation?lesson=trig`. This route is GOLD only and offers seven
+manual Previous/Next checkpoints, Reset, and a grounding/identity diagnostic view.
+It does not load the Catalyst AI review component or call a provider endpoint.
+Capture all seven projector states plus diagnostics at 1280×720. Save generated
+Math evidence separately under ignored `.cuelayer/reviews/trig-holdout/`; preserve
+the prior Teaching Representation AI packet byte-for-byte. Both routes remain
+development-only and absent from the production browser bundle.
