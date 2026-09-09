@@ -88,3 +88,11 @@ export function projectCanvas(state: CoreTeachingState, projection: LearnerProje
   }
   return { nodes, edges };
 }
+
+/** Frame the same inspected-Core elements the renderer will reveal, including
+ * cached Support. Hidden, invalid or unrelated geometry does not enter the frame.
+ */
+export function inspectionRects(state: CoreTeachingState, projection: LearnerProjection, spatial: SpatialState, coreId: string): Rect[] {
+  return projectCanvas(state, projection, spatial, coreId).nodes.filter(node => node.data.coreId === coreId)
+    .map(node => rectOf(spatial.elements[node.data.spatialKey]!));
+}

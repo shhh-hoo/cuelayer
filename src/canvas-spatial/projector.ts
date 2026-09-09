@@ -13,6 +13,7 @@ export type ProjectorResult = { state: ProjectorState; command?: CameraCommand }
 export const emptyProjector = (): ProjectorState => ({ mode: "AUTO_FOLLOW", viewport: { x: 40, y: 40, zoom: 1 } });
 export const MIN_AUTO_ZOOM = 0.65;
 export const MAX_AUTO_ZOOM = 1;
+export const MIN_INSPECTION_ZOOM = 0.3;
 const padding = (surface: Size) => surface.width < 600 ? 20 : 48;
 const close = (a: Viewport, b: Viewport) => Math.abs(a.x - b.x) < 2 && Math.abs(a.y - b.y) < 2 && Math.abs(a.zoom - b.zoom) < 0.005;
 
@@ -64,6 +65,16 @@ export function followTeaching(previous: ProjectorState, surface: Size, reducedM
 }
 
 export function inspectRegion(previous: ProjectorState, rects: Rect[], surface: Size, reducedMotion = false): ProjectorResult {
-  const target = reframe({ all: rects, primary: rects, framing: "FOCUS" }, surface);
+  const region = bounds(rects);
+  let target: Viewport | undefined;
+  if (region && surface.width > 0 && surface.height > 0) {
+    // Explicit inspection uses the existing manual zoom range, so restored Support
+    // can fit on narrow screens without lowering the automatic teaching zoom floor.
+    const pad = padding(surface);
+    const zoom = Math.max(MIN_INSPECTION_ZOOM, Math.min(MAX_AUTO_ZOOM,
+      (surface.width - 2 * pad) / region.width, (surface.height - 2 * pad) / region.height));
+    target = { x: surface.width / 2 - (region.x + region.width / 2) * zoom,
+      y: surface.height / 2 - (region.y + region.height / 2) * zoom, zoom };
+  }
   return commandFor({ ...previous, mode: "TEACHER_INSPECTION", lastTarget: undefined }, target, reducedMotion);
 }

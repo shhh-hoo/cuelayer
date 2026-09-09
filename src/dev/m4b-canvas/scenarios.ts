@@ -75,6 +75,15 @@ const widen = fixture("rsc-group2-review-widen");
 const tangent = fixture("mit-free-tangent-and-return");
 const support = fixture("cambridge-kinetics-concept-graph-practical");
 const supportHidden = clone(support.expected); supportHidden.attention.support = []; supportHidden.projector = "PRESERVE_VIEW";
+const supportParked = clone(support.input.state);
+supportParked.knowledge.currentCoreId = "arrhenius";
+supportParked.knowledge.revision++;
+supportParked.knowledge.cores.arrhenius = clone(shifted.knowledge.cores.arrhenius!);
+const longRevision = clone(first);
+longRevision.knowledge.revision++;
+longRevision.knowledge.cores.catalysts!.objects.catalyst!.value = fact(
+  "A catalyst increases the reaction rate by providing an alternative pathway with a lower activation energy. " +
+  "It participates in intermediate steps and is regenerated overall; it does not change the equilibrium constant. ".repeat(5));
 
 export const SCENARIOS: Scenario[] = [
   { id: "growth", title: "A · Incremental Core growth", steps: growth },
@@ -103,5 +112,14 @@ export const SCENARIOS: Scenario[] = [
   ] },
   { id: "support", title: "Support visibility & history", steps: [
     step("Relevant practical Support", support), { label: "Support leaves attention", state: support.input.state, projection: supportHidden },
+    { label: "Kinetics is parked; inspect its retained Support", state: supportParked,
+      projection: focus(supportParked, object("arrhenius", "rate"), "REFRAME_ATTENTION"),
+      note: "Inspect kinetics restores its historical Support and frames the same rendered elements. Teaching stays on Arrhenius." },
+  ] },
+  { id: "long-revision", title: "Long revision & local scroll", steps: [
+    growth[0]!,
+    { label: "Long revision keeps the established rectangle", state: longRevision,
+      projection: focus(longRevision, object("catalysts", "catalyst"), "PRESERVE_VIEW"),
+      note: "Scroll inside the revised object. Its identity, reserved rectangle and the shared camera stay fixed." },
   ] },
 ];

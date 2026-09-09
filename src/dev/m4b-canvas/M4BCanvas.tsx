@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Background, Handle, Position, ReactFlow, ReactFlowProvider, useReactFlow, type NodeChange, type NodeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { advanceSpatial, emptySpatial, measureSpatial, rectOf } from "../../canvas-spatial/spatial.ts";
-import { attentionFrame, projectCanvas, type CanvasNode } from "../../canvas-spatial/canvas-projection.ts";
-import { emptyProjector, followTeaching, inspectRegion, inspectViewport, updateProjector, type ProjectorResult } from "../../canvas-spatial/projector.ts";
+import { advanceSpatial, emptySpatial, measureSpatial } from "../../canvas-spatial/spatial.ts";
+import { attentionFrame, inspectionRects, projectCanvas, type CanvasNode } from "../../canvas-spatial/canvas-projection.ts";
+import { emptyProjector, followTeaching, inspectRegion, inspectViewport, MIN_INSPECTION_ZOOM, updateProjector, type ProjectorResult } from "../../canvas-spatial/projector.ts";
 import type { Size, Viewport } from "../../canvas-spatial/geometry.ts";
 import { SCENARIOS, type Scenario } from "./scenarios.ts";
 import "./m4b-canvas.css";
@@ -89,11 +89,11 @@ function Canvas({ scenario, preset, reducedOverride }: { scenario: Scenario; pre
   }, []);
   const jump = (coreId: string) => {
     setInspectedCoreId(coreId);
-    const rects = Object.values(spatial.elements).filter(e => e.coreId === coreId && e.kind === "OBJECT").map(rectOf);
+    const rects = inspectionRects(current.state, current.projection, spatial, coreId);
     execute(inspectRegion(controller.current, rects, surface, reduced));
   };
   const zoom = (factor: number) => {
-    const old = getViewport(), nextZoom = Math.min(2, Math.max(0.3, old.zoom * factor));
+    const old = getViewport(), nextZoom = Math.min(2, Math.max(MIN_INSPECTION_ZOOM, old.zoom * factor));
     const next = { x: surface.width / 2 - (surface.width / 2 - old.x) * nextZoom / old.zoom,
       y: surface.height / 2 - (surface.height / 2 - old.y) * nextZoom / old.zoom, zoom: nextZoom };
     manual(next); void setViewport(next, { duration: 0 });
@@ -125,7 +125,7 @@ function Canvas({ scenario, preset, reducedOverride }: { scenario: Scenario; pre
       <ReactFlow<CanvasNode> nodes={rendered.nodes} edges={rendered.edges} nodeTypes={nodeTypes}
         defaultViewport={emptyProjector().viewport} onNodesChange={onNodesChange}
         nodesDraggable={false} nodesConnectable={false} edgesReconnectable={false} elementsSelectable={false}
-        deleteKeyCode={null} selectionKeyCode={null} minZoom={0.3} maxZoom={2}
+        deleteKeyCode={null} selectionKeyCode={null} minZoom={MIN_INSPECTION_ZOOM} maxZoom={2}
         onMoveStart={event => {
           if (!event) return;
           const viewport = getViewport();

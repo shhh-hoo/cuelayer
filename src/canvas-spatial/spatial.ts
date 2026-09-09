@@ -54,6 +54,7 @@ export function advanceSpatial(previous: SpatialState, state: CoreTeachingState,
   for (const core of Object.values(state.knowledge.cores).sort((a, b) => a.id.localeCompare(b.id))) {
     const coreKey = semanticKey(state.sessionId, coreRef(core.id));
     if (!next.coreOrigins[core.id]) {
+      // Rightward expansion is the M4B placement mechanism, not a Core invariant.
       const extent = bounds(occupied());
       const origin = freePosition({ width: 256, height: 44 }, { x: extent ? extent.x + extent.width + 160 : 0, y: 0 }, occupied(), 80);
       next.coreOrigins[core.id] = origin;
@@ -62,30 +63,45 @@ export function advanceSpatial(previous: SpatialState, state: CoreTeachingState,
     const added = Object.values(core.objects).filter(o => o.status === "valid" && !next.elements[semanticKey(state.sessionId, objectRef(core.id, o.id))]).sort((a, b) => a.id.localeCompare(b.id));
     if (!added.length) continue;
     const addedIds = new Set(added.map(o => o.id));
-    const relations = Object.values(core.relations).filter(r => r.status === "valid").sort((a, b) => a.id.localeCompare(b.id));
-    const connection = relations.find(r => addedIds.has(r.value.toObjectId) && !addedIds.has(r.value.fromObjectId));
-    const anchor = connection ? next.elements[semanticKey(state.sessionId, objectRef(core.id, connection.value.fromObjectId))] : undefined;
-    const graph = new graphlib.Graph().setGraph({ rankdir: "TB", nodesep: 32, ranksep: 52 }).setDefaultEdgeLabel(() => ({}));
-    for (const object of added) graph.setNode(object.id, { ...textSize(object.value.text) });
-    for (const relation of relations) if (addedIds.has(relation.value.fromObjectId) && addedIds.has(relation.value.toObjectId)) graph.setEdge(relation.value.fromObjectId, relation.value.toObjectId);
-    layout(graph); // ONLY the genuinely new mini-subgraph; labels are fresh copies.
-    // Disconnected additions use a vertical local lane, avoiding Dagre's wide row on narrow projectors.
-    const disconnected = graph.edgeCount() === 0;
-    let laneY = 0;
-    const suggestions = added.map(object => {
-      const size = textSize(object.value.text);
-      const node = graph.node(object.id);
-      const rect = { id: object.id, ...size, x: disconnected ? 0 : node.x - size.width / 2, y: disconnected ? laneY : node.y - size.height / 2 };
-      laneY += size.height + 32;
-      return rect;
-    });
-    const group = bounds(suggestions)!;
-    const origin = next.coreOrigins[core.id]!;
-    const preferred = anchor ? { x: anchor.position.x, y: rectOf(anchor).y + rectOf(anchor).height + 52 } : { x: origin.x, y: origin.y + 80 };
-    const location = freePosition(group, preferred, occupied());
-    for (const suggested of suggestions) {
-      const key = semanticKey(state.sessionId, objectRef(core.id, suggested.id));
-      next.elements[key] = { key, kind: "OBJECT", coreId: core.id, position: { x: location.x + suggested.x - group.x, y: location.y + suggested.y - group.y }, size: { width: suggested.width, height: suggested.height }, anchorKey: anchor?.key ?? coreKey };
+    const relations = Object.values(core.relations).filter(r => r.status === "valid"
+      && core.objects[r.value.fromObjectId]?.status === "valid" && core.objects[r.value.toObjectId]?.status === "valid")
+      .sort((a, b) => a.id.localeCompare(b.id));
+    const neighbors = new Map(added.map(o => [o.id, new Set<string>()]));
+    for (const { value: { fromObjectId: from, toObjectId: to } } of relations) {
+      if (addedIds.has(from) && addedIds.has(to)) { neighbors.get(from)!.add(to); neighbors.get(to)!.add(from); }
+    }
+    const unseen = new Set(addedIds);
+    for (const seed of added) {
+      if (!unseen.delete(seed.id)) continue;
+      const component = new Set([seed.id]), pending = [seed.id];
+      while (pending.length) for (const id of neighbors.get(pending.pop()!)!) {
+        if (unseen.delete(id)) { component.add(id); pending.push(id); }
+      }
+      // Connectivity and boundary anchoring ignore relation direction. For multiple
+      // established endpoints, the smallest object ID is a deterministic local tie-break.
+      const anchorIds = relations.flatMap(({ value: { fromObjectId: from, toObjectId: to } }) =>
+        component.has(from) && !addedIds.has(to) ? [to] : component.has(to) && !addedIds.has(from) ? [from] : []);
+      const anchor = [...new Set(anchorIds)].sort((a, b) => a.localeCompare(b))
+        .map(id => next.elements[semanticKey(state.sessionId, objectRef(core.id, id))]).find(Boolean);
+      const objects = added.filter(o => component.has(o.id));
+      const graph = new graphlib.Graph().setGraph({ rankdir: "TB", nodesep: 32, ranksep: 52 }).setDefaultEdgeLabel(() => ({}));
+      for (const object of objects) graph.setNode(object.id, { ...textSize(object.value.text) });
+      for (const { value: { fromObjectId: from, toObjectId: to } } of relations) {
+        if (component.has(from) && component.has(to)) graph.setEdge(from, to);
+      }
+      layout(graph); // Only this genuinely new component; established geometry never enters Dagre.
+      const suggestions = objects.map(object => {
+        const size = textSize(object.value.text), node = graph.node(object.id);
+        return { id: object.id, ...size, x: node.x - size.width / 2, y: node.y - size.height / 2 };
+      });
+      const group = bounds(suggestions)!;
+      const origin = next.coreOrigins[core.id]!;
+      const preferred = anchor ? { x: anchor.position.x, y: rectOf(anchor).y + rectOf(anchor).height + 52 } : { x: origin.x, y: origin.y + 80 };
+      const location = freePosition(group, preferred, occupied());
+      for (const suggested of suggestions) {
+        const key = semanticKey(state.sessionId, objectRef(core.id, suggested.id));
+        next.elements[key] = { key, kind: "OBJECT", coreId: core.id, position: { x: location.x + suggested.x - group.x, y: location.y + suggested.y - group.y }, size: { width: suggested.width, height: suggested.height }, anchorKey: anchor?.key ?? coreKey };
+      }
     }
   }
   const anchorFor = (refs: SemanticReference[]) => refs.flatMap(ref => referenceKeys(state, ref)).map(key => next.elements[key]).find(Boolean)

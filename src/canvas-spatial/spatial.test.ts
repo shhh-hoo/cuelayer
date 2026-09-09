@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { M4A_GROUNDED_LEARNER_PROJECTION_FIXTURES } from "../learner-projection/grounded-fixtures.ts";
 import { SCENARIOS, fixture } from "../dev/m4b-canvas/scenarios.ts";
 import { advanceSpatial, coreRef, emptySpatial, measureSpatial, objectRef, rectOf, rendererId, semanticKey, transientKey } from "./spatial.ts";
-import { attentionFrame, projectCanvas } from "./canvas-projection.ts";
+import { attentionFrame, inspectionRects, projectCanvas } from "./canvas-projection.ts";
+import { emptyProjector, inspectRegion } from "./projector.ts";
 import { overlaps } from "./geometry.ts";
 
 function freeze<T>(value: T): T {
@@ -14,6 +15,21 @@ const initialized = (id: string) => {
   const item = fixture(id);
   return { item, spatial: advanceSpatial(emptySpatial(item.input.state.sessionId), item.input.state, item.expected) };
 };
+
+function neighborhoodUpdate() {
+  const step = scenario("growth").steps[1]!;
+  const state = structuredClone(step.state), core = state.knowledge.cores.catalysts!;
+  const key = (id: string) => semanticKey(state.sessionId, objectRef(core.id, id));
+  const before = advanceSpatial(emptySpatial(state.sessionId), state, step.projection);
+  // Previously established neighborhoods may be anywhere in UI spatial memory.
+  before.elements[key("catalyst")]!.position = { x: 100, y: 500 };
+  before.elements[key("alternative-path")]!.position = { x: 1500, y: 500 };
+  const add = (id: string) => { core.objects[id] = { ...structuredClone(core.objects.catalyst!), id }; };
+  const connect = (id: string, from: string, to: string) => {
+    core.relations[id] = { id, status: "valid", value: { ...core.objects.catalyst!.value, fromObjectId: from, toObjectId: to } };
+  };
+  return { state, core, before, key, add, connect, projection: step.projection };
+}
 
 describe("spatial memory and authority", () => {
   it.each(SCENARIOS)("$title preserves established coordinates and has no automatic node overlaps", s => {
@@ -61,6 +77,62 @@ describe("spatial memory and authority", () => {
     const d = after.elements[semanticKey(state.sessionId, objectRef("catalysts", "d"))]!;
     expect(d.position.y).toBeGreaterThan(c.position.y);
     for (const node of Object.values(before.elements)) { expect(overlaps(rectOf(c), rectOf(node), 0)).toBe(false); expect(overlaps(rectOf(d), rectOf(node), 0)).toBe(false); }
+  });
+
+  it.each(["new → established", "established → new", "two independent components"])("grows locally for %s without changing any established coordinate bytes", direction => {
+    const { state, before, key, add, connect, projection } = neighborhoodUpdate();
+    add("b"); add("b-tip"); connect("b-tip-link", "b-tip", "b");
+    if (direction === "established → new") connect("boundary-b", "catalyst", "b");
+    else connect("boundary-b", "b", "catalyst");
+    const components = [["b", "b-tip", "catalyst"]];
+    if (direction === "two independent components") {
+      add("d"); add("d-tip"); connect("d-tip-link", "d", "d-tip");
+      connect("boundary-d", "alternative-path", "d");
+      components.push(["d", "d-tip", "alternative-path"]);
+    }
+    const coordinates = (spatial: typeof before) => JSON.stringify(Object.keys(before.elements).map(id => spatial.elements[id]!.position));
+    const bytes = coordinates(before), input = JSON.stringify([state, projection]);
+    freeze(before); freeze(state); freeze(projection);
+    const after = advanceSpatial(before, state, projection);
+    expect(coordinates(after)).toBe(bytes);
+    expect(JSON.stringify([state, projection])).toBe(input);
+    const reordered = structuredClone(state), core = reordered.knowledge.cores.catalysts!;
+    core.objects = Object.fromEntries(Object.entries(core.objects).reverse());
+    core.relations = Object.fromEntries(Object.entries(core.relations).reverse());
+    expect(advanceSpatial(before, reordered, projection)).toEqual(after);
+    for (const [first, second, anchorId] of components) {
+      const anchor = before.elements[key(anchorId!)]!;
+      for (const id of [first!, second!]) {
+        const element = after.elements[key(id)]!;
+        expect(element.anchorKey).toBe(anchor.key);
+        expect(element.position.x).toBe(anchor.position.x);
+        expect(element.position.y).toBeGreaterThan(anchor.position.y);
+        expect(element.position.y).toBeLessThan(anchor.position.y + 650);
+      }
+    }
+    const rectangles = Object.values(after.elements).map(rectOf);
+    rectangles.forEach((rect, i) => rectangles.slice(i + 1).forEach(other => expect(overlaps(rect, other, 0)).toBe(false)));
+  });
+
+  it("selects a deterministic local endpoint for a component touching multiple established objects", () => {
+    const { state, core, before, key, add, connect, projection } = neighborhoodUpdate();
+    add("b"); connect("z", "b", "alternative-path"); connect("a", "catalyst", "b");
+    const after = advanceSpatial(freeze(before), state, projection);
+    core.objects = Object.fromEntries(Object.entries(core.objects).reverse());
+    core.relations = Object.fromEntries(Object.entries(core.relations).reverse());
+    expect(advanceSpatial(before, state, projection)).toEqual(after);
+    expect(after.elements[key("b")]!.anchorKey).toBe(key("alternative-path"));
+    for (const id of Object.keys(before.elements)) expect(after.elements[id]).toEqual(before.elements[id]);
+  });
+
+  it("falls back to the Core only when no valid established boundary exists", () => {
+    const { state, core, before, key, add, connect, projection } = neighborhoodUpdate();
+    add("b"); connect("invalid-link", "b", "catalyst");
+    core.relations["invalid-link"]!.status = "invalidated";
+    connect("missing-endpoint", "absent", "b");
+    const after = advanceSpatial(freeze(before), state, projection);
+    expect(after.elements[key("b")]!.anchorKey).toBe(semanticKey(state.sessionId, coreRef(core.id)));
+    for (const id of Object.keys(before.elements)) expect(after.elements[id]).toEqual(before.elements[id]);
   });
 
   it("preserves new/parked/refocused Core origins and does not duplicate their nodes", () => {
@@ -113,6 +185,32 @@ describe("spatial memory and authority", () => {
     expect(projectCanvas(hidden!.state, hidden!.projection, next).nodes.some(n => n.data.spatialKey === key)).toBe(false);
     expect(projectCanvas(hidden!.state, hidden!.projection, next, "kinetics").nodes.some(n => n.data.spatialKey === key)).toBe(true);
     expect(hidden!.state.knowledge.cores.kinetics!.supports["rate-observation"]).toBeDefined();
+  });
+
+  it.each([{ width: 1280, height: 520 }, { width: 390, height: 520 }])("frames the rendered historical Support when inspecting a parked Core at $width × $height", surface => {
+    const steps = scenario("support").steps;
+    let spatial = emptySpatial(steps[0]!.state.sessionId);
+    for (const step of steps) spatial = advanceSpatial(spatial, step.state, step.projection);
+    const { state, projection } = steps.at(-1)!;
+    const input = JSON.stringify([state, projection, spatial]);
+    freeze(state); freeze(projection); freeze(spatial);
+    expect(state.knowledge.currentCoreId).toBe("arrhenius");
+    const key = semanticKey(state.sessionId, { kind: "SUPPORT", coreId: "kinetics", id: "rate-observation" });
+    expect(projectCanvas(state, projection, spatial).nodes.some(n => n.data.spatialKey === key)).toBe(false);
+    const rendered = projectCanvas(state, projection, spatial, "kinetics").nodes.filter(n => n.data.coreId === "kinetics");
+    expect(rendered.find(n => n.data.spatialKey === key)?.data).toMatchObject({ parked: true, inspected: true });
+    const rects = inspectionRects(state, projection, spatial, "kinetics");
+    expect(rects).toEqual(rendered.map(n => rectOf(spatial.elements[n.data.spatialKey]!)));
+    const support = rectOf(spatial.elements[key]!);
+    expect(rects).toContainEqual(support);
+    const camera = inspectRegion(emptyProjector(), rects, surface).command!.target;
+    for (const rect of rects) {
+      expect(rect.x * camera.zoom + camera.x).toBeGreaterThanOrEqual(0);
+      expect((rect.x + rect.width) * camera.zoom + camera.x).toBeLessThanOrEqual(surface.width);
+      expect(rect.y * camera.zoom + camera.y).toBeGreaterThanOrEqual(0);
+      expect((rect.y + rect.height) * camera.zoom + camera.y).toBeLessThanOrEqual(surface.height);
+    }
+    expect(JSON.stringify([state, projection, spatial])).toBe(input);
   });
 
   it("uses retained measurements for future collision tests without moving established geometry", () => {
