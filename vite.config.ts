@@ -1,6 +1,7 @@
 import { interpretationDeadlines } from "./src/lesson-stream/runtime-policy.ts";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import { m4bDevEntry } from "./src/dev/m4b-canvas/entry.ts";
 import { createSpeechmaticsJWT } from "@speechmatics/auth";
 import { estimateTeachingCost, requestOpenAITeachingInterpretation } from "./server/teaching/openai-interpreter.ts";
 
@@ -31,7 +32,7 @@ export default defineConfig(({ mode }) => {
   const apiKey = env.SPEECHMATICS_API_KEY;
   const deadlines = interpretationDeadlines(env.VITE_TEACHING_DIAGNOSTIC_DEADLINE_MS, mode === "development");
   return {
-  plugins: [react(), {
+  plugins: [react(), m4bDevEntry(), {
     name: "speechmatics-token-endpoint",
     configureServer(server) {
       server.middlewares.use("/api/speechmatics/token", async (request, response) => {
