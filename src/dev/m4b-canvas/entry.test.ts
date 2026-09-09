@@ -13,6 +13,16 @@ it("selects the separate harness entry only for its exact development URL", asyn
     expect(harness).not.toContain('src="/src/main.tsx"');
     expect(normal).toContain('src="/src/main.tsx"');
     expect(normal).not.toContain("m4b-canvas");
+    // Vite's SPA fallback rewrites req.url before the HTML middleware runs.
+    // The requested route survives only in originalUrl.
+    for (const originalUrl of ["/dev/m4b-canvas", "/dev/m4b-canvas?review=1"]) {
+      const fallback = await server.transformIndexHtml("/index.html", html, originalUrl);
+      expect(fallback).toContain('src="/src/dev/m4b-canvas/main.tsx"');
+      expect(fallback).not.toContain('src="/src/main.tsx"');
+    }
+    const sessionFallback = await server.transformIndexHtml("/index.html", html, "/session");
+    expect(sessionFallback).toContain('src="/src/main.tsx"');
+    expect(sessionFallback).not.toContain("m4b-canvas");
   } finally { await server.close(); }
 });
 it("disables the entry transform for production builds", () => {

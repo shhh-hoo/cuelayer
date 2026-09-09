@@ -7,9 +7,15 @@ export function m4bDevEntry(): Plugin {
   return {
     name: "m4b-dev-entry",
     apply: "serve",
-    transformIndexHtml(html, context) {
-      return context.path === "/dev/m4b-canvas"
-        ? html.replace('src="/src/main.tsx"', 'src="/src/dev/m4b-canvas/main.tsx"') : html;
+    transformIndexHtml: {
+      // Select the entry before Vite discovers and preloads module scripts.
+      order: "pre",
+      handler(html, context) {
+        // SPA fallback changes path to /index.html; originalUrl retains the route.
+        const path = (context.originalUrl ?? context.path).split("?")[0];
+        return path === "/dev/m4b-canvas"
+          ? html.replace('src="/src/main.tsx"', 'src="/src/dev/m4b-canvas/main.tsx"') : html;
+      },
     },
   };
 }
