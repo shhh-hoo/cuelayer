@@ -233,7 +233,6 @@ const group2Review = state([
   {
     id: "group2",
     objects: [["reactivity", "Group 2 metals become more reactive down the group."], ["hydroxides", "Group 2 hydroxides show a solubility trend down the group."], ["carbonates", "Group 2 carbonates show a thermal-stability trend down the group." ]],
-    relations: [["reactivity-ie", "Decreasing ionisation energy contributes to the reactivity trend.", "reactivity", "reactivity"]],
   },
 ], "group2");
 
