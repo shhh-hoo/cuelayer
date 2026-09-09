@@ -13,9 +13,15 @@ export type RepresentationKind =
   | "CHEMICAL_EQUATION"
   | "MOLECULE_2D"
   | "FUNCTION_PLOT"
+  | "PLOT"
   | "TABLE"
   | "DIAGRAM"
-  | "APPARATUS";
+  | "APPARATUS"
+  | "CODE"
+  | "SOURCE_TEXT"
+  | "IMAGE"
+  | "MAP"
+  | "TIMELINE";
 
 export type RepresentationIntent = {
   id: string;
@@ -30,10 +36,16 @@ export type WorkBlockKind =
   | "EQUATION"
   | "TABLE"
   | "GRAPH"
+  | "PLOT"
   | "OBSERVATION"
   | "MOLECULE"
   | "DIAGRAM"
-  | "APPARATUS";
+  | "APPARATUS"
+  | "CODE"
+  | "SOURCE_TEXT"
+  | "IMAGE"
+  | "MAP"
+  | "TIMELINE";
 
 export type WorkBlock = {
   id: string;
@@ -134,12 +146,26 @@ export type ForbiddenProjectionBehavior =
   | "PERSIST_WORK_AS_KNOWLEDGE"
   | "INVENT_UNGROUNDED_SURFACE"
   | "SHOW_ALL_AVAILABLE_REPRESENTATIONS"
-  | "INFER_LEARNER_EMOTION";
+  | "INFER_LEARNER_EMOTION"
+  | "COLLAPSE_COMPETING_INTERPRETATIONS"
+  | "REPLACE_PRIMARY_SOURCE_WITH_SUMMARY";
+
+export type ProjectionSubject =
+  | "CHEMISTRY"
+  | "MATHEMATICS"
+  | "PHYSICS"
+  | "BIOLOGY"
+  | "COMPUTER_SCIENCE"
+  | "ECONOMICS"
+  | "HISTORY"
+  | "ENGLISH_LANGUAGE"
+  | "GEOGRAPHY";
 
 export type LearnerProjectionFixture = {
   id: string;
   source: {
     family: "CAMBRIDGE" | "RSC" | "MIT_OCW";
+    subject?: ProjectionSubject;
     title: string;
     url: string;
   };
@@ -187,7 +213,9 @@ function sameRef(a: SemanticReference | undefined, b: SemanticReference | undefi
 
 function illegalProjectionKeys(value: unknown, path = "projection"): string[] {
   if (!value || typeof value !== "object") return [];
-  const forbidden = new Set(["active", "retained", "focusId", "x", "y", "opacity", "html", "svg", "teachingStyle"]);
+  const forbidden = new Set([
+    "active", "retained", "focusId", "x", "y", "opacity", "html", "svg", "teachingStyle", "emotion", "learnerEmotion",
+  ]);
   const errors: string[] = [];
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
     if (forbidden.has(key)) errors.push(`${path}.${key}`);
