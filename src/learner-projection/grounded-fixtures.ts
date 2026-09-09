@@ -1,12 +1,17 @@
 import type { LearnerProjectionFixture, ProjectionCandidate } from "./contracts.ts";
-import { M4A_LEARNER_PROJECTION_FIXTURES as RESEARCH_FIXTURES } from "./fixtures.ts";
+import { M4A_LEARNER_PROJECTION_FIXTURES as CHEMISTRY_FIXTURES } from "./fixtures.ts";
+import { M4A_CROSS_DISCIPLINE_FIXTURES } from "./cross-discipline-fixtures.ts";
+
+export const M4A_RESEARCH_LEARNER_PROJECTION_FIXTURES: LearnerProjectionFixture[] = [
+  ...CHEMISTRY_FIXTURES,
+  ...M4A_CROSS_DISCIPLINE_FIXTURES,
+];
 
 /**
  * The research scenarios state what should be visible. This harness supplies
- * synthetic committed-evidence identities for every non-text representation
- * and Work Surface block so the M4A consumer contract never invents a surface
- * from Core text alone. Production candidate generation is intentionally out
- * of scope for this PR.
+ * synthetic committed-evidence identities for every representation and Work
+ * Surface block so the M4A consumer contract never invents a surface from Core
+ * text alone. Production candidate generation is intentionally out of scope.
  */
 function groundedCandidates(fixture: LearnerProjectionFixture): ProjectionCandidate[] {
   const representations: ProjectionCandidate[] = fixture.expected.attention.representations.map(item => ({
@@ -27,7 +32,7 @@ function groundedCandidates(fixture: LearnerProjectionFixture): ProjectionCandid
   return [...representations, ...work];
 }
 
-export const M4A_GROUNDED_LEARNER_PROJECTION_FIXTURES: LearnerProjectionFixture[] = RESEARCH_FIXTURES.map(fixture => {
+export const M4A_GROUNDED_LEARNER_PROJECTION_FIXTURES: LearnerProjectionFixture[] = M4A_RESEARCH_LEARNER_PROJECTION_FIXTURES.map(fixture => {
   const candidates = groundedCandidates(fixture);
   const committedEvidenceCheckpointIds = [...new Set(candidates.flatMap(candidate => candidate.evidenceCheckpointIds))];
   return {
