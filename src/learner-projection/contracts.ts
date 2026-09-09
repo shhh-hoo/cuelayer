@@ -7,45 +7,24 @@ import type { PresentationMode } from "../session/presentation-mode.ts";
  * durable Active/Retained/focus-style slots are intentionally absent.
  */
 
-export type RepresentationKind =
-  | "TEXT"
-  | "MATH"
-  | "CHEMICAL_EQUATION"
-  | "MOLECULE_2D"
-  | "FUNCTION_PLOT"
-  | "PLOT"
-  | "TABLE"
-  | "DIAGRAM"
-  | "APPARATUS"
-  | "CODE"
-  | "SOURCE_TEXT"
-  | "IMAGE"
-  | "MAP"
-  | "TIMELINE";
+export const REPRESENTATION_KINDS = [
+  "TEXT", "MATH", "CHEMICAL_EQUATION", "MOLECULE_2D", "PLOT", "TABLE", "DIAGRAM", "APPARATUS", "CODE", "SOURCE_TEXT", "IMAGE", "MAP", "TIMELINE",
+] as const;
+export type RepresentationKind = typeof REPRESENTATION_KINDS[number];
 
 export type RepresentationIntent = {
   id: string;
   kind: RepresentationKind;
+  /** COMPARE may give multiple representations co-primary (dominant) attention. */
   role: "dominant" | "companion";
   /** Optional semantic anchor. Rendered HTML/SVG/coordinates never belong here. */
   target?: SemanticReference;
 };
 
-export type WorkBlockKind =
-  | "TEXT"
-  | "EQUATION"
-  | "TABLE"
-  | "GRAPH"
-  | "PLOT"
-  | "OBSERVATION"
-  | "MOLECULE"
-  | "DIAGRAM"
-  | "APPARATUS"
-  | "CODE"
-  | "SOURCE_TEXT"
-  | "IMAGE"
-  | "MAP"
-  | "TIMELINE";
+export const WORK_BLOCK_KINDS = [
+  "TEXT", "EQUATION", "TABLE", "PLOT", "OBSERVATION", "MOLECULE", "DIAGRAM", "APPARATUS", "CODE", "SOURCE_TEXT", "IMAGE", "MAP", "TIMELINE",
+] as const;
+export type WorkBlockKind = typeof WORK_BLOCK_KINDS[number];
 
 export type WorkBlock = {
   id: string;
@@ -60,12 +39,18 @@ export type EphemeralWorkSurface = {
 };
 
 /**
- * Grounded, non-authoritative surface candidates supplied by the host/runtime.
- * M4A does not define their producer. A later producer may be deterministic,
- * teacher-controlled or model-assisted, but every transient candidate must be
- * tied to committed evidence and can be ignored by the learner projection.
+ * Grounded, non-authoritative, discardable candidates from the host or a domain Skill.
+ * A Skill may use any internal mechanism, including a model; automatic output
+ * must converge to this typed, grounded, validated structured boundary.
+ * Producer metadata grants no authority. New truth-bearing claims, relations,
+ * interpretations or corrections must return through semantic interpretation,
+ * grounding and verification before they can become accepted lesson knowledge.
+ * Selection never promotes a candidate to Core or Cue.
  */
-export type ProjectionCandidate =
+export type ProjectionCandidate = {
+  /** Optional extension seam; no Skill runtime or producer taxonomy in M4A. */
+  producer?: { skillId: string };
+} & (
   | {
       candidateType: "REPRESENTATION";
       id: string;
@@ -80,25 +65,30 @@ export type ProjectionCandidate =
       status: WorkBlock["status"];
       semanticRefs: SemanticReference[];
       evidenceCheckpointIds: string[];
-    };
+    }
+);
 
 export type ProjectionTransition = {
   /** Whether learner-visible knowledge advances or the established context is held. */
   knowledge: "PRESERVE" | "ADVANCE";
-  /** FOCUS is ordinary teaching; COMPARE and WIDEN are deliberate wider frames. */
+  /** FOCUS: one neighborhood; COMPARE: co-primary targets; WIDEN: broader established structure. */
   framing: "FOCUS" | "COMPARE" | "WIDEN";
-  /** PAIR keeps one dominant representation and adds a justified companion. */
+  /** PAIR adds a justified companion, or a co-primary representation in COMPARE. */
   representation: "KEEP" | "SWITCH" | "PAIR";
 };
 
-export type LearnerNavigationState =
-  | { mode: "FOLLOW_LIVE" }
-  | { mode: "INSPECTING_HISTORY"; coreId: string };
-
-export type NavigationIntent = {
-  camera: "FOLLOW_ATTENTION" | "PRESERVE_VIEW";
-  liveReturn: "HIDDEN" | "AVAILABLE" | "EMPHASIZED";
-};
+/**
+ * The shared classroom projector follows accepted teaching attention, never raw
+ * speech. This expresses intent only; visibility thresholds, layout, geometry
+ * and camera execution belong to M4B.
+ */
+export type SharedProjectorIntent =
+  /** Teaching attention remains comfortably visible, including during a tangent. */
+  | "PRESERVE_VIEW"
+  /** Accepted attention leaves the useful view; follow without a new composition. */
+  | "FOLLOW_ATTENTION"
+  /** A comparison, widening, Core shift or teacher refocus needs a new composition. */
+  | "REFRAME_ATTENTION";
 
 export type RecentSemanticChange = {
   ref: SemanticReference;
@@ -107,13 +97,13 @@ export type RecentSemanticChange = {
 
 export type LearnerProjectionInput = {
   state: CoreTeachingState;
+  /** Already accepted semantic/attention changes; raw speech is never an attention input. */
   recentChanges: RecentSemanticChange[];
   /** Exact committed evidence identities available to this projection turn. */
   committedEvidenceCheckpointIds?: string[];
   /** Optional transient candidates are inputs, never accepted lesson state. */
   candidates?: ProjectionCandidate[];
   presentationMode: PresentationMode;
-  navigation: LearnerNavigationState;
   viewport: { width: number; height: number };
   previousProjection?: LearnerProjection;
 };
@@ -121,6 +111,7 @@ export type LearnerProjectionInput = {
 export type LearnerProjection = {
   attention: {
     anchor?: SemanticReference;
+    /** Co-primary semantic targets in COMPARE; none is demoted to context. */
     emphasis: SemanticReference[];
     context: SemanticReference[];
     /** Support is semantic history; omission from attention never deletes it. */
@@ -130,7 +121,7 @@ export type LearnerProjection = {
   };
   workSurface?: EphemeralWorkSurface;
   transition: ProjectionTransition;
-  navigation: NavigationIntent;
+  projector: SharedProjectorIntent;
   /** Derived role only: every established Core except currentCoreId. */
   parkedCoreIds: string[];
 };
@@ -141,7 +132,6 @@ export type ForbiddenProjectionBehavior =
   | "TREAT_PARKED_AS_DURABLE_STATUS"
   | "DELETE_SUPPORT_ON_VISUAL_EVICTION"
   | "RELAYOUT_ESTABLISHED_KNOWLEDGE"
-  | "YANK_FROM_HISTORY_INSPECTION"
   | "LEAK_ANSWER_DURING_PRODUCTIVE_STRUGGLE"
   | "PERSIST_WORK_AS_KNOWLEDGE"
   | "INVENT_UNGROUNDED_SURFACE"
@@ -215,6 +205,7 @@ function illegalProjectionKeys(value: unknown, path = "projection"): string[] {
   if (!value || typeof value !== "object") return [];
   const forbidden = new Set([
     "active", "retained", "focusId", "x", "y", "opacity", "html", "svg", "teachingStyle", "emotion", "learnerEmotion",
+    "navigation", "liveReturn", "zoom", "coordinates", "position", "reactFlowId",
   ]);
   const errors: string[] = [];
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
@@ -241,6 +232,27 @@ export function learnerProjectionFixtureErrors(fixture: LearnerProjectionFixture
   }
   if (candidates.length && !committedEvidence.size) errors.push("transient candidates supplied without committed evidence identities");
   for (const candidate of candidates) {
+    if (candidate.candidateType === "REPRESENTATION") {
+      if (!REPRESENTATION_KINDS.includes(candidate.representationKind)) errors.push(`candidate ${candidate.id} has unsupported representation kind`);
+    } else if (candidate.candidateType === "WORK") {
+      if (!WORK_BLOCK_KINDS.includes(candidate.workKind)) errors.push(`candidate ${candidate.id} has unsupported work kind`);
+    } else {
+      errors.push("unsupported candidate type");
+      continue;
+    }
+    const fields = candidate.candidateType === "REPRESENTATION"
+      ? ["candidateType", "id", "representationKind", "target", "evidenceCheckpointIds", "producer"]
+      : ["candidateType", "id", "workKind", "status", "semanticRefs", "evidenceCheckpointIds", "producer"];
+    for (const key of Object.keys(candidate)) {
+      if (!fields.includes(key)) errors.push(`candidate ${candidate.id} has unsupported field ${key}`);
+    }
+    if (candidate.producer && (
+      typeof candidate.producer.skillId !== "string" || !candidate.producer.skillId.trim() ||
+      Object.keys(candidate.producer).some(key => key !== "skillId")
+    )) errors.push(`candidate ${candidate.id} has invalid Skill producer metadata`);
+    for (const path of illegalProjectionKeys(candidate, `candidate:${candidate.id}`)) {
+      errors.push(`renderer/legacy field leaked into contract at ${path}`);
+    }
     if (!candidate.evidenceCheckpointIds.length) errors.push(`candidate ${candidate.id} lacks committed-evidence identity`);
     for (const checkpointId of candidate.evidenceCheckpointIds) {
       if (!committedEvidence.has(checkpointId)) errors.push(`candidate ${candidate.id} references uncommitted evidence ${checkpointId}`);
@@ -262,8 +274,11 @@ export function learnerProjectionFixtureErrors(fixture: LearnerProjectionFixture
   if (expected.attention.support.some(ref => ref.kind !== "SUPPORT")) errors.push("attention.support contains non-Support reference");
 
   const dominantRepresentations = expected.attention.representations.filter(item => item.role === "dominant");
-  if (dominantRepresentations.length > 1) errors.push("more than one dominant representation");
+  if (expected.transition.framing !== "COMPARE" && dominantRepresentations.length > 1) {
+    errors.push("more than one dominant representation outside COMPARE");
+  }
   for (const representation of expected.attention.representations) {
+    if (!REPRESENTATION_KINDS.includes(representation.kind)) errors.push(`representation ${representation.id} has unsupported kind`);
     const candidate = candidates.find(item => item.id === representation.id && item.candidateType === "REPRESENTATION");
     if (!candidate || candidate.candidateType !== "REPRESENTATION") {
       errors.push(`representation ${representation.id} has no grounded transient candidate`);
@@ -275,6 +290,7 @@ export function learnerProjectionFixtureErrors(fixture: LearnerProjectionFixture
   }
 
   for (const block of expected.workSurface?.blocks ?? []) {
+    if (!WORK_BLOCK_KINDS.includes(block.kind)) errors.push(`work block ${block.id} has unsupported kind`);
     const candidate = candidates.find(item => item.id === block.id && item.candidateType === "WORK");
     if (!candidate || candidate.candidateType !== "WORK") {
       errors.push(`work block ${block.id} has no grounded transient candidate`);
@@ -291,12 +307,13 @@ export function learnerProjectionFixtureErrors(fixture: LearnerProjectionFixture
     .sort();
   if (JSON.stringify([...expected.parkedCoreIds].sort()) !== JSON.stringify(derivedParked)) errors.push("parked Core projection is not derived from currentCoreId");
 
-  if (fixture.input.navigation.mode === "INSPECTING_HISTORY") {
-    if (!state.knowledge.cores[fixture.input.navigation.coreId]) errors.push("inspection Core does not exist");
-    if (fixture.input.navigation.coreId === state.knowledge.currentCoreId) errors.push("inspection target is current Core");
-    if (expected.navigation.camera !== "PRESERVE_VIEW") errors.push("history inspection may not be yanked back to live attention");
-  }
-
+  if (!["PRESERVE", "ADVANCE"].includes(expected.transition.knowledge)) errors.push("unsupported knowledge transition");
+  if (!["FOCUS", "COMPARE", "WIDEN"].includes(expected.transition.framing)) errors.push("unsupported attention framing");
+  if (!["PRESERVE_VIEW", "FOLLOW_ATTENTION", "REFRAME_ATTENTION"].includes(expected.projector)) errors.push("unsupported shared projector intent");
+  if (expected.workSurface && expected.workSurface.lifecycle !== "EPHEMERAL") errors.push("Work Surface must remain ephemeral");
+  // Inspect projection context, not accepted state (which legitimately contains cue.active).
+  const { state: _state, ...context } = fixture.input;
+  for (const path of illegalProjectionKeys(context, "input")) errors.push(`renderer/legacy field leaked into contract at ${path}`);
   for (const path of illegalProjectionKeys(expected)) errors.push(`renderer/legacy field leaked into contract at ${path}`);
   if (new Set(fixture.mustNot).size !== fixture.mustNot.length) errors.push("duplicate mustNot behavior");
 
