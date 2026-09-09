@@ -19,10 +19,18 @@ append-only accepted lesson events
         ↓
 deterministic lesson knowledge state
         ↓
-attention / spatial projection
+grounded representation candidates / payloads
+        ↓
+learner projection / attention selection
+        ↓
+visible artifact runtime
+        ↓
+Canvas spatial execution
         ↓
 learner surface
 ```
+
+The representation and spatial stages are non-authoritative projections of accepted lesson state. They may preserve their own visual/artifact/spatial continuity, but they must not become a second lesson-truth store.
 
 AI decision-making has three logically separate responsibilities:
 
@@ -47,8 +55,11 @@ The system must preserve these boundaries:
 - semantic interpretation proposes meaning-bearing knowledge/intervention changes;
 - accepted domain events record what CueLayer accepted as lesson-state change;
 - deterministic reduction reconstructs durable lesson knowledge without provider calls;
-- attention/intervention policy decides what deserves learner attention now;
-- rendering realizes the selected projection;
+- representation production may derive typed, grounded candidate forms and host payloads only from accepted meaning/evidence or other explicitly authorized bases;
+- candidate availability does not itself authorize display; learner projection/attention policy decides which candidates deserve learner attention now and with what role/framing;
+- visible artifact runtime joins selected candidate identity to the latest still-valid grounded payload and preserves artifact continuity without becoming semantic authority;
+- Canvas spatial execution owns measurement, local visual organization, placement, packing, temporary teaching choreography, camera execution and teacher viewport inspection;
+- rendering realizes the selected artifact/spatial scene;
 - trace explains execution but is never replay authority.
 
 ## Durable lesson knowledge
@@ -81,7 +92,7 @@ Exact type names and wire shapes are implementation details. The following seman
 6. A non-current established Core is a Parked Core by role relative to `currentCoreId`. A separate persisted `parked` flag is not required.
 7. Returning to an earlier mainline must be able to continue the existing Core rather than creating a duplicate Core.
 8. Semantic knowledge must not have a fixed product-level capacity merely because the viewport is finite.
-9. Every independently mutable or referenceable semantic entity must have stable lesson-scoped identity that survives content revision. Text content, array position, renderer-local IDs, coordinates, and screen position are not semantic identity.
+9. Every independently mutable or referenceable semantic entity must have stable lesson-scoped identity that survives content revision. Text content, array position, renderer-local IDs, coordinates, screen position, representation IDs and Semantic Space membership are not semantic identity.
 10. Knowledge and Teaching Cue remain independent revision and conflict domains; a knowledge-only change must not create an unrelated Cue conflict, and vice versa.
 
 ## Semantic change contract
@@ -175,7 +186,8 @@ Alpha must not:
 - originate weakly relevant, poorly timed, low-value or answer-leaking learner interventions merely to increase interaction;
 - disclose complete answers that destroy unresolved productive learner work;
 - use hidden syllabus assumptions as if they were teacher evidence;
-- require teacher approval or micromanagement for ordinary learner-surface updates.
+- require teacher approval or micromanagement for ordinary learner-surface updates;
+- treat autonomous AI representation selection or free-form generated markup/media as accepted live authority before the reviewed grounding, artifact-identity, form-selection, timing and failure gates are satisfied.
 
 Teacher speech is the primary classroom signal and immutable evidence of what was said, but not an infallible learner-visible truth boundary. AI controls the learner-facing surface by default; ordinary interventions do not require teacher approval. That autonomy remains contestable: later teaching may clarify, reject, revise, or supersede the AI's interpretation.
 
@@ -195,6 +207,50 @@ Cue targeting may reference a Core, semantic object, relation, comparison, or le
 
 A correction does not automatically create a Cue. Conversely, an evidence-insufficient factual disagreement may independently justify an AI-origin QUESTION/HINT when that is the pedagogically appropriate way to preserve dialogue rather than overwrite truth.
 
+## Teaching Representation
+
+Teaching Representation is the non-authoritative projection layer between accepted lesson meaning and learner-facing rendering. It is not part of Core truth and does not get to introduce semantic claims merely because a visual form would be useful.
+
+The implementation boundary is:
+
+```text
+accepted Core/Cue state + committed grounding
+        ↓
+representation producer / capability logic
+        ↓
+typed grounded candidates + host payloads
+        ↓
+learner projection / attention selection
+        ↓
+selected artifact identities + latest valid payloads
+        ↓
+Canvas spatial execution / renderer
+```
+
+Representation production must preserve these rules:
+
+- a candidate references accepted semantic identities and attributable evidence; availability does not imply visibility;
+- complete renderer payloads may remain host-side and may be richer than the M4A candidate index, but they are discardable projection data rather than lesson truth;
+- selected artifact identity must be stable enough for progressive growth/revision where the same teaching object is still being represented; repeated updates must not silently manufacture unrelated replacement identities;
+- a historical payload must be revalidated against current accepted state before reuse. Invalidated, superseded or no-longer-grounded claims must not survive visually as stale content;
+- representation form changes may switch or pair media without duplicating semantic knowledge;
+- arbitrary model-authored HTML, SVG, CSS, code or executable expressions are not a trusted automatic rendering boundary;
+- new truth-bearing content discovered or invented during representation production must return through semantic interpretation/grounding/verification before it can become learner-visible lesson truth.
+
+The current Teaching Visual Language v0.1 is a product-design working model rather than executable ontology. It may guide capability and renderer design, but it must not be serialized into Core state or treated as an exhaustive runtime enum:
+
+```text
+ESTABLISH  → create or join a local Semantic Space
+RELATE     → graph
+ORGANISE   → spatial grouping
+TRANSFORM  → visible steps while preserving invariants and identity
+COMPARE    → align comparable dimensions and highlight differences
+```
+
+Teaching Moves are separate from representation media. `PLOT`, `TABLE`, `DIAGRAM`, `MATH`, `IMAGE`, `MAP`, `CODE`, `TIMELINE` and similar media describe possible surface forms, not cognitive-move ontology. One medium may serve several moves, and several moves may compose in one teaching moment.
+
+Structured representation should be preferred over accumulating transcript-like prose when accepted meaning has useful internal structure. This does not authorize front-loading branches, classifications, relationships or conclusions the teaching has not yet established.
+
 ## Attention and intervention
 
 Durable semantic state and learner attention are separate. A candidate can be semantically useful without deserving immediate display.
@@ -208,20 +264,40 @@ current Core
 + relevant current Support
 + current Teaching Cue
 + viewport / presentation mode
-+ learner inspection state
++ shared-projector / teacher inspection state
 ```
 
-The Intervention Governor additionally considers teaching phase and natural boundaries, pacing, semantic density, current Cue, recent intervention history/cooldown, learner inspection, presentation mode, intervention urgency, expected pedagogical value, productive-struggle risk, and interruption cost. Its conceptual decisions are `SHOW_NOW | DEFER | MERGE | DROP | QUIET`.
+The Intervention Governor additionally considers teaching phase and natural boundaries, pacing, semantic density, current Cue, recent intervention history/cooldown, shared-projector/teacher inspection, presentation mode, intervention urgency, expected pedagogical value, productive-struggle risk, and interruption cost. Its conceptual decisions are `SHOW_NOW | DEFER | MERGE | DROP | QUIET`.
 
 The Governor should combine deterministic budgets/hard suppression rules with model judgment only where timing is genuinely ambiguous. Interaction count is not a product success metric. Calibration should start conservatively and be tuned from real lesson traces rather than a universal interventions-per-minute rule.
 
 Previously established knowledge may remain visible because current understanding depends on it. That is dynamic necessary context, not a `RETAINED` semantic status.
 
-Parked Cores remain spatially revisitable but default to low or zero attention and may be outside the current viewport. Exact coordinates, measurements, drag state, zoom, viewport, and inspection state belong to Canvas/UI state rather than lesson knowledge.
+Parked Cores remain spatially revisitable but default to low or zero attention and may be outside the current viewport. Exact coordinates, measurements, drag state, zoom, viewport, teacher inspection state, temporary presentation geometry and Semantic Space packing belong to Canvas/UI state rather than lesson knowledge.
 
 The renderer may virtualize old Cores or Support. Virtualization must not delete semantic history.
 
-Renderer vocabulary such as text emphasis, relation layouts, arrows, equations, transforms, grouping, or compact notation is presentation vocabulary, not semantic ontology.
+Renderer vocabulary such as text emphasis, relation layouts, arrows, equations, transforms, grouping, Teaching Moves, representation-media types or compact notation is presentation vocabulary, not semantic ontology.
+
+## Canvas spatial execution
+
+Canvas spatial state is a non-authoritative execution layer. Its job is to keep the learner-facing visual world readable and continuous while consuming accepted projection intent; it must not rewrite semantic meaning to make layout easier.
+
+The current working spatial model groups related visual objects into lightweight local `Semantic Space` neighborhoods. `Semantic Space` is a Canvas/UI concept, not a Core entity, relation type or durable lesson-truth category. The next representation/spatial integration must preserve that boundary even if the exact runtime type or packing algorithm changes.
+
+Current spatial constraints for this design cycle are:
+
+- stable semantic identity is stronger than stable pixel position;
+- local visual membership/topology and recognizable relative geography should remain stable when possible;
+- a local space may expand as teaching adds grounded objects/representations;
+- expansion may minimally displace neighboring spaces to prevent overlap; exact x/y coordinates are not a hard invariant;
+- resolve new spatial pressure incrementally and locally rather than repeatedly applying global re-layout merely to compact or beautify the Canvas;
+- semantic topology, accepted dependencies, current teaching context and established neighborhood continuity should guide placement before generic similarity; visual proximity must never invent a semantic relation;
+- internal grouping regions used for ORGANISE may overlap or nest when that expresses accepted membership, but independently packed Semantic Spaces must not collide in a way that makes unrelated teaching content physically overlap;
+- temporary COMPARE/WIDEN choreography may move selected canonical artifacts into a shared presentation composition and later restore their persistent geography without creating semantic duplicates or Context Echo copies;
+- teacher pan/zoom/history inspection is shared-projector UI state. It may suppress automatic camera execution temporarily but must not change `currentCoreId`, Core truth, Parked role or M4A projection semantics.
+
+Exact Semantic Space membership policy, packing algorithm, persistence across reload/devices, collision strategy and motion parameters remain implementation/evaluation questions. Do not turn one spike's authored coordinates or solver choice into product ontology.
 
 ## Latency boundary
 
@@ -233,7 +309,10 @@ Default direction:
 common path:
 teaching evidence
 → Semantic Interpreter
-→ deterministic acceptance / attention budget
+→ deterministic semantic acceptance
+→ bounded representation candidate production
+→ deterministic validation / attention budget
+→ artifact + spatial execution
 → learner surface
 
 conditional side path:
@@ -242,7 +321,7 @@ possible factual conflict
 → later marked correction or clarification
 ```
 
-A future model-based Governor may be added only if real evidence shows that its timing quality exceeds its latency and complexity cost. Verification latency may be slower than ordinary teaching latency; it must not stall unrelated Core/Cue updates.
+Representation selection or generation must not add a mandatory serial model call to the common path merely for novelty. A future model-based Governor or representation selector may be added only if real evidence shows that its pedagogical/form-selection value exceeds its latency, continuity and failure costs. Verification latency may be slower than ordinary teaching latency; it must not stall unrelated Core/Cue updates.
 
 ## Presentation modes
 
@@ -262,11 +341,15 @@ At runtime, exactly one lesson-domain model is authoritative for a session. Temp
 
 The next Board-domain migration must introduce a versioned event/state contract rather than reusing legacy `SET_ACTIVE` / bounded `Retained` semantics under new names.
 
+Representation-artifact or Canvas spatial persistence, if introduced, is subordinate to the accepted lesson event/state generation. Reloaded visual state must be revalidated/reconstructed against current accepted semantics rather than becoming an independent replay authority.
+
 ## Scheduling and failure recovery
 
 The scheduler must preserve ordered unprocessed evidence. Provider, semantic validation, storage, timeout, cancellation, stale-result, and conflict failures on the common semantic path must not silently consume evidence or erase accepted learner state.
 
-A transient semantic-path failure preserves the last accepted Board and Cue surface until a later valid change is accepted. Independent failure domains should degrade independently wherever technically possible. Verification/Governor side-path failures must not roll back already accepted semantic state, re-open already consumed evidence, or block unrelated subsequent checkpoints. A verification side request is not an accepted lesson event or learner truth; only a later independently verified correction may change durable state.
+A transient semantic-path failure preserves the last accepted Board and Cue surface until a later valid change is accepted. Independent failure domains should degrade independently wherever technically possible. Verification/Governor/representation side-path failures must not roll back already accepted semantic state, re-open already consumed evidence, or block unrelated subsequent checkpoints. A verification side request is not an accepted lesson event or learner truth; only a later independently verified correction may change durable state.
+
+A representation or spatial failure must preserve the last valid learner-visible projection where possible, fail closed rather than render ungrounded replacement content, and remain recoverable from accepted semantic state plus still-valid representation/artifact state.
 
 Exact queue bounds, retry counts, deadlines, context budgets, request envelopes, batching, cooldowns and conflict policy remain executable configuration owned by code and tests.
 
@@ -286,7 +369,9 @@ Normalized verification requests leave the semantic path only after durable acce
 
 ## Diagnostic trace
 
-Trace is diagnostic authority only. It may record speech, checkpoint, request, provider, verification, Governor decision, validation, accepted-event, reduced-state, render, and latency facts, but it must never become domain replay authority or enter the audio hot path in a way that changes product execution.
+Trace is diagnostic authority only. It may record speech, checkpoint, request, provider, verification, Governor decision, representation candidate/selection/artifact, spatial scene, validation, accepted-event, reduced-state, render, and latency facts, but it must never become domain replay authority or enter the audio hot path in a way that changes product execution.
+
+Adding representation/spatial trace events must follow the same rule: trace may explain candidate availability, selection, artifact continuity, grounding rejection, placement/choreography and final visibility, but missing trace data cannot change representation validity, lesson truth or replay.
 
 See `docs/TRACE.md`.
 
@@ -306,9 +391,15 @@ Repository changes that affect live teaching must preserve or deliberately migra
 - trace isolation from domain truth and the speech hot path;
 - current semantic state not bounded by viewport capacity;
 - attention policy not silently deleting semantic knowledge;
+- representation candidates/payloads remain grounded, non-authoritative and revalidated against current accepted state before historical reuse;
+- candidate availability remains separate from M4A learner-attention selection;
+- artifact identity may preserve visual continuity without becoming semantic identity;
+- Teaching Moves, representation media and Semantic Space geometry do not enter durable Core ontology merely to simplify rendering;
+- local spatial growth avoids unrelated overlap without requiring immutable pixel coordinates or continual global re-layout;
+- temporary teaching choreography does not create duplicate semantic truth or Context Echo copies;
 - auxiliary intelligence not unnecessarily extending the common learner-visible critical path.
 
-Engineering checks, offline evaluation, and synthetic browser fixtures do not by themselves establish real-lesson acceptance.
+Engineering checks, offline evaluation, synthetic browser fixtures and cross-discipline authored representation stories do not by themselves establish real-lesson acceptance.
 
 ## Transitional legacy implementation
 
@@ -318,7 +409,7 @@ Those shapes are compatibility/implementation debt, not product authority. Until
 
 - do not add new product behavior that depends on `Retained <= 2` or global `Support <= 2`;
 - do not treat `topic_shift -> clear previous context` as the desired product behavior;
-- do not promote renderer display vocabulary into the new semantic schema;
+- do not promote renderer display vocabulary, Teaching Moves, representation media or Semantic Spaces into the semantic schema;
 - preserve replay/tests for historical event versions while introducing the new version intentionally;
 - keep the current runtime reviewable and failure-safe while migration is in progress.
 
