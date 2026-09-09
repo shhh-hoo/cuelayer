@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
-import { BaseEdge, getSmoothStepPath, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, ViewportPortal, useReactFlow, type EdgeProps, type Node, type NodeProps } from "@xyflow/react";
+import { BaseEdge, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, ViewportPortal, useReactFlow, type EdgeProps, type Node, type NodeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { bounds, type Point, type Size, type Viewport } from "../../canvas-spatial/geometry.ts";
 import { CHOREOGRAPHY_SCENARIOS, type ChoreographyStep } from "./scenarios.ts";
@@ -8,14 +8,19 @@ import { GAP, measureItems, minimumFont, prepareTeachingFrame, readableRegion, t
 import { compositionMetrics } from "./metrics.ts";
 import type { SolverId } from "./solvers.ts";
 import HomeMap from "./HomeMap.tsx";
+import { isComposition, visualLayer, type VisualLayer } from "./presentation.ts";
+import { routeRelation, type RelationBox } from "./relations.ts";
+import { planMotion, sampleMotion, type MotionBox } from "./motion.ts";
 import "./choreography.css";
 
-type NodeData = TeachingItem & { font: number; presentation: boolean; home?: Point; receded: boolean };
+type NodeData = TeachingItem & { font: number; presentation: boolean; home?: Point; layer: VisualLayer; framing: TeachingFrame["scene"]["framing"] };
 type TeachingNode = Node<NodeData, "knowledge">;
+const MOTION_MS = 320;
 const SOLVERS: { id: SolverId; name: string }[] = [{ id: "baseline", name: "Measured baseline" }, { id: "webcola", name: "WebCola" }, { id: "elk", name: "ELK" }];
 function KnowledgeNode({ data }: NodeProps<TeachingNode>) {
   const instance = useId();
-  return <article className="choreo-node" data-kind={data.kind} data-role={data.role} data-receded={data.receded}
+  return <article className="choreo-node" data-kind={data.kind} data-role={data.role} data-layer={data.layer} data-framing={data.framing}
+    aria-hidden={data.layer === "suppressed" || undefined}
     data-canonical-id={data.id} data-render-instance={instance} data-presentation={data.presentation}
     style={{ "--teaching-font": `${data.font}px` } as CSSProperties}>
     {data.presentation && data.coreId && data.kind !== "CORE" && <div className="choreo-origin">{data.coreId.replaceAll("-", " ")}</div>}
@@ -25,12 +30,7 @@ function KnowledgeNode({ data }: NodeProps<TeachingNode>) {
   </article>;
 }
 function RelationEdge(props: EdgeProps) {
-  const [direct] = getSmoothStepPath({ ...props, borderRadius: 14, offset: 14 });
-  const corridor = props.data?.corridorY as number | undefined;
-  const sourceExit = props.sourceX + (props.sourcePosition === Position.Left ? -16 : 16);
-  const targetEntry = props.targetX + (props.targetPosition === Position.Left ? -16 : 16);
-  const path = corridor === undefined ? direct : `M${props.sourceX},${props.sourceY} L${sourceExit},${props.sourceY} L${sourceExit},${corridor} L${targetEntry},${corridor} L${targetEntry},${props.targetY} L${props.targetX},${props.targetY}`;
-  return <BaseEdge path={path} markerEnd={props.markerEnd} style={props.style} />;
+  return <BaseEdge path={props.data?.path as string ?? ""} markerEnd={props.markerEnd} style={props.style} />;
 }
 const nodeTypes = { knowledge: KnowledgeNode };
 const edgeTypes = { relation: RelationEdge };
@@ -58,7 +58,14 @@ function CanvasPane({ step, solver, homesVisible, diagnostics, reduced, workMode
   const [state, setState] = useState(controller.current);
   const [renderPositions, setRenderPositions] = useState<Record<string, Point>>({});
   const positions = useRef(renderPositions);
+  const renderedGeometry = useRef<Record<string, MotionBox>>({});
+  const [travelGeometry, setTravelGeometry] = useState<Record<string, MotionBox>>({});
+  const [motionNote, setMotionNote] = useState("");
   const animation = useRef(0);
+  const lastComposition = useRef<string[]>([]);
+  const returning = useRef<string[]>([]);
+  const [returningIds, setReturningIds] = useState<string[]>([]);
+  const [moving, setMoving] = useState(false);
   const generation = useRef(0);
   const pendingSolve = useRef(false);
   const pendingFollow = useRef(false);
@@ -80,20 +87,39 @@ function CanvasPane({ step, solver, homesVisible, diagnostics, reduced, workMode
   useEffect(() => () => stop(), [stop]);
   const move = useCallback((frame: TeachingFrame) => {
     stop();
-    const target = Object.fromEntries(frame.scene.items.map(item => [item.id,
-      frame.positions[item.id] ?? homes.current.positions[item.id] ?? { x: 0, y: 0 }]));
-    const start = Object.fromEntries(Object.entries(target).map(([id, end]) => [id, positions.current[id] ?? end]));
+    const selected = isComposition(frame) ? frame.scene.required : [];
+    // Travel retains only visual IDs. Attention/primary roles always come from
+    // the newest visible frame, including accepted semantic refocus.
+    returning.current = selected.length ? [] : lastComposition.current.length ? lastComposition.current : returning.current;
+    lastComposition.current = selected;
+    setReturningIds(returning.current); setMoving(true);
+    const target = Object.fromEntries(frame.scene.items.map(item => [item.id, {
+      ...(frame.positions[item.id] ?? homes.current.positions[item.id] ?? { x: 0, y: 0 }),
+      ...frame.sizes[item.id]!, presentation: Boolean((isComposition(frame) || workMode === "attached") && frame.scene.required.includes(item.id)),
+    }]));
+    const start = Object.fromEntries(frame.scene.items.map(item => {
+      const old = renderedGeometry.current[item.id] ?? target[item.id]!;
+      // Keep the current accepted role/text, but measure it at its travelling
+      // width. Only visual geometry and provenance wait for the phase boundary.
+      const size = measureItems([item], old.width, frame.compact ?? compact, old.presentation)[item.id]!;
+      return [item.id, { ...old, ...size }];
+    }));
+    const motion = planMotion(start, target, frame.scene.items.filter(item => item.durable
+      && (selected.includes(item.id) || returning.current.includes(item.id))).map(item => item.id));
+    setMotionNote(motion.note);
     const started = performance.now();
     const tick = (time: number) => {
-      const progress = effectiveReduced ? 1 : Math.min(1, (time - started) / 240);
+      const progress = effectiveReduced ? 1 : Math.min(1, (time - started) / MOTION_MS);
       const easing = progress * progress * (3 - 2 * progress);
-      const next = Object.fromEntries(Object.entries(target).map(([id, end]) => [id,
-        { x: start[id]!.x + (end.x - start[id]!.x) * easing, y: start[id]!.y + (end.y - start[id]!.y) * easing }]));
+      const geometry = sampleMotion(motion, easing);
+      const next = Object.fromEntries(Object.entries(geometry).map(([id, box]) => [id, { x: box.x, y: box.y }]));
+      setTravelGeometry(geometry); renderedGeometry.current = geometry;
       positions.current = next; setRenderPositions(next);
       animation.current = progress < 1 ? requestAnimationFrame(tick) : 0;
+      if (progress === 1) { returning.current = []; setReturningIds([]); setMoving(false); }
     };
     tick(started);
-  }, [effectiveReduced, stop]);
+  }, [effectiveReduced, stop, workMode, compact]);
   const frameCamera = useCallback((frame: TeachingFrame, ids = frame.scene.required) => {
     const area = bounds(frame.scene.items.filter(item => ids.includes(item.id) && frame.sizes[item.id])
       .map(item => ({ ...(frame.positions[item.id] ?? homes.current.positions[item.id] ?? { x: 0, y: 0 }), ...frame.sizes[item.id]! })));
@@ -103,7 +129,7 @@ function CanvasPane({ step, solver, homesVisible, diagnostics, reduced, workMode
     // remain at full type size, aligned to the start and explicitly marked FAIL.
     const target = { x: 20 + Math.max(0, (region.width - area.width) / 2) - area.x,
       y: 44 + Math.max(0, (region.height - area.height) / 2) - area.y, zoom: 1 };
-    setCamera(target); void setViewport(target, { duration: effectiveReduced ? 0 : 240, interpolate: "linear" });
+    setCamera(target); void setViewport(target, { duration: effectiveReduced ? 0 : MOTION_MS, interpolate: "linear" });
   }, [surface, setViewport, effectiveReduced]);
   useEffect(() => {
     if (!surface.width || !surface.height) return;
@@ -160,41 +186,47 @@ function CanvasPane({ step, solver, homesVisible, diagnostics, reduced, workMode
   }, [homeRequest, move, frameCamera, save]);
   const visible = state.visible;
   const visibleCompact = visible?.compact ?? compact;
+  const drawnSizes = useMemo(() => Object.fromEntries(Object.entries(visible?.sizes ?? {}).map(([id, size]) =>
+    [id, moving && travelGeometry[id] ? { width: travelGeometry[id]!.width, height: travelGeometry[id]!.height } : size])), [visible, moving, travelGeometry]);
   const metrics = useMemo(() => visible ? compositionMetrics(visible.scene.items.filter(item => item.visible).map(item => ({ id: item.id,
     home: homes.current.positions[item.id], position: renderPositions[item.id] ?? visible.positions[item.id] ?? homes.current.positions[item.id] ?? { x: 0, y: 0 },
-    ...(visible.sizes[item.id] ?? { width: 1, height: 1 }), fontSize: teachingFont(item, visibleCompact), minimumFontSize: minimumFont(item, compact),
+    ...(drawnSizes[item.id] ?? { width: 1, height: 1 }), fontSize: teachingFont(item, visibleCompact), minimumFontSize: minimumFont(item, compact),
     required: visible.scene.required.includes(item.id) })), visible.scene.edges, readableRegion(surface), GAP, camera.zoom,
-    originalHomes.current, homes.current.positions) : undefined, [visible, renderPositions, camera.zoom, surface, compact, visibleCompact]);
-  const composition = visible && ["COMPARE", "WIDEN"].includes(visible.scene.framing);
+    originalHomes.current, homes.current.positions) : undefined, [visible, drawnSizes, renderPositions, camera.zoom, surface, compact, visibleCompact]);
+  const composition = Boolean(visible && isComposition(visible));
+  const presentationActive = composition || returningIds.length > 0;
   const nodes: TeachingNode[] = (visible?.scene.items ?? []).filter(item => item.visible).map(item => ({ id: item.id, type: "knowledge",
     position: renderPositions[item.id] ?? visible!.positions[item.id] ?? homes.current.positions[item.id] ?? { x: 0, y: 0 },
-    style: { width: visible!.sizes[item.id]!.width }, data: { ...item, font: teachingFont(item, visibleCompact),
-      presentation: Boolean((composition || workMode === "attached") && visible!.scene.required.includes(item.id)),
-      home: homes.current.positions[item.id], receded: Boolean(item.durable && composition && !visible!.scene.required.includes(item.id) && visible!.inspectedCoreId !== item.coreId) } }));
+    style: { width: drawnSizes[item.id]!.width }, data: { ...item, font: teachingFont(item, visibleCompact),
+      presentation: moving && travelGeometry[item.id] ? travelGeometry[item.id]!.presentation
+        : Boolean((composition || workMode === "attached") && visible!.scene.required.includes(item.id)),
+      home: homes.current.positions[item.id], layer: visualLayer(item, visible!, returningIds), framing: visible!.scene.framing } }));
+  renderedGeometry.current = Object.fromEntries(nodes.map(node => [node.id, { ...node.position, ...drawnSizes[node.id]!, presentation: node.data.presentation }]));
+  const boxes: RelationBox[] = nodes.map(node => ({ id: node.id, x: node.position.x, y: node.position.y, ...drawnSizes[node.id]! }));
+  const selectedBoxes = boxes.filter(box => visible!.scene.required.includes(box.id));
   const edges = (visible?.scene.edges ?? []).filter(edge => nodes.some(node => node.id === edge.source) && nodes.some(node => node.id === edge.target)
     && (!composition || visible!.scene.required.includes(edge.source) && visible!.scene.required.includes(edge.target)))
-    .map(edge => {
-      const source = nodes.find(node => node.id === edge.source)!, target = nodes.find(node => node.id === edge.target)!;
-      const sourceRight = source.position.x + visible!.sizes[source.id]!.width;
-      const targetRight = target.position.x + visible!.sizes[target.id]!.width;
-      // Face one another across a row gap. Stacked objects use the outside
-      // right-hand corridor, as in the unchanged Option 2 reference.
-      const leftToRight = sourceRight <= target.position.x;
-      const rightToLeft = targetRight <= source.position.x;
-      const selected = nodes.filter(node => visible!.scene.required.includes(node.id));
-      const spansText = (leftToRight || rightToLeft) && selected.some(node => node.id !== source.id && node.id !== target.id
-        && node.position.x > Math.min(source.position.x, target.position.x) && node.position.x < Math.max(source.position.x, target.position.x));
-      return { ...edge, type: "relation", sourceHandle: rightToLeft ? "left" : "right", targetHandle: leftToRight ? "left" : "right",
-        data: { corridorY: spansText ? Math.min(...selected.map(node => node.position.y)) - 24 : undefined },
-        ariaLabel: edge.label, style: { stroke: "#499573", strokeWidth: 2.5 },
-        markerEnd: { type: MarkerType.Arrow, color: "#499573", width: 18, height: 18 } };
+    .flatMap(edge => {
+      const route = routeRelation(boxes.find(box => box.id === edge.source)!, boxes.find(box => box.id === edge.target)!, composition ? selectedBoxes : boxes);
+      if (!route) return [];
+      // During travel there is no old-world line crossing moving text. Once
+      // settled, neutral choreography links use the actual presented boxes.
+      return [{ ...edge, type: "relation", sourceHandle: route.sourceHandle, targetHandle: route.targetHandle,
+        data: { path: route.path }, ariaLabel: edge.label,
+        style: { stroke: composition ? "#8aa596" : "#499573", strokeWidth: composition ? 1.5 : 2.5, opacity: moving || returningIds.length ? 0 : 1 },
+        markerEnd: composition ? undefined : { type: MarkerType.Arrow, color: "#499573", width: 18, height: 18 } }];
     });
-  const selectedBounds = composition ? bounds(nodes.filter(node => visible!.scene.required.includes(node.id)).map(node => ({ ...node.position, ...visible!.sizes[node.id]! }))) : undefined;
+  // Proximity is a presentation cue, never a TeachingEdge or solver input.
+  // Only the two-reference cross-Core case gets this neutral, unarrowed link.
+  const proximity = visible?.scene.framing === "WIDEN" && selectedBoxes.length === 2
+    && new Set(nodes.filter(node => visible.scene.required.includes(node.id)).map(node => node.data.coreId)).size === 2
+    && !edges.length ? routeRelation(selectedBoxes[0]!, selectedBoxes[1]!, selectedBoxes) : undefined;
   const diagnostic = metrics && { ...metrics, layoutExecutionMs: visible?.solveMs, mode: state.mode, framing: visible?.scene.framing,
     acceptedLatest: state.latest?.scene.label, visibleStep: visible?.scene.label, surface,
     required: visible?.scene.required, camera, compact: visibleCompact, presentationPositions: visible?.positions,
-    homes: homes.current.positions, positions: renderPositions, measurements: visible?.sizes, notes: visible?.notes };
-  return <section className="choreo-pane" data-solver={solver} data-mode={state.mode} data-ready={!busy} data-error={Boolean(error)}>
+    moving, returningIds, visualPhase: moving ? state.mode === "TEACHER_INSPECTION" ? "paused" : returningIds.length ? "returning" : "moving" : composition ? "composed" : "home",
+    homes: homes.current.positions, positions: renderPositions, measurements: drawnSizes, notes: visible?.notes, motionNote };
+  return <section className="choreo-pane" data-solver={solver} data-mode={state.mode} data-ready={!busy} data-error={Boolean(error)} data-moving={moving}>
     <div className="choreo-pane-title"><strong>{SOLVERS.find(item => item.id === solver)!.name}</strong><span>{state.mode === "TEACHER_INSPECTION" ? "Reviewing together" : "Following teaching"}</span></div>
     <div className="choreo-surface" ref={container}>
       <ReactFlow<TeachingNode> nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
@@ -206,12 +238,14 @@ function CanvasPane({ step, solver, homesVisible, diagnostics, reduced, workMode
         onMoveEnd={(_event, viewport) => setCamera(viewport)}
         aria-label={`${solver} shared teaching choreography`}>
         <ViewportPortal>
-          {selectedBounds && <div className="choreo-neighborhood" style={{ left: selectedBounds.x - 14, top: selectedBounds.y - 14,
-            width: selectedBounds.width + 28, height: selectedBounds.height + 28 }} />}
-          {!composition && visible && Object.entries(homes.current.coreOrigins).map(([core, origin]) => {
+          {proximity && <svg className="choreo-proximity" width="1" height="1" aria-hidden="true" style={{ opacity: moving ? 0 : 1 }}>
+            <path data-presentation-proximity d={proximity.path} fill="none" stroke="#8aa596" strokeWidth="1.5" />
+          </svg>}
+          {visible && Object.entries(homes.current.coreOrigins).map(([core, origin]) => {
             const members = nodes.filter(node => node.data.coreId === core && node.data.kind !== "CORE" && node.data.durable);
-            const area = bounds(members.map(node => ({ ...node.position, ...visible.sizes[node.id]! })));
-            return area && <div key={core} className="choreo-neighborhood" style={{ left: origin.x - 14, top: area.y - 14, width: area.width + 28, height: area.height + 28 }} />;
+            const area = bounds(members.map(node => ({ ...homes.current.positions[node.id]!, ...homes.current.sizes[node.id]! })));
+            return area && <div key={core} className="choreo-neighborhood" data-suppressed={presentationActive && visible.inspectedCoreId !== core}
+              style={{ left: origin.x - 14, top: area.y - 14, width: area.width + 28, height: area.height + 28 }} />;
           })}
           {homesVisible && nodes.filter(node => node.data.home && different(node.position, node.data.home)).map(node => {
             const home = node.data.home!, dx = node.position.x - home.x, dy = node.position.y - home.y;
@@ -225,7 +259,7 @@ function CanvasPane({ step, solver, homesVisible, diagnostics, reduced, workMode
       {homesVisible && <HomeMap nodes={nodes.filter(node => node.data.home).map(node => ({ id: node.id,
         home: node.data.home!, position: node.position, label: `${node.data.coreId} · ${node.data.label}` }))} />}
       {error && <div className="choreo-failure" role="alert">SOLVER FAILURE · {error}</div>}
-      {metrics && !metrics.readable && <div className="choreo-capacity" role="status">READABLE FIT FAIL · {metrics.requiredCount} required targets · fit would need {metrics.requiredZoom.toFixed(2)}×<br /><small>Text stays full size. Inspect to see overflow.</small></div>}
+      {metrics && !moving && !metrics.readable && <div className="choreo-capacity" role="status">READABLE FIT FAIL · {metrics.requiredCount} required targets · fit would need {metrics.requiredZoom.toFixed(2)}×<br /><small>Text stays full size. Inspect to see overflow.</small></div>}
       {diagnostics && metrics && <div className="choreo-diagnostics">
         <span>Home changed: <b>{metrics.homeCoordinatesChanged ? "YES" : "no"}</b></span>
         <span>Moved temporarily: <b>{metrics.temporarilyMoved}</b></span>
@@ -247,8 +281,22 @@ function CanvasPane({ step, solver, homesVisible, diagnostics, reduced, workMode
         const reviewItems = next.scene.items.filter(item => item.coreId === core && item.visible);
         // Inspection retains its measured typography, including across a
         // viewport change. Remeasure new/revised review text at that same size.
-        for (const item of reviewItems) Object.assign(next.sizes, measureItems([item], next.sizes[item.id]!.width, next.compact ?? compact,
-          ["COMPARE", "WIDEN"].includes(next.scene.framing) && next.scene.required.includes(item.id)));
+        const reviewedTravel = { ...travelGeometry };
+        let travelChanged = false;
+        for (const item of reviewItems) {
+          const held = moving ? travelGeometry[item.id] : undefined;
+          const size = measureItems([item], held?.width ?? next.sizes[item.id]!.width, next.compact ?? compact,
+            held?.presentation ?? (["COMPARE", "WIDEN"].includes(next.scene.framing) && next.scene.required.includes(item.id)))[item.id]!;
+          next.sizes[item.id] = size;
+          if (held) {
+            // New review text may grow while the interrupted width/provenance
+            // stays held. Geometry consumers must use its newly measured height.
+            reviewedTravel[item.id] = { ...held, ...size };
+            renderedGeometry.current[item.id] = reviewedTravel[item.id]!;
+            travelChanged = true;
+          }
+        }
+        if (travelChanged) setTravelGeometry(reviewedTravel);
         save(reviewed);
         frameCamera(next, reviewItems.map(item => item.id));
       }}>Inspect {core.replaceAll("-", " ")}</button>)}
@@ -316,9 +364,6 @@ export default function Choreography() {
       <label>Scenario<select aria-label="Scenario" value={scenarioId} onChange={event => { setScenarioId(event.target.value); setIndex(0); setPlaying(false); }}>
         {CHOREOGRAPHY_SCENARIOS.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
       </select></label>
-      <label>Solver<select aria-label="Solver" value={solver} onChange={event => setSolver(event.target.value as SolverId | "all")}>
-        {SOLVERS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="all">Side by side</option>
-      </select></label>
       <label>Viewport<select aria-label="Viewport" value={preset} onChange={event => setPreset(event.target.value)}><option value="desktop">1280 × 720</option><option value="narrow">390 × 844</option></select></label>
       <label>Work<select aria-label="Work placement" value={workMode} onChange={event => setWorkMode(event.target.value as typeof workMode)}><option value="adjacent">Adjacent transient</option><option value="attached">Solver attached</option></select></label>
     </div>
@@ -339,6 +384,10 @@ export default function Choreography() {
       <button onClick={() => setHomeRequest(n => n + 1)}>HOME</button><button onClick={() => setFollowRequest(n => n + 1)}>Follow latest</button>
     </div><small>Drag to inspect together. Presentation moves; home memory stays.</small></footer>
     <details className="choreo-report"><summary>Benchmark evidence</summary><p>{scenario.source}</p>
+      <p>The measured baseline is the working compositor. Earlier solver tools remain here for reference.</p>
+      <label>Benchmark solver <select aria-label="Benchmark solver" value={solver} onChange={event => setSolver(event.target.value as SolverId | "all")}>
+        {SOLVERS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="all">Side by side</option>
+      </select></label>
       <p>Side-by-side panes use their actual available width. Select one solver for a full projector view. Failed frames retain full typography.</p>
       <button onClick={() => void evaluate()} disabled={measuring}>{measuring ? "Measuring all scenarios…" : "Measure all scenarios"}</button>
       {report !== undefined && <pre data-testid="composition-report">{JSON.stringify(report, null, 2)}</pre>}

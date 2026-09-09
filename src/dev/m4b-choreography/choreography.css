@@ -28,17 +28,19 @@
 .choreo-surface { position: relative; min-height: 0; flex: 1; }
 .choreo-surface .react-flow { background: #f8faf3; }
 .choreo-surface .react-flow__viewport-portal { z-index: -1; }
-.choreo-node { width: 100%; height: auto; color: #093b30; font-family: Arial, Helvetica, sans-serif; }
+.choreo-node { width: 100%; height: auto; color: #093b30; font-family: Arial, Helvetica, sans-serif; transition: opacity 160ms ease-out; }
 .choreo-node .choreo-copy { font-family: inherit; font-size: var(--teaching-font); line-height: 1.25; font-weight: 400; letter-spacing: -.25px; margin: 0; white-space: normal; overflow-wrap: anywhere; }
 .choreo-node h2.choreo-copy { text-transform: capitalize; letter-spacing: -1.2px; font-weight: 700; line-height: 1.15; }
 .choreo-node[data-role="primary"] p.choreo-copy { font-weight: 650; text-decoration-color: #529c77; }
-.choreo-node[data-role="primary"][data-presentation="true"] p.choreo-copy { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 7px; }
+.choreo-node[data-role="primary"][data-presentation="true"][data-framing="WIDEN"] .choreo-origin { color: #245f47; }
 .choreo-origin { text-transform: capitalize; margin-bottom: 10px; font-size: 13px; line-height: 18px; color: #48765b; letter-spacing: .3px; }
-.choreo-node[data-receded="true"] { opacity: .26; }
+.choreo-node[data-layer="suppressed"] { opacity: 0; pointer-events: none; transition-duration: 100ms; }
+.choreo-proximity { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .choreo-node .react-flow__handle { opacity: 0; pointer-events: none; border: 0; width: 1px; height: 1px; min-width: 0; min-height: 0; }
 .choreo-node[data-kind="WORK"] { border-top: 2px dashed #91ab87; padding-top: 12px; }
 .choreo-node[data-kind="REPRESENTATION"] { color: #4d6c56; }
-.choreo-neighborhood { position: absolute; pointer-events: none; background: #edf4e8; border-radius: 18px; }
+.choreo-neighborhood { position: absolute; pointer-events: none; background: #edf4e8; border-radius: 18px; transition: opacity 160ms ease-out; }
+.choreo-neighborhood[data-suppressed="true"] { opacity: 0; transition-duration: 100ms; }
 .choreo-home-marker { position: absolute; pointer-events: none; color: #a16936; border: 2px dashed #bf8f5c; width: 30px; height: 30px; border-radius: 50%; z-index: 4; }
 .choreo-home-marker span { display: block; position: absolute; white-space: nowrap; top: -25px; font-size: 13px; background: #fff6df; }
 .choreo-home-marker i { display: block; height: 0; border-top: 1px dashed #c2925f; transform-origin: top left; position: absolute; left: 0; top: 0; }
