@@ -162,3 +162,26 @@ npm run eval:core:validate -- --fresh-holdout
 ```
 
 These commands make zero provider/verifier calls. Exemplar validation does not rescore historical model results or establish real microphone/learner acceptance.
+
+## Teaching representation development review
+
+Run `npm run dev:teaching -- --port 5182` and open `/dev/teaching-representation`.
+This separate development configuration enables the optional AI comparison endpoint;
+ordinary `npm run dev` still provides GOLD rendering without that endpoint. Neither
+entry nor endpoint is included in the production browser/API graph.
+
+The review has Previous, Next, Play/Pause, Reset, Teaching/Diagnostic view and a
+GOLD/AI selector. Play advances every 3.5 seconds for accelerated review; checkpoint
+times describe the authored approximately eight-minute lesson. Diagnostics sit below
+the simulated projector and include accepted refs, candidate provenance, payloads,
+M4A roles, home/presentation geometry, raw AI responses and comparison metrics.
+
+GOLD needs no provider. After GOLD browser review, **Run AI comparison** makes one
+zero-retry call per fixed checkpoint using existing `OPENAI_API_KEY` / `OPENAI_MODEL`
+configuration (default `gpt-5.6-luna`). Each call has a 45-second timeout. Runs and raw
+responses, including failures, are saved under ignored
+`.cuelayer/reviews/teaching-representation/`; GET only loads the latest matching
+fixture fingerprint. The AI selector replays that run without further model calls.
+**Run AI again** explicitly starts a new paid run; it never overwrites earlier runs.
+No microphone, production session, accepted event schema or Core interpreter is used
+by this optional presentation provider. Its only output is a strict form/ref plan.

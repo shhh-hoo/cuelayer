@@ -1,0 +1,38 @@
+.tr-spike { --ink: #073a30; --paper: #f8faf3; background: var(--paper); color: var(--ink); font-family: Arial, Helvetica, sans-serif; min-height: 100vh; }
+body { margin: 0; }
+.tr-spike * { box-sizing: border-box; }
+.tr-spike button { background: #edf4e8; border: 1px solid #d7e3d2; border-radius: 8px; padding: 8px 13px; color: var(--ink); cursor: pointer; font: inherit; }
+.tr-spike button:disabled { opacity: .4; cursor: default; }
+.tr-spike button:focus-visible { outline: 3px solid #317d5c; outline-offset: 3px; }
+.tr-toolbar { height: 48px; display: flex; align-items: center; gap: 18px; padding: 0 24px; font-size: 12px; }
+.tr-toolbar strong { font-size: 23px; letter-spacing: -1px; }
+.tr-toolbar button { margin-left: auto; }
+.tr-projector { height: calc(100vh - 106px); min-height: 550px; overflow: hidden; position: relative; }
+.tr-projector .react-flow { background: var(--paper); }
+.tr-atom { color: var(--ink); width: 100%; }
+.tr-atom h1 { margin: 0; font-size: 64px; line-height: 1.12; letter-spacing: -1.6px; font-weight: 650; }
+.tr-atom p { margin: 0; font-size: 32px; line-height: 1.2; font-weight: 400; letter-spacing: -.35px; }
+.tr-atom[data-role="primary"] p { font-weight: 600; }
+.tr-origin { font-size: 16px; color: #527461; margin-bottom: 13px; }
+.tr-neighborhood { position: absolute; width: 545px; height: 365px; background: #edf3e7; border-radius: 22px; z-index: -2; pointer-events: none; }
+.tr-connectors { overflow: visible; position: absolute; left: 0; top: 0; pointer-events: none; color: #749980; }
+.tr-connectors > path { fill: none; stroke: #749980; stroke-width: 1.8; }
+.tr-projector .react-flow__viewport-portal { z-index: -1; }
+.tr-energy { margin: 0; width: 560px; }
+.tr-energy svg { display: block; width: 100%; height: 360px; overflow: visible; }
+.tr-energy text { fill: #315e4d; font-size: 20px; }
+.tr-energy .tr-axis { fill: none; stroke: #88a493; stroke-width: 1.5; }
+.tr-high { fill: none; stroke: #9b9c85; stroke-width: 3; stroke-dasharray: 7 5; }
+.tr-low { fill: none; stroke: #247653; stroke-width: 4; }
+.tr-guide { fill: none; stroke: #abbcac; stroke-width: 1; stroke-dasharray: 4 5; }
+.tr-barrier { fill: none; stroke: #8b947d; stroke-width: 1.5; }
+.tr-catalysed { stroke: #247653; }
+.tr-energy figcaption { margin: 0 0 0 58px; color: #627c68; font-size: 14px; }
+.tr-equation { font-size: 68px; padding: 12px 0; }
+.tr-equation math { margin: 0; text-align: left; }
+.tr-controls { min-height: 58px; padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; }
+.tr-controls nav { display: flex; gap: 6px; }
+.tr-diagnostics { border-top: 1px solid #d7e3d2; padding: 24px; font-size: 13px; overflow-wrap: anywhere; background: #eef3e9; }
+.tr-diagnostics h2 { font-size: 18px; }
+.tr-diagnostics pre { white-space: pre-wrap; font-size: 11px; line-height: 1.4; }
+.tr-measure { position: fixed; left: -20000px; top: 0; visibility: hidden; pointer-events: none; min-height: 0; }
