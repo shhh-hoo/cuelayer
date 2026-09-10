@@ -8,8 +8,13 @@ export function composePresentation(homes: Record<string, Rect>, selected: strin
   const ids = [...new Set(selected)].filter(id => homes[id]);
   const temporary: Record<string, Rect> = {};
   if (projection.transition.framing !== 'FOCUS') {
-    let x = 0;
-    for (const id of ids) { temporary[id] = { ...homes[id], x, y: 0 }; x += homes[id].width + 32; }
+    let x = 0, y = 0, rowHeight = 0;
+    const rowWidth = (surface.width - 64) / 0.65;
+    for (const id of ids) {
+      if (x > 0 && x + homes[id].width > rowWidth) { y += rowHeight + 32; x = 0; rowHeight = 0; }
+      temporary[id] = { ...homes[id], x, y }; x += homes[id].width + 32;
+      rowHeight = Math.max(rowHeight, homes[id].height);
+    }
   }
   const boxes = { ...homes, ...temporary };
   const area = bounds(ids.map(id => boxes[id])) ?? { x: 0, y: 0, width: 1, height: 1 };

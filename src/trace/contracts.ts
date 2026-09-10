@@ -264,7 +264,7 @@ const SECRET_KEY = /^(?:authorization|api[_-]?key|access[_-]?token|refresh[_-]?t
 const AUDIO_KEY = /^(?:audio(?:data|frames?|blob|buffer)?|pcm(?:data|frames?|buffer)?|microphone(?:data|frames?)?|recording|waveform|binary|blob|buffer)$/i;
 const SECRET_TEXT = /(?:bearer\s+[a-z0-9._~+/=-]+|sk-[a-z0-9_-]{8,}|eyJ[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+)/gi;
 const AUDIT_EVENT_TYPES = new Set<SessionTraceEventType>([
-  "core.request", "core.provider_request", "core.provider_response", "core.proposal_normalized", "core.validation", "core.accepted", "core.published", "core.verification",
+  "core.request", "core.provider_request", "core.provider_response", "core.proposal_normalized", "core.validation", "core.accepted", "core.published", "core.verification", "core.representation", "core.projector",
   "interpretation.request_snapshot", "provider.contract_snapshot", "provider.request_snapshot", "provider.response_snapshot", "interpretation.proposal_normalized", "interpretation.validation_result", "interpretation.step_accepted", "teaching_surface.rendered",
 ]);
 
