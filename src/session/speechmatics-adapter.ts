@@ -1,6 +1,11 @@
 import type { AddPartialTranscript, AddTranscript, ErrorType, RealtimeServerMessage } from "@speechmatics/real-time-client";
 import type { SpeechEvent, SpeechWord } from "./speech-types";
 
+import { immutableSpeechEvidence } from "./immutable-speech-evidence";
+import type { SpeechRunId } from "./speech-types";
+
+type Receipt = { speechRunId: SpeechRunId; receivedAt: number; receiptSequence: number; speechEventId: string };
+
 type TranscriptMessage = AddPartialTranscript | AddTranscript;
 
 function transcriptEvent(message: TranscriptMessage, kind: "provisional" | "committed"): SpeechEvent | undefined {
@@ -27,10 +32,19 @@ function providerError(message: ErrorType): SpeechEvent {
 }
 
 /** The only module that understands Speechmatics transcript message shapes. */
-export function speechEventFromSpeechmatics(message: RealtimeServerMessage): SpeechEvent | undefined {
+export function speechEventFromSpeechmatics(message: RealtimeServerMessage, receipt?: Receipt): SpeechEvent | undefined {
   switch (message.message) {
     case "AddPartialTranscript": return transcriptEvent(message, "provisional");
-    case "AddTranscript": return transcriptEvent(message, "committed");
+    case "AddTranscript": {
+      const event = transcriptEvent(message, "committed");
+      if (!receipt || event?.kind !== "committed") return event;
+      // The wire message has no final ID. Audio interval + channel identifies a
+      // final within a run; never use transcript wording or receipt count as ID.
+      const providerFinalId = JSON.stringify(["speechmatics", message.channel ?? null, message.metadata.start_time, message.metadata.end_time]);
+      return { ...event, speechEventId: receipt.speechEventId, evidence: immutableSpeechEvidence({ ...receipt,
+        providerFinalId, text: event.text, words: event.words,
+        startMs: message.metadata.start_time * 1000, endMs: message.metadata.end_time * 1000 }) };
+    }
     case "Error": return providerError(message);
     default: return undefined;
   }

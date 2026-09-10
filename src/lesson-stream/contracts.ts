@@ -22,6 +22,9 @@ export type CompactEvidenceCheckpoint = {
 };
 
 export type GroundingRecord = {
+  /** Direct final ingress has no invented canonical span. Historical span records remain valid. */
+  immutableFinal?: { version: "immutable-speech-v1"; evidenceId: string; providerFinalId: string;
+    speechRunId: SpeechRunId; speechEventId: string; receivedAt: number; receiptSequence: number };
   checkpointId: string;
   canonicalSpanIds: Array<{ spanId: string; spanRevision: number }>;
   words: SpeechWord[];

@@ -13,6 +13,9 @@ import type { CoreProposal } from '../lesson-stream/core/interpretation-proposal
 import { CapabilityRegistry } from '../teaching-representation/registry';
 import { SessionTraceRuntime } from '../trace/runtime';
 import type { SpeechEvent, SpeechRunId } from './speech-types';
+import * as canonicalSpeech from './canonical-speech';
+import { speechEventFromSpeechmatics } from './speechmatics-adapter';
+import { latencyNow } from '../trace/learner-latency';
 import { lessonStartedEvent } from '../lesson-stream/events';
 
 vi.mock('./SpeechmaticsSessionProvider', () => ({ usePrepareSpeechmaticsAudioContext: () => () => undefined }));
@@ -169,15 +172,44 @@ it('a missing durable domain fails closed on the real route, without a runtime o
   await mount(); expect(host.textContent).toContain('lesson-domain-missing');
   expect(opens).not.toHaveBeenCalled(); expect(legacyOpens).not.toHaveBeenCalled(); expect(requests).toEqual([]);
 });
-it('committed canonical speech from the normal page reducer reaches the Core scheduler without a second semantic consumer', async () => {
+it('an immutable provider final reaches the Core scheduler through the normal page while its transcript remains open', async () => {
   await mount();
   await act(async () => { [...host.querySelectorAll('button')].find(button => button.textContent === 'Enable mic')!.click(); });
   await until(() => host.textContent!.includes('Mute mic'));
-  await act(() => { speech.callbacks!.onEvent(speech.run, { kind: 'committed', text: 'A committed synthetic statement.', speechEventId: 'synthetic-final', words: [{ text: 'A committed synthetic statement.', startMs: 0, endMs: 1000 }] }); });
+  await act(() => { speech.callbacks!.onEvent(speech.run, speechEventFromSpeechmatics({ message: 'AddTranscript', metadata: { transcript: 'A committed synthetic statement', start_time: 0, end_time: 1 }, results: [] } as never, { speechRunId: speech.run, receivedAt: latencyNow(), receiptSequence: 0, speechEventId: 'synthetic-final' })!); });
   await until(() => live!.state.processedThroughSequence === 1);
   expect(live!.runtime.replay.grounding.size).toBe(1);
   expect(live!.runtime.replay.checkpoints[0].speechRunId).toBe(speech.run);
   expect(live!.runtime.replay.checkpoints[0].sourceFinalIds).toHaveLength(1);
   expect(live!.runtime.events.filter(e => e.type === 'speech.run_allocated')).toHaveLength(1);
   expect(legacyOpens).not.toHaveBeenCalled();
+});
+
+it('normal production admission and 750 ms Live progress continue through a canonical span open for 1.6 seconds', async () => {
+  await mount();
+  await act(async () => { [...host.querySelectorAll('button')].find(button => button.textContent === 'Enable mic')!.click(); });
+  await until(() => host.textContent!.includes('Mute mic'));
+  const assembly = vi.spyOn(canonicalSpeech, 'applySpeechEvent');
+  vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] });
+  try {
+    for (let i = 0; i < 8; i++) {
+      await act(async () => {
+        speech.callbacks!.onEvent(speech.run, speechEventFromSpeechmatics({ message: 'AddTranscript',
+          metadata: { transcript: `fragment${i}`, start_time: i * 0.2, end_time: i * 0.2 + 0.1 },
+          results: [{ type: 'word', start_time: i * 0.2, end_time: i * 0.2 + 0.1, alternatives: [{ content: `fragment${i}`, confidence: 1 }] }],
+        } as never, { speechRunId: speech.run, receivedAt: latencyNow(), receiptSequence: i, speechEventId: `continuous-${i}` })!);
+        for (let tick = 0; tick < 20 && live!.runtime.replay.checkpoints.length <= i; tick++) await new Promise<void>(r => setImmediate(r));
+      });
+      expect(live!.runtime.replay.checkpoints).toHaveLength(i + 1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+        for (let tick = 0; tick < 20; tick++) await new Promise<void>(r => setImmediate(r));
+      });
+      const transcript = assembly.mock.results.at(-1)!.value.state;
+      expect(transcript.spans).toHaveLength(1); expect(transcript.spans[0].status).toBe('open');
+      if (i === 3) expect(live!.state.processedThroughSequence).toBe(4);
+    }
+    expect(live!.state.processedThroughSequence).toBe(8);
+    expect(requests).toHaveLength(2); expect(legacyOpens).not.toHaveBeenCalled();
+  } finally { vi.useRealTimers(); }
 });

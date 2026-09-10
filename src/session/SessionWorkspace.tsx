@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { PresentationStage } from "./PresentationStage";
 import { requestPresentationStream, stopPresentationStream } from "./presentation-capture";
 import { SessionControls } from "./SessionControls";
-import { createInitialSessionState } from "./session-state";
+import { acceptsImmutableSpeechFinal, createInitialSessionState } from "./session-state";
 import { createSessionPageReducer } from "./page-session-reducer";
 import { usePrepareSpeechmaticsAudioContext } from "./SpeechmaticsSessionProvider";
 import { speechStartFailureFrom, useSpeechmaticsSession } from "./use-speechmatics-session";
@@ -45,18 +45,26 @@ export function SessionWorkspace({ trace, useTeaching }: { trace: SessionTraceCo
   const teachingLayoutRef = useRef<string | undefined>(undefined);
   const prepareSpeechmaticsAudioContext = usePrepareSpeechmaticsAudioContext();
 
-  const { start: startSpeechmatics, stop: stopSpeechmatics, pause: pauseSpeechmatics, resume: resumeSpeechmatics } = useSpeechmaticsSession({
-    onEvent: (runId, event) => dispatchSession({ type: "speech-event", runId, event, now: Date.now() }),
-    onReady: (runId) => dispatchSession({ type: "speech-ready", runId }),
-    onTrace: trace.emit,
-  });
-
   const liveTeaching = useTeaching({
     sessionId: trace.sessionId,
     sessionStatus: state.status,
     speechStatus: state.speech.status,
     speechRunId: state.speech.debug.runId,
     canonicalSpeech: state.speech.canonical,
+    onTrace: trace.emit,
+  });
+
+  const { start: startSpeechmatics, stop: stopSpeechmatics, pause: pauseSpeechmatics, resume: resumeSpeechmatics } = useSpeechmaticsSession({
+    onEvent: (runId, event) => {
+      const current = stateRef.current;
+      if (liveTeaching.domain === "core" && event.kind === "committed" && event.evidence
+        && acceptsImmutableSpeechFinal(current, runId)) {
+        // Sibling consumer: enqueue persistence before transcript assembly. No speech-side scheduler.
+        liveTeaching.admitSpeechEvidence(event.evidence);
+      }
+      dispatchSession({ type: "speech-event", runId, event, now: Date.now() });
+    },
+    onReady: (runId) => dispatchSession({ type: "speech-ready", runId }),
     onTrace: trace.emit,
   });
 

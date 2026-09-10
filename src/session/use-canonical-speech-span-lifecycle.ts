@@ -9,7 +9,7 @@ type LifecycleInput = {
   dispatch(action: SessionAction): void;
 };
 
-/** Schedules only canonical lexical closure; interpretation remains closed-evidence-only. */
+/** Schedules human-readable transcript closure; Core final admission is independent. */
 export function scheduleCanonicalSpeechSpanClosure({ canonicalSpeech, speechRunId, dispatch }: LifecycleInput) {
   const openSpan = [...canonicalSpeech.spans].reverse().find((span) => span.status === "open");
   if (!openSpan) return () => undefined;

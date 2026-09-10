@@ -221,16 +221,17 @@ export function useSpeechmaticsSession({ onEvent, onReady, onTrace }: Speechmati
       if (typeof seqNo === "number") deliveryMonitorRef.current?.observe(seqNo);
       return;
     }
-    const event = speechEventFromSpeechmatics(data);
+    const receiptSequence = providerMessageSequenceRef.current++;
+    const speechEventId = `speech-event-${runId}-${receiptSequence}`;
+    const event = speechEventFromSpeechmatics(data, { speechRunId: runId, receivedAt: asrFinalAt, receiptSequence, speechEventId });
     if (!event) return;
-    const speechEventId = `speech-event-${runId}-${providerMessageSequenceRef.current++}`;
     if (event.kind === "error") {
       failRun(runId, event.code, event.message);
       return;
     }
     const correlation = { rootId: `speech:${runId}`, runId, speechEventId };
     if (event.kind === "provisional") {
-      emitTrace(traceDraft("speech.partial", { runId, transcript: event.text, wordCount: event.words.length }, { priority: "raw", correlation }));
+      emitTrace(traceDraft("speech.partial", { runId, transcript: event.text, wordCount: event.words.length, receivedAt: asrFinalAt }, { priority: "raw", correlation, occurredAt: asrFinalAt }));
     } else {
       const speechEndMs = event.words.length ? Math.max(...event.words.map(word => word.endMs)) : null;
       const latency = { asrFinalAt, speechEndMs, ...(speechEndMs === null ? { speechObservedAt: null, speechMappingUncertaintyMs: null, speechClockBasis: "unavailable" as const } : pcmClockRef.current.resolve(speechEndMs)) };

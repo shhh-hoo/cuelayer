@@ -1,3 +1,5 @@
+import type { ImmutableSpeechEvidence } from "../../session/immutable-speech-evidence.ts";
+import type { CompactEvidenceCheckpoint } from "../contracts.ts";
 import { ZodError } from "zod";
 import type { CanonicalSpeechSpan, SpeechRunId } from "../../session/speech-types.ts";
 import { RetryBackoff } from "../../session/retry-backoff.ts";
@@ -82,6 +84,17 @@ export class CoreLiveSession {
   get health() { return { pendingCount: this.scheduler.pendingCount, inFlight: !!this.flight,
     oldestPendingAgeMs: this.coordinator.oldestPendingAgeMs, paused: !this.running || this.retry.isPaused, consecutiveFailures: this.retry.consecutiveFailures, error: this.error }; }
 
+  async commitSpeechEvidence(evidence: ImmutableSpeechEvidence) {
+    if (this.closed || this.finishing) throw new Error("core-session-not-capturing");
+    if (evidence.speechRunId !== this.runId) throw new Error("core-stale-speech-run");
+    const commit = this.commitFinal(evidence);
+    this.committing.add(commit);
+    try { return await commit; } finally { this.committing.delete(commit); }
+  }
+  private async commitFinal(evidence: ImmutableSpeechEvidence) {
+    const checkpoint = await this.runtime.commitSpeechEvidence(evidence);
+    return this.admitted(checkpoint, evidence.speechRunId);
+  }
   async commitClosedSpan(span: CanonicalSpeechSpan, speechRunId = this.runId) {
     if (this.closed || this.finishing) throw new Error("core-session-not-capturing");
     if (speechRunId !== this.runId) throw new Error("core-stale-speech-run");
@@ -91,18 +104,33 @@ export class CoreLiveSession {
   }
   private async commit(span: CanonicalSpeechSpan, speechRunId: SpeechRunId) {
     const checkpoint = await this.runtime.commitClosedSpan(span, speechRunId);
+    if (checkpoint && span.closeReason && ["terminal_punctuation", "meaningful_pause", "timing_gap", "explicit_stop"].includes(span.closeReason)) this.coordinator.markBoundary(checkpoint.checkpointId);
+    return this.admitted(checkpoint, speechRunId);
+  }
+  private admitted(checkpoint: CompactEvidenceCheckpoint | undefined, speechRunId: SpeechRunId) {
     if (checkpoint) {
       this.scheduler.enqueue([checkpoint]);
-      // Existing canonical closure is a scheduling signal only, never semantic resolution.
-      if (span.closeReason && ["terminal_punctuation", "meaningful_pause", "timing_gap", "explicit_stop"].includes(span.closeReason)) this.coordinator.markBoundary(checkpoint.checkpointId);
       this.trace.record("core.checkpoint_committed", () => ({ checkpointId: checkpoint.checkpointId,
-        lessonSequence: checkpoint.lessonSequence, eventId: this.runtime.indexes.commits.get(checkpoint.checkpointId)!.eventId }),
+        lessonSequence: checkpoint.lessonSequence, eventId: this.runtime.indexes.commits.get(checkpoint.checkpointId)!.eventId,
+        ingress: this.ingressTiming(checkpoint.checkpointId) }),
       { runId: speechRunId, checkpointId: checkpoint.checkpointId });
       this.windowTrace("committed");
       this.pump();
     }
     return checkpoint;
   }
+  private ingressTiming(checkpointId: string, dispatched = false) {
+    const final = this.runtime.replay.grounding.get(checkpointId)?.immutableFinal;
+    if (!final) return undefined;
+    const now = performance.timeOrigin + performance.now();
+    const eligibility = this.coordinator.eligibility();
+    return { speechEventId: final.speechEventId, providerFinalReceivedAt: final.receivedAt, observedAt: now,
+      ...(dispatched ? { dispatchedAt: now, finalToDispatchMs: Math.max(0, now - final.receivedAt) }
+        : { admittedAt: now, finalToAdmissionMs: Math.max(0, now - final.receivedAt),
+            eligibilityWaitMs: eligibility?.waitMs ?? 0,
+            finalToEligibilityMs: Math.max(0, now + (eligibility?.waitMs ?? 0) - final.receivedAt) }) };
+  }
+
   async allocateSpeechRunId() { if (this.closed || this.finishing) throw new Error("core-session-not-capturing"); const runId = await this.runtime.allocateSpeechRunId(); this.setSpeechRun(runId); return runId; }
   setSpeechRun(runId: SpeechRunId) {
     if (runId === this.runId) return;
@@ -170,6 +198,7 @@ export class CoreLiveSession {
     let stage: RequestStage = "provider";
     try {
       this.trace.record("core.request", () => ({ requestId: binding.requestId, checkpointIds: binding.newEvidenceIds,
+        ingress: binding.newEvidenceIds.map(id => ({ checkpointId: id, ...this.ingressTiming(id, true) })),
         scheduledAt, queuedAt: this.runtime.indexes.commits.get(binding.newEvidenceIds[0]!)?.timestamp,
         queue: this.queuePressure(binding.newEvidenceIds.length), task: this.coordinator.task, dispatchReason,
         diagnostics: coreContextDiagnostics(binding), context: binding.context,
@@ -271,8 +300,8 @@ export class CoreLiveSession {
     }));
   }
 
-  /** Caller first drains capture. Refuse new spans while draining the semantic tail. */
-  async finalize(tail: readonly CanonicalSpeechSpan[] = [], speechRunId = this.runId) {
+  /** Caller first drains capture. Refuse new evidence while draining the semantic tail. */
+  async finalize(tail: readonly (CanonicalSpeechSpan | ImmutableSpeechEvidence)[] = [], speechRunId = this.runId) {
     if (this.finishing || this.closed) return false;
     this.finishing = true;
     this.trace.record("core.finalization", () => ({ status: "draining", pendingCount: this.scheduler.pendingCount }));
@@ -280,7 +309,12 @@ export class CoreLiveSession {
     try {
       if (speechRunId !== this.runId) throw new Error("core-stale-speech-run");
       await Promise.all([...this.committing]);
-      for (const span of tail) await this.commit(span, speechRunId);
+      for (const item of tail) {
+        if ("evidenceId" in item) {
+          if (item.speechRunId !== speechRunId) throw new Error("core-stale-speech-run");
+          await this.commitFinal(item);
+        } else await this.commit(item, speechRunId);
+      }
       this.coordinator.flush();
       this.pump();
       while (this.flight || this.scheduler.pendingCount || this.runtime.pending.length) {
