@@ -12,7 +12,10 @@ export function createHttpCoreInterpreter(fetcher: typeof fetch = fetch): CoreLi
     try {
       const response = await fetcher('/api/teaching/core-interpretation', { method: 'POST', signal,
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ context: binding.context }) });
-      const body = await response.json() as { proposal?: unknown; diagnostics?: CoreProviderDiagnostic[]; error?: string };
+      const responseText = await response.text();
+      let body: { proposal?: unknown; diagnostics?: CoreProviderDiagnostic[]; error?: string };
+      try { body = JSON.parse(responseText) as typeof body; }
+      catch { throw new Error(`core-http-${response.status}-invalid-json`); }
       if (Array.isArray(body.diagnostics)) for (const diagnostic of body.diagnostics) {
         try {
           if (diagnostic.stage === 'endpoint') remoteAbortSource = diagnostic.abortSource;
@@ -21,7 +24,7 @@ export function createHttpCoreInterpreter(fetcher: typeof fetch = fetch): CoreLi
       }
       if (!response.ok) {
         if (body.error === 'core-provider-output-invalid') throw new SyntaxError(body.error);
-        throw new Error(body.error ?? 'core-provider-unavailable');
+        throw new Error(body.error ?? `core-http-${response.status}`);
       }
       outcome = "success";
       return body.proposal;
