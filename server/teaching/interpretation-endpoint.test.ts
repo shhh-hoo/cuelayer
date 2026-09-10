@@ -56,7 +56,7 @@ describe("Teaching State interpretation endpoint", () => {
     }));
     const captured = responseCapture();
     const pending = handler({ method: "POST", body: input }, captured.response);
-    await vi.advanceTimersByTimeAsync(6_000);
+    await vi.advanceTimersByTimeAsync(12_000);
     await pending;
     expect(captured.result()).toEqual({ code: 502, body: { error: "teaching-interpretation-timeout" } });
   });

@@ -1,3 +1,4 @@
+import { interpretationDeadlines } from "../../src/lesson-stream/runtime-policy.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -60,7 +61,7 @@ describe("production-module transcript replay", () => {
   it.each(["provider-failure", "timeout"] as const)("preserves all pending after bounded %s and reports every failure", async outcome => {
     fakeTime(); const trace = captured();
     const promise = runReplay(options({ interpreter: mockInterpreter([{ outcome }, { outcome }, { outcome }]), onTimeline: trace.onTimeline }));
-    await vi.advanceTimersByTimeAsync(30000); const result = await promise;
+    await vi.advanceTimersByTimeAsync(3 * interpretationDeadlines().clientMs + 10_000); const result = await promise;
     expect(result.status).toBe("paused"); expect(result.attempts).toBe(3); expect(result.pendingEvidenceIds).toHaveLength(3);
     const failures = trace.rows.filter(r => r.type === "request.failed"); expect(failures).toHaveLength(3);
     expect(failures.every(r => r.category === (outcome === "timeout" ? "timeout" : "provider"))).toBe(true);

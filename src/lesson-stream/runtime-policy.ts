@@ -1,5 +1,6 @@
 /** Conservative dogfood bounds; no context is silently truncated to satisfy them. */
-export const PROVIDER_DEADLINE_MS = 6_000;
+// M6 dogfood observation window, not a learner-latency target.
+export const PROVIDER_DEADLINE_MS = 12_000;
 export const TRANSPORT_GRACE_MS = 2_000;
 export const MAX_REQUEST_CHECKPOINTS = 2;
 export const MAX_PROJECTED_INPUT_TOKENS = 24_000;
@@ -9,6 +10,7 @@ export const PROVIDER_ENVELOPE_RESERVE_TOKENS = 12_000;
 export function interpretationDeadlines(diagnosticMs?: string, development = false) {
   const requested = Number(diagnosticMs);
   const providerMs = development && Number.isFinite(requested) && requested >= 6_000 && requested <= 60_000 ? requested : PROVIDER_DEADLINE_MS;
+  // Give the server first opportunity to classify termination before the client aborts HTTP.
   return { providerMs, clientMs: providerMs + TRANSPORT_GRACE_MS };
 }
 export type InterpretationFailure = "validation" | "provider" | "timeout" | "cancelled" | "conflict" | "budget";

@@ -140,7 +140,7 @@ describe("controlled Core live pipeline", () => {
     const { session, store } = await setup({ deadlineMs: 100, interpreter: async binding => { reply = proposalFor(binding, true); return late.promise; } });
     await session.commitClosedSpan(closedSpan()); const before = structuredClone(session.runtime.replay);
     await vi.advanceTimersByTimeAsync(100); await finish(session);
-    expect(session.health.error).toBe("core-provider-timeout"); expect(session.runtime.replay).toEqual(before);
+    expect(session.health.error).toBe("core-client-timeout"); expect(session.runtime.replay).toEqual(before);
     late.resolve(reply); await Promise.resolve(); expect(store.events).toEqual(before.events); expect(session.health.pendingCount).toBe(1);
   });
   it("explicit cancel retains evidence and requires resume", async () => {
