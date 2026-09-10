@@ -1,0 +1,6 @@
+.representation-canvas { width:100%; height:100%; position:relative; overflow:hidden; background:#faf9f5; color:#173c3a; touch-action:none; }
+.canvas-world { position:absolute; transform-origin:0 0; }
+.representation-artifact { position:absolute; box-sizing:border-box; padding:16px; font:28px/1.3 Georgia,serif; }
+.representation-artifact[data-role=companion] { color:#365551; }
+.representation-canvas[data-moving=true] [data-connector-layer] { visibility:hidden; }
+.canvas-status { position:absolute; z-index:2; bottom:8px; left:16px; right:16px; margin:0; padding:8px; background:#faf9f5; font:14px/1.4 system-ui,sans-serif; }

@@ -8,7 +8,15 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "report:bundle": "node --import tsx scripts/report-production-bundle.ts",
+    "test:live-state": "vitest run src/lesson-stream/continuous-state.test.tsx src/session/continuous-runtime.test.tsx",
+    "eval:lesson-replay": "node --import tsx scripts/evaluate-lesson-replay.ts",
+    "eval:semantics:validate": "node --experimental-strip-types scripts/evaluate-semantics.ts --validate",
+    "eval:semantics:live": "node --experimental-strip-types scripts/evaluate-semantics.ts --live",
+    "eval:core:validate": "node --import tsx scripts/evaluate-core-semantics.ts --validate",
+    "eval:core": "node --import tsx scripts/evaluate-core-semantics.ts",
+    "check:repo": "node --experimental-strip-types scripts/check-repository-hygiene.ts"
   },
   "dependencies": {
     "@speechmatics/auth": "^0.1.0",
@@ -23,10 +31,13 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@types/node": "^26.4.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "6.1.1",
     "fake-indexeddb": "^6.2.5",
+    "jsdom": "^30.0.1",
+    "tsx": "^4.23.13",
     "typescript": "5.9.3",
     "vite": "8.2.2",
     "vitest": "4.1.11"

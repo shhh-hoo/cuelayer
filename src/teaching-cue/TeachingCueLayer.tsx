@@ -26,6 +26,7 @@ export function TeachingCueLayer({ cue, presentationMode, placement = "overlay",
 
   return <aside
     className={`teaching-cue-layer teaching-cue-${presentationMode} teaching-cue-placement-${placement}`}
+    data-cue-id={cue.id}
     data-kind={cue.kind.toLowerCase()}
     aria-label={`${LABEL[cue.kind]} teaching cue`}
     aria-live="polite"
@@ -35,5 +36,6 @@ export function TeachingCueLayer({ cue, presentationMode, placement = "overlay",
       <span>{LABEL[cue.kind]}</span>
     </div>
     <p>{cue.contribution.content}</p>
+    {cue.hint ? <div data-cue-id={`${cue.id}:hint`} className="teaching-cue-hint" aria-label="Teacher hint"><strong>Hint</strong><p>{cue.hint.contribution.content}</p></div> : null}
   </aside>;
 }

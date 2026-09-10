@@ -35,3 +35,13 @@ export function createHttpTeachingInterpreter(endpoint = "/api/teaching/interpre
     },
   };
 }
+
+/** Settles cancellation even if an adapter ignores AbortSignal; late results are inert. */
+export function interpretWithAbort(interpreter: TeachingInterpreter, request: TeachingInterpretationRequest, signal: AbortSignal): Promise<TeachingInterpretationResponse> {
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(new Error(String(signal.reason ?? "interpretation-cancelled")));
+    if (signal.aborted) { abort(); return; }
+    signal.addEventListener("abort", abort, { once: true });
+    Promise.resolve().then(() => interpreter.interpret(request, { signal })).then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
+}

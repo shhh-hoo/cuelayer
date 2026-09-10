@@ -1,0 +1,8 @@
+.core-review { height:100vh; display:flex; flex-direction:column; background:#faf9f5; }
+.core-review header { display:flex; gap:24px; padding:12px 20px; font:14px system-ui,sans-serif; }
+.core-review nav { display:flex; flex-wrap:wrap; gap:8px; padding:8px 20px; }
+.core-review nav button { padding:7px 10px; }
+.core-review .presentation-stage { flex:1; min-height:300px; width:100%; margin:0; aspect-ratio:auto; border-radius:0; }
+.core-review details { padding:8px 20px; max-height:22vh; overflow:auto; font:12px system-ui,sans-serif; }
+.core-review pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+@media(max-width:600px) { .core-review header span { display:none; } }

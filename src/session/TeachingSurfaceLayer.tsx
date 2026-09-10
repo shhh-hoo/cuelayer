@@ -1,4 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { surfaceItems, surfaceVisibility } from "../trace/dom-visibility";
+import { latencyNow } from "../trace/learner-latency";
+import type { SessionTracePayloads } from "../trace/contracts";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import type { BoardContent, BoardItem, TeachingStateSnapshot } from "../lesson-stream/contracts";
 import type { TeachingRenderOrigin } from "./use-live-teaching";
 import { BoardLayout, boardDensityForContent, type BoardDensity } from "../teaching-cue/BoardLayout";
@@ -19,8 +22,8 @@ function Content({ content }: { content: BoardContent }) {
   </div>;
 }
 
-function RetainedItem({ item }: { item: BoardItem }) {
-  return <div className="teaching-board-retained-item" data-board-item-id={item.id}><Content content={item.contribution.content} /></div>;
+function RetainedItem({ item, support }: { item: BoardItem; support: TeachingStateSnapshot["board"]["support"] }) {
+  return <div className="teaching-board-retained-item" data-board-item-id={item.id}><Content content={item.contribution.content} />{support.filter((entry) => entry.targetBoardItemId === item.id).map((entry) => <p key={entry.id} data-support-id={entry.id} data-support-target={item.id}>{entry.contribution.content}</p>)}</div>;
 }
 
 export function teachingSurfaceRenderDetails({ state, presentationMode, origin }: { state: TeachingStateSnapshot; presentationMode: PresentationMode; origin?: TeachingRenderOrigin }) {
@@ -29,26 +32,43 @@ export function teachingSurfaceRenderDetails({ state, presentationMode, origin }
   return { renderId, boardRevision: state.board.revision, cueRevision: state.cue.revision, presentationMode, density, state, ...(origin ? { origin } : {}) };
 }
 
-export function TeachingSurfaceLayer({ state, presentationMode, origin, onCueExpire, onRendered }: {
+export function TeachingSurfaceLayer({ state, presentationMode, origin, onCueExpire, onRendered, onVisibility }: {
   state: TeachingStateSnapshot;
   presentationMode: PresentationMode;
   onCueExpire?(cueId: string, now: number): void;
   origin?: TeachingRenderOrigin;
+  onVisibility?(details: SessionTracePayloads["teaching_surface.visibility"]): void;
   onRendered?(details: { renderId: string; boardRevision: number; cueRevision: number; presentationMode: PresentationMode; density: BoardDensity; state: TeachingStateSnapshot; origin?: TeachingRenderOrigin }): void;
 }) {
+  const element = useRef<HTMLElement | null>(null);
   const details = useMemo(() => teachingSurfaceRenderDetails({ state, presentationMode, origin }), [origin, presentationMode, state]);
   const { renderId, density } = details;
   useEffect(() => {
     onRendered?.(details);
   }, [details, onRendered]);
 
-  if (!state.board.active && !state.cue.active) return null;
-  return <section className="teaching-surface-layer" data-render-id={renderId} data-board-revision={state.board.revision} data-cue-revision={state.cue.revision} aria-label="Live teaching surface">
+  useLayoutEffect(() => {
+    if (!onVisibility) return;
+    const rendererCommittedAt = latencyNow();
+    let first = 0; let second = 0; let done = false;
+    const finish = (observation: SessionTracePayloads["teaching_surface.visibility"]["observation"]) => {
+      if (done) return; done = true;
+      try { const observedAt = latencyNow(); onVisibility({ items: surfaceItems(element.current), observedAt, documentVisible: document.visibilityState === "visible", measurementBasis: "post-frame-css-geometry", renderId, boardRevision: state.board.revision, cueRevision: state.cue.revision, rendererCommittedAt, domVisibleAt: observation === "visible" ? observedAt : null, observation }); } catch { /* Diagnostic only. */ }
+    };
+    const inspect = () => { try { finish(surfaceVisibility(element.current)); } catch { finish("unavailable"); } };
+    // Two frames provide a post-commit visibility observation; no display/vsync guarantee.
+    if (typeof requestAnimationFrame === "function") first = requestAnimationFrame(() => { second = requestAnimationFrame(inspect); });
+    const timeout = window.setTimeout(() => finish(document.visibilityState === "hidden" ? "hidden" : "unavailable"), 1000);
+    return () => { done = true; if (typeof cancelAnimationFrame === "function") { cancelAnimationFrame(first); cancelAnimationFrame(second); } clearTimeout(timeout); };
+  }, [details, onVisibility, renderId, state.board.revision, state.cue.revision]);
+
+  if (!state.board.active && !state.board.retained.length && !state.cue.active) return null;
+  return <section ref={element} className="teaching-surface-layer" data-render-id={renderId} data-board-revision={state.board.revision} data-cue-revision={state.cue.revision} aria-label="Live teaching surface">
     <BoardLayout
       presentationMode={presentationMode}
       active={state.board.active ? <div className="teaching-board-active" data-board-item-id={state.board.active.id}><Content content={state.board.active.contribution.content} /></div> : null}
-      support={state.board.support.length ? <div className="teaching-board-support-list">{state.board.support.map((support) => <p key={support.id}>{support.contribution.content}</p>)}</div> : undefined}
-      retained={state.board.retained.map((item) => <RetainedItem key={item.id} item={item} />)}
+      support={state.board.support.length ? <div className="teaching-board-support-list">{state.board.support.filter((support) => support.targetBoardItemId === state.board.active?.id).map((support) => <p key={support.id} data-support-id={support.id} data-support-target={support.targetBoardItemId}>{support.contribution.content}</p>)}</div> : undefined}
+      retained={state.board.retained.map((item) => <RetainedItem key={item.id} item={item} support={state.board.support} />)}
       cue={state.cue.active}
       onCueExpire={onCueExpire}
     />

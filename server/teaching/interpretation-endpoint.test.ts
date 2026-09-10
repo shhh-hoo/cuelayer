@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TeachingInterpretationRequest } from "../../src/lesson-stream/contracts";
 import { createInitialTeachingState } from "../../src/lesson-stream/teaching-state";
+import { ACTIVE_ALPHA_SEMANTIC_PROFILE } from "../../src/lesson-stream/semantic-profile";
 
 const mocks = vi.hoisted(() => ({ interpret: vi.fn() }));
 vi.mock("./openai-interpreter.ts", () => ({ requestOpenAITeachingInterpretation: mocks.interpret, estimateTeachingCost: () => undefined }));
@@ -10,7 +11,8 @@ import handler from "../../api/teaching/interpretation";
 const input: TeachingInterpretationRequest = {
   requestId: "request-1",
   sessionId: "session-1",
-  policyVersion: "live-state-p4-v1",
+  policyVersion: ACTIVE_ALPHA_SEMANTIC_PROFILE.policyVersion,
+  semanticProfileId: ACTIVE_ALPHA_SEMANTIC_PROFILE.id,
   processedTimeline: [],
   currentState: createInitialTeachingState(),
   newEvidence: [{ checkpointId: "checkpoint-1", lessonSequence: 1, speechRunId: 1, startMs: 0, endMs: 100, text: "A useful statement.", sourceFinalIds: ["final-1"], warnings: [] }],

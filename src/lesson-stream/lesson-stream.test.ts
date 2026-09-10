@@ -236,11 +236,9 @@ describe("lesson evidence and replay", () => {
     });
     await expiry;
     const result = await acceptance;
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.cueConflict).toBe(true);
-    expect(result.steps[0]!.boardDelta.action).toBe("SET_ACTIVE");
-    expect(result.steps[0]!.cueDelta.action).toBe("KEEP");
+    expect(result).toMatchObject({ ok: false, error: "interpretation-state-conflict", validationState: { cue: { revision: 2 } } });
+    expect(runtime.pending.map((item) => item.checkpointId)).toEqual([b!.checkpointId]);
+    expect(runtime.state.board.active).toBeUndefined();
   });
 
   it("does not advance materialized state when an accepted batch fails to append", async () => {
@@ -398,7 +396,10 @@ describe("proposal validation and deterministic state", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.steps[0]!.cueDelta).toEqual({ action: "SET", cueKind: "NOTE", contribution: visibleText("A", "Complete the task") });
+    expect(result.steps[0]!.cueDelta).toEqual({
+      action: "SET", cueKind: "NOTE",
+      contribution: { mode: "RECONSTRUCT", content: "Complete the task", provenance: { basis: "SPEECH", speechRefs: [{ checkpointId: "A", quote: "Complete the task." }] } },
+    });
     expect(result.steps[0]!.warnings).toContainEqual({ code: "cue_target_dropped" });
   });
 
@@ -487,7 +488,7 @@ describe("proposal validation and deterministic state", () => {
     expect(invalid).toEqual({ ok: false, error: "proposal-batch-coverage-invalid" });
   });
 
-  it("applies non-conflicting Cue work when the Board revision changed", () => {
+  it("rejects model-authored base revision changes before considering channels", () => {
     const sessionId = "lesson-conflict";
     const item = checkpoint("A", 1, "Compare the two pathways. Which is faster?");
     const events = [lessonStartedEvent(sessionId, 1), groundedEvent(sessionId, 2, item)];
@@ -510,12 +511,7 @@ describe("proposal validation and deterministic state", () => {
       state,
       model: "test-model",
     });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.boardConflict).toBe(true);
-      expect(result.steps[0]!.boardDelta.action).toBe("KEEP");
-      expect(result.steps[0]!.cueDelta.action).toBe("SET");
-    }
+    expect(result).toEqual({ ok: false, error: "proposal-base-revision-mismatch" });
   });
 
   it("keeps Board and Cue independent, bounds retained context, and replays correction plus NOTE expiry", () => {

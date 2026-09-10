@@ -6,6 +6,7 @@ import { TraceWriter, type TraceWriterSnapshot } from "./writer";
 
 export type SessionTraceRuntimeOptions = {
   requestedSessionId: string;
+  preserveSessionIdentity?: boolean;
   path: string;
   environment: string;
   sourceInstanceId?: string;
@@ -52,12 +53,24 @@ export class SessionTraceRuntime {
     let sessionId = options.requestedSessionId;
     let existing = await store.getSession(sessionId);
     let replacedSessionId: string | undefined;
+    if (existing?.status === "completed" && options.preserveSessionIdentity) {
+      const sourceId = options.sourceInstanceId ?? sourceInstanceId();
+      const writer = new TraceWriter(sessionId, sourceId, events => store.appendBatch(sessionId, events));
+      const runtime = new SessionTraceRuntime(sessionId, sourceId, store, writer);
+      runtime.completed = true;
+      writer.close();
+      return runtime;
+    }
     if (existing?.status === "completed") {
       replacedSessionId = sessionId;
       sessionId = createTraceSessionId();
       existing = undefined;
     }
     let ensured = await store.ensureActiveSession(sessionId, metadata);
+    if (ensured.record.status === "completed" && options.preserveSessionIdentity) {
+      store.close();
+      throw new Error("trace-completed-during-open");
+    }
     if (ensured.record.status === "completed") {
       replacedSessionId ??= sessionId;
       sessionId = createTraceSessionId();
