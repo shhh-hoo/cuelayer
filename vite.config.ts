@@ -1,3 +1,4 @@
+import { coreInterpretationResponse } from "./server/teaching/core/endpoint.ts";
 import { representationReviewEntry } from './src/dev/teaching-representation/entry.ts';
 import { interpretationDeadlines } from "./src/lesson-stream/runtime-policy.ts";
 import { defineConfig, loadEnv } from "vite";
@@ -41,6 +42,17 @@ export default defineConfig(({ mode }) => {
         if (!apiKey) { response.statusCode = 503; response.end(JSON.stringify({ error: "speech-not-configured" })); return; }
         try { response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ token: await createSpeechmaticsJWT({ type: "rt", apiKey, ttl: 60 }) })); }
         catch { response.statusCode = 502; response.end(JSON.stringify({ error: "speech-token-unavailable" })); }
+      });
+      server.middlewares.use("/api/teaching/core-interpretation", async (request, response) => {
+        response.setHeader("Cache-Control", "no-store");
+        response.setHeader("Content-Type", "application/json");
+        if (request.method !== "POST") { response.statusCode = 405; response.end(JSON.stringify({ error: "method-not-allowed" })); return; }
+        const controller = new AbortController();
+        response.on("close", () => { if (!response.writableEnded) controller.abort("client-disconnected"); });
+        try {
+          const result = await coreInterpretationResponse(await requestBody(request), { apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL, signal: controller.signal });
+          response.statusCode = result.status; response.end(JSON.stringify(result.body));
+        } catch { response.statusCode = 400; response.end(JSON.stringify({ error: "core-context-invalid" })); }
       });
       server.middlewares.use("/api/teaching/interpretation", async (request, response) => {
         response.setHeader("Cache-Control", "no-store");

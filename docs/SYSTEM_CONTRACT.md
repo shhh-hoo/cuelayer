@@ -353,9 +353,9 @@ A representation or spatial failure must preserve the last valid learner-visible
 
 Exact queue bounds, retry counts, deadlines, context budgets, request envelopes, batching, cooldowns and conflict policy remain executable configuration owned by code and tests.
 
-## Controlled Core live boundary
+## Core live boundary
 
-Normal `/session` remains legacy until the production cutover. The internal `CoreLiveSession` API requires explicit `lessonDomain: "core"` and an injected interpreter. It consumes closed canonical speech spans through the shared checkpoint converter and lossless scheduler, using the reviewed Core context/proposal/validation contracts directly. It provides authoritative Core state to a host; no compatibility renderer or Canvas layout is introduced here.
+Normal newly allocated `/session` identities durably claim Core before semantic work begins. Restoration selects the runtime from the immutable lesson-domain claim, preserving the deterministic historical v3/v4 legacy path. Missing, invalid or mismatched restoration claims fail closed. The shared `CoreLiveSession` API requires explicit `lessonDomain: "core"` and an injected interpreter; the production host supplies the Core HTTP adapter. It consumes closed canonical speech spans through the shared checkpoint converter and lossless scheduler, using the reviewed Core context/proposal/validation contracts directly. It provides authoritative Core state to the reviewed learner projection, representation and Canvas surface without converting it into legacy Board state. Diagnostic trace status cannot replace the stored lesson identity.
 
 The local event store records an immutable domain claim for each session, including empty sessions. Historical v3/v4 sessions are validated and claimed as legacy without conversion. A mismatched domain, mixed event generation, overwritten event identity or competing event sequence is rejected. Core sessions retain the v5 Core event generation, with additive persisted speech-run allocation events.
 

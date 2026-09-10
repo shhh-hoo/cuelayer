@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "preview": "vite preview",
+    "report:bundle": "node --import tsx scripts/report-production-bundle.ts",
     "test:live-state": "vitest run src/lesson-stream/continuous-state.test.tsx src/session/continuous-runtime.test.tsx",
     "eval:lesson-replay": "node --import tsx scripts/evaluate-lesson-replay.ts",
     "eval:semantics:validate": "node --experimental-strip-types scripts/evaluate-semantics.ts --validate",

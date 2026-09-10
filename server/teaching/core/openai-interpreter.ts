@@ -9,7 +9,7 @@ export type CoreCallDiagnostic = {
   response?: Awaited<ReturnType<CoreProviderTransport>>; transportError?: string;
 };
 /** Explicit injection supports offline validation and controlled Core live hosts. */
-export async function interpretCore(binding: CoreInterpretationBinding, model: string, transport: CoreProviderTransport, signal?: AbortSignal, record?: (diagnostic: CoreCallDiagnostic) => void) {
+export async function interpretCore(binding: Pick<CoreInterpretationBinding, "context">, model: string, transport: CoreProviderTransport, signal?: AbortSignal, record?: (diagnostic: CoreCallDiagnostic) => void) {
   const observe = (diagnostic: CoreCallDiagnostic) => { try { record?.(diagnostic); } catch { /* Diagnostics never alter the provider result. */ } };
   const request = { ...coreProviderRequest(binding), model };
   if (!model.trim() || Math.ceil(JSON.stringify(request).length / 4) + request.max_output_tokens > CORE_PROVIDER_BUDGET.maxEstimatedTokens) throw new Error("core-provider-envelope-budget-exceeded");
@@ -29,7 +29,7 @@ export async function interpretCore(binding: CoreInterpretationBinding, model: s
   const proposal = providerCoreProposalSchema.parse(JSON.parse(response.output_text));
   return { proposal, identity: coreProviderIdentity, requestedModel: model, actualModel: response.model };
 }
-/** Called only by separately authorized offline evaluation; never imported by production routes. */
+/** Server-only transport; credentials never enter the browser bundle. */
 export function openAICoreTransport(apiKey: string): CoreProviderTransport {
   const client = new OpenAI({ apiKey, maxRetries: 0 });
   return async (request, signal) => {

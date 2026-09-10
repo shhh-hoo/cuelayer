@@ -28,7 +28,7 @@ The corpus, gold, manifest, and evaluator identity remain frozen unless a scoped
 
 ## Compatibility warning
 
-The frozen v5 benchmark evaluates legacy semantic profiles (`alpha-core-p4-v7`, `alpha-augment-p4-v7`, `bounded-agent-p4-semantics-v7`). The current live PR15 runtime uses a later continuous/bounded profile and still implements the legacy Board-slot ontology.
+The frozen v5 benchmark evaluates legacy semantic profiles (`alpha-core-p4-v7`, `alpha-augment-p4-v7`, `bounded-agent-p4-semantics-v7`). The historical legacy runtime uses a later continuous/bounded profile and retains the Board-slot ontology for compatible restoration. New production sessions use the separate Core path.
 
 Therefore:
 
@@ -82,7 +82,7 @@ Cue authority remains distinct from factual provenance. New provider proposals m
 
 Syllabus is a soft product boundary, but this M2 schema intentionally does not accept free-form model belief as a common-knowledge factual provenance source. Low-risk common-knowledge augmentation is product-authorized in principle; its durable authority path requires separate review before production cutover. Do not fake it by mislabeling model belief as speech or a trusted domain rule.
 
-Core evaluation does not import the production scheduler/store/runtime. Normal `/session` remains legacy, and its frozen evaluator/corpus remain unchanged. Generated outputs should be redirected only to ignored `.cuelayer/` or `artifacts/` locations.
+Core evaluation does not import the production scheduler/store/runtime. Normal new `/session` sessions use the production Core host; the frozen legacy evaluator/corpus remain historical and unchanged. Generated outputs should be redirected only to ignored `.cuelayer/` or `artifacts/` locations.
 
 ```sh
 npm run eval:semantics:validate
@@ -112,7 +112,7 @@ Policy v2 distinguishes an unfinished current phrase (normally accepted no-op, w
 
 Policy v6 corrected that authority problem: model confidence may motivate verification but cannot settle learner-visible truth; settled correction requires host-verified trusted evidence. It also introduced proactive AI-origin Cue and separated intervention origin from factual provenance. Proposal v3 represented possible conflict as top-level non-accepting `NEEDS_VERIFICATION`.
 
-Policy v7 / proposal v4 close the scheduler contradiction before live integration. There is no top-level `NEEDS_VERIFICATION`: an otherwise accepted `PROPOSE` carries `verificationRequests[]` as best-effort non-authoritative sidecars. Ordinary semantic steps continue to consume evidence; invalid sidecars cannot roll back otherwise valid semantic acceptance. `NEEDS_CONTEXT` remains the only top-level non-accepting result. Context remains v3 because its projection shape is unchanged. Durable `lesson-event-v5-core` remains replay-compatible because verification sidecars are not durable events/state and production Core cutover has not occurred.
+Policy v7 / proposal v4 close the scheduler contradiction before live integration. There is no top-level `NEEDS_VERIFICATION`: an otherwise accepted `PROPOSE` carries `verificationRequests[]` as best-effort non-authoritative sidecars. Ordinary semantic steps continue to consume evidence; invalid sidecars cannot roll back otherwise valid semantic acceptance. `NEEDS_CONTEXT` remains the only top-level non-accepting result. Context remains v3 because its projection shape is unchanged. Durable `lesson-event-v5-core` remains replay-compatible because verification sidecars are not durable events/state and the cutover does not alter accepted-event schema or replay semantics.
 
 The frozen `CORE1-domain` fixture has a speech-intent/addressee ambiguity: “Supply its conventional symbol as enrichment.” appears in current teacher speech and was interpreted as a learner TASK. This does not establish domain-metadata leakage or arbitrary Cue invention. Current policy still states that domain metadata does not itself prove teacher-established learner work; independently AI-initiated Cue is product-authorized through explicit AI origin. This human adjudication changes neither the frozen fixture nor its recorded machine score.
 
@@ -181,4 +181,12 @@ This gate establishes a bounded architecture seam, not generic semantic entailme
 
 Browser acceptance uses `/dev/core-projector` at 1280×720 and 390×844 with reduced motion. Review accepted entry/revision, WIDEN/COMPARE and return, native artifact-internal resizing without changing accepted state or outer Canvas dimensions, teacher drag/wheel, revision and withdrawal during inspection, Follow teaching, mainline shift/refocus, clipping/overlap, node continuity, console output and network requests. The optional diagnostics disclosure supplies the measured homes, transient boxes, visible IDs and failure reasons. Store screenshots and logs in ignored `.cuelayer/reviews/`; do not commit generated evidence.
 
-The actual production-bundle regression permits only the generic representation/Canvas modules and the reviewed `accepted.content` implementation. It excludes development entries, Chemistry/Math capabilities and graph-layout packages. Import-boundary tests continue to reject activation of a Core semantic runtime/provider by normal browser/API routes; only accepted-reference schemas and diagnostic helpers are newly reachable. Full validation includes typecheck, all tests, production build, both frozen exemplar validators, clean repository hygiene and diff checks. No historical model evaluations, provider or verifier calls are part of this gate.
+The actual production-bundle regression permits only the generic representation/Canvas modules and the reviewed `accepted.content` implementation. It excludes development entries, Chemistry/Math capabilities and graph-layout packages. The import-boundary regression now follows the normal domain-gated Core route to its controller and reviewed shared surface, excluding legacy semantic reducers and development/subject capabilities. The separate legacy branch remains available for historical restoration. Full validation includes typecheck, all tests, production build, both frozen exemplar validators, clean repository hygiene and diff checks. No historical model evaluations, provider or verifier calls are part of this gate.
+
+## Normal production-route regression
+
+The cutover suite uses the actual `/session` component, durable IndexedDB domain gate, Core live controller and HTTP seam. Synthetic committed canonical speech and injected local proposals are the primary evidence; authored accepted GOLD snapshots are not the production-route proof. The suite checks persist-before-publish through learner DOM, provider/output/storage failures, identity-preserving revision, representation failure/recovery, replay without evidence duplication, historical v3/v4 restoration, domain mismatch, finalization and no dual semantic writer. Production composition tests additionally isolate diagnostic/verification failure, competing acceptance and retryable incomplete finalization. Existing Core tests retain independent knowledge/Cue conflict, timeout and cancellation coverage.
+
+`npm run report:bundle` measures the actual emitted production graph using built-in gzip/brotli compression. The production import regression follows static dependencies of each domain branch and the generated Core chunk, forbidding legacy semantic reducers, development fixtures, Chemistry/Math and graph-layout dependencies on the new Core route. Generated measurements belong in ignored review evidence.
+
+Browser acceptance of `/session` covers desktop, narrow/reduced-motion, durable Core claim, synthetic speech ingress, delayed persistence, revision/identity, mainline shift/refocus, teacher inspection, representation failure/recovery, exact reload, semantic finalization and historical legacy replay. The Runbook defines reproduction and evidence storage. These deterministic checks establish integration correctness only. M6 classroom/model/microphone acceptance remains a separate HOLD gate; no frozen corpus or historical model result is changed or rerun.

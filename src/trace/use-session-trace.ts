@@ -9,6 +9,7 @@ const INITIAL_PENDING_LIMIT = 256;
 
 export type SessionTraceController = {
   sessionId: string;
+  created: boolean;
   snapshot: SessionTraceRuntimeSnapshot | { status: "initializing" | "degraded"; pendingCount: number; droppedCount: number; consecutiveFailures: number; completed: false; sourceInstanceId?: string; error?: string };
   emit: TraceEmitter;
   flush(): Promise<void>;
@@ -38,8 +39,9 @@ function queueBeforeRuntime(pending: PendingState, draft: SessionTraceDraft) {
   pending.drafts.push(draft);
 }
 
-export function useSessionTrace({ observeStatus = false }: { observeStatus?: boolean } = {}): SessionTraceController {
+export function useSessionTrace({ observeStatus = false, preserveSessionIdentity = false }: { observeStatus?: boolean; preserveSessionIdentity?: boolean } = {}): SessionTraceController {
   const [initialIdentity] = useState(() => resolveTraceSessionIdentity(window.location, window.history));
+  const [created, setCreated] = useState(initialIdentity.created);
   const [requestedSessionId, setRequestedSessionId] = useState(initialIdentity.sessionId);
   const [sessionId, setSessionId] = useState(initialIdentity.sessionId);
   const latencyRef = useRef(new LearnerLatencyTracker());
@@ -64,6 +66,7 @@ export function useSessionTrace({ observeStatus = false }: { observeStatus?: boo
 
     void SessionTraceRuntime.open({
       requestedSessionId,
+      preserveSessionIdentity,
       path: window.location.pathname,
       environment: import.meta.env.MODE,
     }).then((runtime) => {
@@ -110,7 +113,7 @@ export function useSessionTrace({ observeStatus = false }: { observeStatus?: boo
       runtimeRef.current = undefined;
       if (runtime) void runtime.flush().catch(() => undefined).finally(() => runtime.close());
     };
-  }, [observeStatus, requestedSessionId]);
+  }, [observeStatus, requestedSessionId, preserveSessionIdentity]);
 
   const flush = useCallback(async () => {
     await runtimeRef.current?.flush();
@@ -138,6 +141,7 @@ export function useSessionTrace({ observeStatus = false }: { observeStatus?: boo
     pendingRef.current = { drafts: [], dropped: new Map() };
     latencyRef.current = new LearnerLatencyTracker();
     setSnapshot(initialSnapshot());
+    setCreated(true);
     setSessionId(nextSessionId);
     setRequestedSessionId(nextSessionId);
     return nextSessionId;
@@ -158,5 +162,5 @@ export function useSessionTrace({ observeStatus = false }: { observeStatus?: boo
     return runtime.exportTraceSessionJsonl(sessionId);
   }, []);
 
-  return { sessionId, snapshot, emit, flush, complete, startNewSession, readRecent, exportJsonlBlob, listTraceSessions, readTraceSession, exportTraceSessionJsonl };
+  return { sessionId, created, snapshot, emit, flush, complete, startNewSession, readRecent, exportJsonlBlob, listTraceSessions, readTraceSession, exportTraceSessionJsonl };
 }

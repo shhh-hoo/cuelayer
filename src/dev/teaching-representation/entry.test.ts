@@ -17,9 +17,25 @@ it('selects the isolated review entry before module discovery, leaving /session 
 });
 it('ships only the reviewed production representation modules and excludes development/domain capabilities', async () => {
   const modules: string[] = [];
+  const chunks: Array<{ name: string; imports: string[]; modules: string[] }> = [];
   await build({ logLevel: 'silent', build: { write: false }, plugins: [{ name: 'assert-production-isolation',
-    generateBundle(_options, bundle) { for (const item of Object.values(bundle)) if (item.type === 'chunk') modules.push(...Object.keys(item.modules)); },
+    generateBundle(_options, bundle) { for (const item of Object.values(bundle)) if (item.type === 'chunk') { modules.push(...Object.keys(item.modules)); chunks.push({ name: item.fileName, imports: item.imports, modules: Object.keys(item.modules) }); } },
   }] });
+  const branchModules = (entry: string) => {
+    const found = chunks.find(chunk => chunk.modules.some(id => id.endsWith(entry)));
+    expect(found).toBeDefined();
+    const names = new Set<string>();
+    const visit = (name: string) => { if (names.has(name)) return; names.add(name); chunks.find(chunk => chunk.name === name)?.imports.forEach(visit); };
+    visit(found!.name);
+    return chunks.filter(chunk => names.has(chunk.name)).flatMap(chunk => chunk.modules);
+  };
+  const core = branchModules('/src/session/CoreSession.tsx');
+  expect(core.some(id => id.endsWith('/src/lesson-stream/core/runtime.ts'))).toBe(true);
+  expect(core.some(id => id.endsWith('/src/session/CoreTeachingSurface.tsx'))).toBe(true);
+  expect(core.filter(id => /\/lesson-stream\/(runtime|teaching-state|accepted-interpretations)\.ts$|\/use-live-teaching\.ts$/.test(id))).toEqual([]);
+  const legacy = branchModules('/src/session/LegacySession.tsx');
+  expect(legacy.some(id => id.endsWith('/src/lesson-stream/runtime.ts'))).toBe(true);
+  expect(legacy.filter(id => /\/lesson-stream\/core\/(runtime|live-session|teaching-state)\.ts$/.test(id))).toEqual([]);
   expect(modules.some(id => id.endsWith('/src/main.tsx'))).toBe(true);
   expect(modules.filter(id => /src\/dev\/|@xyflow|@dagrejs|webcola|elkjs/.test(id))).toEqual([]);
   expect(modules.filter(id => id.includes('/src/representation-capabilities/')).map(id => id.split('/src/')[1])).toEqual(['representation-capabilities/accepted-text.tsx']);

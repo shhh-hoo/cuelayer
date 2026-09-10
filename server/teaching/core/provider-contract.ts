@@ -4,7 +4,7 @@ import { CORE_PROPOSAL_VERSION, providerCoreProposalSchema } from "../../../src/
 import { CORE_INTERPRETATION_POLICY, CORE_POLICY_VERSION } from "./semantic-policy.ts";
 
 export const CORE_PROVIDER_BUDGET = Object.freeze({ maxEstimatedTokens: 24_000, outputTokens: 8_192, estimate: "ceil-json-characters-divided-by-four" });
-export function coreProviderRequest(binding: CoreInterpretationBinding) {
+export function coreProviderRequest(binding: Pick<CoreInterpretationBinding, "context">) {
   const request = {
     reasoning: { effort: "low" as const }, max_output_tokens: CORE_PROVIDER_BUDGET.outputTokens,
     input: [{ role: "system" as const, content: CORE_INTERPRETATION_POLICY }, { role: "user" as const, content: JSON.stringify(binding.context) }],

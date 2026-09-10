@@ -4,13 +4,12 @@ import { RetryBackoff } from "../../session/retry-backoff.ts";
 import { persistedAuditDigest } from "../../trace/audit.ts";
 import { sanitizeTraceValue, type TraceEmitter } from "../../trace/contracts.ts";
 import { abortable } from "../abortable.ts";
-import { openLessonRuntime } from "../open-runtime.ts";
 import { LosslessInterpretationScheduler } from "../pending-evidence.ts";
 import { interpretationDeadlines, type InterpretationFailure } from "../runtime-policy.ts";
 import { buildCoreInterpretationContext, type ContextOptions, type CoreInterpretationBinding } from "./interpretation-context.ts";
 import { CORE_PROPOSAL_LIMITS, coreProposalSchema } from "./interpretation-proposal.ts";
 import type { CoreReplay } from "./replay.ts";
-import type { CoreEventStore, CoreLessonStreamRuntime } from "./runtime.ts";
+import { CoreLessonStreamRuntime, type CoreEventStore } from "./runtime.ts";
 import { CoreTrace, coreContextDiagnostics, coreProviderResponseAudit } from "./trace.ts";
 import { VerificationDispatcher, type VerificationSink } from "./verification-dispatcher.ts";
 
@@ -41,7 +40,7 @@ function failureCategory(error: unknown, stage: RequestStage, signal?: AbortSign
   return "provider";
 }
 
-/** Controlled/headless live API. It owns one semantic flight; no production route activates it. */
+/** Shared live controller for production and injected hosts. It owns one semantic flight. */
 export class CoreLiveSession {
   private readonly scheduler = new LosslessInterpretationScheduler();
   readonly verification: VerificationDispatcher;
@@ -66,7 +65,7 @@ export class CoreLiveSession {
   }
   static async open(options: CoreLiveOptions) {
     if (options.lessonDomain !== "core") throw new Error("lesson-domain-mismatch");
-    const runtime = await openLessonRuntime(options.sessionId, { domain: "core", store: options.store });
+    const runtime = await CoreLessonStreamRuntime.open(options.sessionId, options.store);
     try {
       await runtime.start();
       const session = new CoreLiveSession(runtime, options);

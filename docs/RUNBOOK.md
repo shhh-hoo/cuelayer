@@ -105,7 +105,7 @@ Provider timeout, malformed output, validation rejection, persistence failure, a
 
 Historical accepted event versions that the runtime promises to support must remain replayable. Do not rewrite old accepted events or run current proposal validation over historical accepted payloads merely to simplify migration.
 
-The upcoming Core-domain migration should introduce a versioned event/state contract and preserve legacy replay intentionally.
+New sessions use `lesson-event-v5-core`. Existing v3/v4 sessions replay through their historical reducer generation; no events are translated or rewritten on read.
 
 ## Documentation boundary
 
@@ -120,17 +120,17 @@ Use:
 
 PR descriptions, spike reports, benchmark run reports, and historical notes are not authority documents.
 
-## Controlled Core runtime (M3)
+## Production session domain and Core runtime
 
-Normal `/session` remains on the legacy runtime. Core live orchestration is an explicit internal host API, with a Core interpreter supplied by the caller and the same closed canonical speech spans used by the existing checkpoint pipeline. It is exercised with deterministic injected transports; opening a Core runtime does not activate a provider or microphone.
+Normal `/session` allocates an identity and calls `LocalLessonEventStore.resolveDomain` before mounting a semantic host. Newly allocated identities durably claim `core`, including empty sessions. A URL with an existing `sessionId` restores its stored claim. An unknown reopen identity fails with `lesson-domain-missing`; invalid claims and mismatched generations fail closed. Historical unclaimed v3/v4 logs retain the reviewed deterministic legacy detection and are claimed as legacy without changing event bytes. An unclaimed Core log is rejected. Query parameters cannot switch domains.
 
 Each stored session has one fixed semantic domain. A domain mismatch must fail restoration rather than convert events or start a second semantic authority. Core finalization must drain committed semantic evidence before ending the lesson; incomplete drains remain reloadable and retryable. Verification side work is best-effort and does not delay semantic finalization.
 
-M4C adds a read-only shared-projector host for this published Core runtime. Normal new-session domain selection remains legacy; the internal Core live API still requires explicit host configuration.
+The domain gate lazily loads `CoreSession` or `LegacySession`. The Core host calls `openCoreSession`, which composes the existing `CoreLiveSession` controller with the bounded HTTP adapter. Accepted publication drives `CoreTeachingSurface` through `PresentationStage`. Legacy restoration retains `useLiveTeaching`, `LessonStreamRuntime` and its legacy-compatible surface. No Core accepted state is converted into a Board snapshot. Trace completion cannot allocate a replacement lesson identity on reload; an ended Core lesson remains readable, and starting another lesson explicitly allocates a new identity.
 
 Use `openLessonRuntime(sessionId, { domain: "core" })` for a typed Core persistence owner, or `CoreLiveSession.open` for the complete scheduler/controller. `openLessonRuntime(sessionId)` defaults to legacy. Restoration must specify the same domain; an existing domain claim cannot be switched by changing URL parameters or inspecting later events.
 
-An internal host supplies the session/speech-run identities, canonical closed spans and interpreter. In a browser the runtime defaults to local IndexedDB. A Node host supplies a `CoreEventStore` implementing atomic append/abort; deterministic tests use an injected store and transport. The provider bridge is `createCoreLiveInterpreter(model, transport)` from `server/teaching/core/live-interpreter.ts`; it uses the existing Core Structured Outputs envelope and parser, with no credential lookup. No production route imports or activates this bridge.
+An internal host supplies the session/speech-run identities, canonical closed spans and interpreter. In a browser the runtime defaults to local IndexedDB. A Node host supplies a `CoreEventStore` implementing atomic append/abort; deterministic tests use an injected store and transport. The provider bridge is `createCoreLiveInterpreter(model, transport)` from `server/teaching/core/live-interpreter.ts`; it uses the existing Core Structured Outputs envelope and parser, with no credential lookup. Production uses `/api/teaching/core-interpretation`, backed by the same `coreProviderRequest` envelope and `interpretCore` parser. Only the bounded context crosses HTTP; full replay and reference maps remain local acceptance bindings. Server configuration uses the existing `OPENAI_API_KEY` and `OPENAI_MODEL` values. Missing configuration returns a non-accepting failure and retains pending evidence. The OpenAI SDK and credentials remain server-side. The legacy interpretation endpoint remains exclusively for legacy hosts.
 
 ```ts
 const live = await CoreLiveSession.open({
@@ -145,7 +145,7 @@ const ended = await live.finalize(finalClosedSpans, speechRunId);
 // An incomplete drain remains retryable; do not mark the host lesson ended.
 ```
 
-`contextOptions` supplies reviewed host scopes (`required`, `writable`, `factualBasis`) and any already trusted domain rules. The default retains the reviewed builder's current-Core append and grounded Parked-candidate capabilities. Choosing further mutation scopes is explicit host configuration; the controller does not infer authority from provider operations or verification leads. No automatic external evidence retrieval is configured.
+`contextOptions` supplies reviewed host scopes (`required`, `writable`, `factualBasis`) and any already trusted domain rules. The default retains the reviewed builder's current-Core append and grounded Parked-candidate capabilities. The normal production host explicitly permits revisions of up to the existing optional-root budget of valid units in the current Core, plus the current Cue, using `writable`. The existing builder still owns structural closure, bounded admission and capabilities; the controller does not infer authority from provider operations or verification leads. Other historical targets retain the existing grounded candidate/refocus behavior. This conservative host scope does not expand correction authority or add domain rules. No automatic external evidence retrieval is configured.
 
 Core scheduling retains the existing two-checkpoint maximum, approximate evidence budget and 8-second client deadline. The provider deadline is cleared before persistence. Transport/storage failures retry after 1 and 2 seconds and pause after three consecutive failures; channel conflicts retry immediately within the same failure limit. Schema/semantic/budget rejection pauses immediately. `NEEDS_CONTEXT` also pauses immediately: `resume()` reprojects its grounded query, while newly committed evidence remains queued behind the prefix. `cancel()` retains evidence and requires resume; changing a speech run cancels stale work and continues the ordered pending evidence with a fresh request identity.
 
@@ -182,11 +182,11 @@ The generic producer receives a detached frozen accepted snapshot and committed 
 
 Semantic Space membership currently uses explicit accepted anchors plus caller-provided grouping keys. Members append in local order; measured growth moves only obstructed local members. Independently packed spaces use a deterministic bounded pressure wave. COMPARE/WIDEN coordinates remain a separate temporary overlay. Safe fixed-size travel uses the extracted measured motion planner; content resizing or an unsafe two-phase path settles atomically instead of animating through overlap. The automatic camera has a 0.65 zoom floor and reports insufficient fit in diagnostics; arbitrary dense layout and oversized content are not solved. Space/artifact persistence across reload or devices is not implemented.
 
-This authored review entry has no model, provider or verifier call path and remains outside the production bundle. Normal `/session` still creates legacy sessions. The separate Core-backed review below exercises the production shared-surface integration.
+This authored review entry has no model, provider or verifier call path and remains outside the production bundle. Normal new `/session` sessions use Core; this authored entry remains separate from production acceptance. The separate Core-backed review below exercises the production shared-surface integration.
 
 ## Core shared-projector integration (M4C)
 
-A controlled Core host passes `live.runtime` as `coreTeaching.source` to the existing `PresentationStage`, or mounts `CoreTeachingSurface` directly. The stage's props select exactly one Core or legacy surface. A Core surface subscribes to `CoreLessonStreamRuntime` publication and reads its accepted state plus committed checkpoints; it has no semantic reducer, event-store writer, interpreter or verification sink. The production `/session` composition still supplies legacy `teachingState` and creates legacy sessions. M4C does not add a URL switch for changing session domain or activate the Core provider bridge.
+A controlled Core host passes `live.runtime` as `coreTeaching.source` to the existing `PresentationStage`, or mounts `CoreTeachingSurface` directly. The stage's props select exactly one Core or legacy surface. A Core surface subscribes to `CoreLessonStreamRuntime` publication and reads its accepted state plus committed checkpoints; it has no semantic reducer, event-store writer, interpreter or verification sink. Normal Core `/session` composition supplies `coreTeaching.source = live.runtime`. Only a stored legacy session supplies legacy `teachingState`. There is no URL switch for changing semantic domain.
 
 The production composition root is `src/session/representation-composition.ts`. It registers only `accepted.content`, a deterministic literal rendering of accepted Object/Relation/Support/Cue text. It does not parse subject structure, execute generated markup, or register the finite Chemistry/Math development capabilities. New claims still require Core acceptance. Availability is bounded to 128 candidate targets: requested targets first, then valid current-Core units in stable identity order. Retained artifacts revalidate independently of this candidate pool. Exceeding this availability budget is not semantic deletion or a lesson capacity.
 
@@ -199,3 +199,22 @@ Production candidate/artifact/payload IDs use a versioned lossless tuple of sess
 Canvas observes the surface and every mounted artifact with `ResizeObserver`, deduplicates unchanged dimensions, and settles measured pressure before the next paint. It measures on invalidation, never every animation frame. Invalid measurement/unresolved pressure hides the unsafe surface and reports a distinct visual failure; renderer exceptions are isolated per artifact and retry on a later accepted revision. Revalidation continues during shared-camera inspection and invalidated content withdraws. Follow teaching frames the current selection, while subsequent M4A instructions retain authority. Non-selected valid artifacts remain mounted but hidden. COMPARE/WIDEN temporarily wrap canonical artifacts into rows when needed for the viewport; persistent homes remain unchanged. Insufficient fit at the 0.65 automatic zoom floor is visible and diagnostic, with manual pan/zoom available.
 
 For deterministic browser review, open `/dev/core-projector` on the normal development server. **Accept teaching** submits synthetic closed evidence through the actual Core scheduler, validator and IndexedDB persistence using an injected local interpreter. **Revise content**, **New mainline**, **Return mainline** and **Withdraw first** perform subsequent accepted semantic transactions. **Focus**, **Compare** and **Widen** supply explicit transient attention plans; drag/wheel and **Follow teaching** operate the production shared camera. The diagnostics disclosure records accepted state, representation/lifecycle trace and measured Canvas geometry. This dev-only entry has no model/provider/verifier or microphone path; it does not load authored GOLD snapshots. Capture review evidence only under ignored `.cuelayer/reviews/`.
+
+## Normal-route cutover validation
+
+`src/session/production-session.test.tsx` mounts the actual normal session entrypoint with synthetic speech transport, the real Core HTTP client/scheduler/validator and local IndexedDB. It checks durable domain selection, canonical speech ingress, no legacy runtime or dual-write, delayed/failed persistence before DOM publication, provider rejection, stable revision identity, renderer recovery, exact reload without another interpretation call, completed-trace isolation, finalization and legacy routing. `session-domain.test.ts` covers missing/invalid/mismatched claims and historical v3/v4 combinations; `core-session.test.ts` covers side failures, stale acceptance and incomplete finalization through the production composition.
+
+```sh
+npm run typecheck
+npm test
+npm run build
+npm run eval:semantics:validate
+npm run eval:core:validate
+npm run check:repo -- --clean
+git diff --check
+npm run report:bundle
+```
+
+The bundle command builds the actual production graph without writing build output and reports module IDs/counts, per-chunk raw/gzip/brotli bytes and the initial static load. Compression uses Node's built-in zlib. Baseline PR31 (`8f54e9b428835b808b810eb09142897ad18459bf`) is 122 modules, 446,635 raw, 130,930 gzip and 112,302 brotli bytes. Compare combined emitted chunks consistently; compression totals sum separately compressed chunks. Use `-- --root PATH` to measure another checkout. Core controller/client code is lazy-loaded after the stored Core domain resolves; legacy controller code loads only for legacy restoration.
+
+Browser review must use `/session` with local injected interpretation, synthetic committed speech and real IndexedDB persistence. Instrumentation/transport overrides may be supplied by an ignored review-server plugin; do not add a production URL domain toggle or import development fixtures into the application. Test desktop 1280×720, narrow 390×844 and reduced motion; hold persistence, revise accepted content, shift/refocus mainlines, inspect/follow, fail/recover representation, reopen and finalize pending evidence. Also restore a reviewed historical v3/v4 fixture. Check settled geometry, visible artifact identities, console and requests. Record evidence only in ignored `.cuelayer/reviews/m5/`. No microphone, external model/verifier call or new model evaluation is part of this gate. The existing zoom floor and limited accepted-content fallback remain unchanged.
