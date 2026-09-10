@@ -18,11 +18,13 @@
     "check:repo": "node --experimental-strip-types scripts/check-repository-hygiene.ts"
   },
   "dependencies": {
+    "@dagrejs/dagre": "3.1.1",
     "@speechmatics/auth": "^0.1.0",
     "@speechmatics/browser-audio-input": "^2.0.4",
     "@speechmatics/browser-audio-input-react": "^2.0.4",
     "@speechmatics/real-time-client": "^8.5.1",
     "@speechmatics/real-time-client-react": "^3.5.1",
+    "@xyflow/react": "12.11.6",
     "katex": "0.18.4",
     "openai": "^7.8.0",
     "react": "19.2.8",
@@ -34,11 +36,13 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "6.1.1",
+    "elkjs": "0.12.0",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.0.1",
     "tsx": "^4.23.13",
     "typescript": "5.9.3",
     "vite": "8.2.2",
-    "vitest": "4.1.11"
+    "vitest": "4.1.11",
+    "webcola": "3.4.0"
   }
 }
