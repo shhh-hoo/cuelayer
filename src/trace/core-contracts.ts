@@ -12,7 +12,19 @@ export type CoreVerificationJob = {
   sessionId: string; coreRequestId: string; verificationRequestIndex: number;
   checkpointIds: string[]; query: string; claim: string; candidateEvidence: string;
 };
+// Field vocabulary matches the independent M6a latency work; HTTP/abort instrumentation stays there.
+export type CoreQueuePressure = { pendingCheckpointCount: number; oldestPendingAgeMs: number | null; requestCheckpointCount: number;
+  processedThroughSequence: number; consecutiveFailures: number; paused: boolean; backingOff: boolean };
 export type CoreTracePayloads = {
+  "core.session_window": import("../lesson-stream/core/session-coordinator.ts").SessionCoordinator["window"] & {
+    status: "restored" | "committed"; lane: "LIVE"; timestamp: string;
+    eligibility?: { waitMs: number; reason: import("../lesson-stream/core/session-coordinator.ts").DispatchReason };
+  };
+  "core.attempt_completed": { scheduledAt: string; completedAt: string; elapsedMs: number;
+    outcome: "accepted" | "needs_context" | "failure"; queue: CoreQueuePressure;
+    task?: import("../lesson-stream/core/session-processing.ts").SessionTask;
+    processing: import("../lesson-stream/core/session-processing.ts").LiveProcessing["dispositions"];
+    unresolvedCount: number; stageReviewCount: number };
   "core.representation": { knowledgeRevision: number; cueRevision: number; processedThroughSequence: number;
     candidateIds: string[]; selectedIds: string[]; projection: import('../learner-projection/contracts.ts').LearnerProjection;
     changes: import('../teaching-representation/artifact-runtime.ts').ArtifactChange[];
@@ -22,7 +34,9 @@ export type CoreTracePayloads = {
   "core.projector": { knowledgeRevision: number; cueRevision: number; status: 'rendered' | 'degraded'; reason?: string;
     evidence?: import('../canvas-spatial/Canvas.tsx').CanvasEvidence };
   "core.checkpoint_committed": { checkpointId: string; lessonSequence: number; eventId: string };
-  "core.request": { requestId: string; checkpointIds: string[]; diagnostics: CoreContextDiagnostics;
+  "core.request": { scheduledAt?: string; queuedAt?: string; queue?: CoreQueuePressure;
+    task?: import("../lesson-stream/core/session-processing.ts").SessionTask;
+    dispatchReason?: import("../lesson-stream/core/session-coordinator.ts").DispatchReason; requestId: string; checkpointIds: string[]; diagnostics: CoreContextDiagnostics;
     context: InterpretationContext; entities: Array<{ handle: string; target: import("../lesson-stream/core/contracts.ts").SemanticReference; capabilities: string[] }> };
   "core.context_blocked": { checkpointIds: string[]; reason: string; mandatoryClosureFailed: boolean };
   "core.provider_request": { identity: { contract: string; policy: string }; requestedModel: string; request: unknown; requestDigest: string };

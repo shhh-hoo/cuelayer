@@ -1,3 +1,4 @@
+import type { LiveProcessing, UnresolvedObligation } from "./session-processing.ts";
 import type { CompactEvidenceCheckpoint, GroundingRecord } from "../contracts.ts";
 import type { CoreEvent, CoreTeachingState } from "./contracts.ts";
 import { coreEventSchema } from "./events.ts";
@@ -9,11 +10,14 @@ export type CoreReplay = {
   checkpoints: CompactEvidenceCheckpoint[];
   grounding: Map<string, GroundingRecord>;
   consumedCheckpointIds: Set<string>;
+  dispositions: Map<string, LiveProcessing["dispositions"][number]>;
+  unresolved: Map<string, UnresolvedObligation>;
+  reviews: Map<string, NonNullable<LiveProcessing["review"]>>;
   ended: boolean;
 };
 
 export function createCoreReplay(sessionId: string): CoreReplay {
-  return { events: [], state: createCoreTeachingState(sessionId), checkpoints: [], grounding: new Map(), consumedCheckpointIds: new Set(), ended: false };
+  return { events: [], state: createCoreTeachingState(sessionId), checkpoints: [], grounding: new Map(), consumedCheckpointIds: new Set(), dispositions: new Map(), unresolved: new Map(), reviews: new Map(), ended: false };
 }
 
 /** Pure event fold, shared by offline acceptance and replay. This function does not persist or publish. */
@@ -43,12 +47,35 @@ export function appendCoreEvent(base: CoreReplay, input: unknown): CoreReplay {
   if (event.type === "core.step_accepted") {
     if (base.events.some(e => e.type === "core.step_accepted" && e.step.requestId === event.step.requestId && e.step.stepIndex === event.step.stepIndex)) throw new Error("core-step-identity-collision");
     const state = reduceCoreStep(base.state, event.step, base.checkpoints);
-    next = { ...base, state, consumedCheckpointIds: new Set([...base.consumedCheckpointIds, ...event.step.consumesCheckpointIds]) };
+    const dispositions = new Map(base.dispositions), unresolved = new Map(base.unresolved), reviews = new Map(base.reviews);
+    const processing = event.step.liveProcessing;
+    const changed = state.knowledge.revision !== base.state.knowledge.revision || state.cue.revision !== base.state.cue.revision;
+    const records = processing?.dispositions ?? event.step.consumesCheckpointIds.map(checkpointId => ({ checkpointId, kind: changed ? "semantic_change" as const : "resolved_no_change" as const }));
+    if (JSON.stringify(records.map(r => r.checkpointId)) !== JSON.stringify(event.step.consumesCheckpointIds)) throw new Error("core-processing-coverage-invalid");
+    for (const record of records) {
+      if (record.kind === "semantic_change" && !changed || record.kind === "resolved_no_change" && changed) throw new Error("core-processing-disposition-invalid");
+      if (record.kind === "deferred_unresolved") {
+        if (!record.phrase.trim() || !base.checkpoints.find(c => c.checkpointId === record.checkpointId)?.text.includes(record.phrase)) throw new Error("core-processing-unresolved-grounding");
+        unresolved.set(record.checkpointId, { checkpointId: record.checkpointId, phrase: record.phrase });
+      }
+      dispositions.set(record.checkpointId, record);
+    }
+    if (new Set(processing?.resolvedObligationIds).size !== (processing?.resolvedObligationIds.length ?? 0)) throw new Error("core-processing-resolution-duplicate");
+    for (const id of processing?.resolvedObligationIds ?? []) {
+      if (!base.unresolved.has(id)) throw new Error("core-processing-obligation-missing");
+      unresolved.delete(id);
+    }
+    if (processing?.review) {
+      if (JSON.stringify(processing.review.checkpointIds) !== JSON.stringify(event.step.consumesCheckpointIds) || reviews.has(processing.review.id)) throw new Error("core-processing-review-invalid");
+      reviews.set(processing.review.id, processing.review);
+    }
+    next = { ...base, state, dispositions, unresolved, reviews, consumedCheckpointIds: new Set([...base.consumedCheckpointIds, ...event.step.consumesCheckpointIds]) };
   }
   if (event.type === "teaching_cue.expired" && base.state.cue.active?.id === event.cueId && base.state.cue.revision === event.baseCueRevision) {
     if (base.state.cue.active.kind !== "NOTE") throw new Error("core-only-note-can-expire");
     next = { ...base, state: { ...base.state, cue: { revision: base.state.cue.revision + 1 } } };
   }
+  if (event.type === "lesson.ended" && base.checkpoints.some(c => !base.dispositions.has(c.checkpointId))) throw new Error("core-ended-with-pending-evidence");
   return { ...next, events: [...base.events, event], ended: event.type === "lesson.ended" };
 }
 
@@ -61,5 +88,5 @@ export function replayCoreEvents(input: readonly unknown[], emptySessionId?: str
 }
 
 export function pendingCoreEvidence(replay: CoreReplay) {
-  return replay.checkpoints.filter(c => !replay.consumedCheckpointIds.has(c.checkpointId));
+  return replay.checkpoints.slice(replay.state.processedThroughSequence);
 }

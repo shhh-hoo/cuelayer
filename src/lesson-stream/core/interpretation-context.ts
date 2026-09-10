@@ -1,6 +1,7 @@
 import type { CompactEvidenceCheckpoint } from "../contracts.ts";
 import type { CoreTeachingState, Provenance, SemanticReference } from "./contracts.ts";
-import { appendCoreEvent, createCoreReplay, type CoreReplay } from "./replay.ts";
+import type { CoreReplay } from "./replay.ts";
+import { SessionIndexes } from "./session-indexes.ts";
 import { resolveSemanticReference } from "./teaching-state.ts";
 
 export const CORE_CONTEXT_VERSION = "core-interpretation-context-v3";
@@ -33,15 +34,8 @@ const characters = (value: unknown) => JSON.stringify(value).length;
 const valid = (value: ReturnType<typeof resolveSemanticReference>) => value && (!("status" in value) || value.status === "valid");
 
 /** Reconstructs exact channel snapshots. Historical provenance never reads today's same-ID value. */
-export function historicalSources(base: CoreReplay) {
-  const knowledge = new Map<number, CoreTeachingState>(), cue = new Map<number, CoreTeachingState>();
-  let replay = createCoreReplay(base.state.sessionId);
-  knowledge.set(0, replay.state); cue.set(0, replay.state);
-  for (const event of base.events) {
-    replay = appendCoreEvent(replay, event);
-    knowledge.set(replay.state.knowledge.revision, replay.state);
-    cue.set(replay.state.cue.revision, replay.state);
-  }
+export function historicalSources(base: CoreReplay, indexes = new SessionIndexes()) {
+  const { knowledge, cue, checkpoints } = indexes.sync(base);
   const resolve = (target: SemanticReference, revision: number) => {
     const snapshot = (target.kind === "CUE" ? cue : knowledge).get(revision);
     const value = snapshot && resolveSemanticReference(snapshot, target);
@@ -50,15 +44,17 @@ export function historicalSources(base: CoreReplay) {
   };
   const seen = new Set<string>(), memo = new Map<string, string[]>();
   const origins = (p: Provenance): string[] => {
+    const cachedOrigins = indexes.origins.get(p);
+    if (cachedOrigins) return [...cachedOrigins];
     const result = new Set<string>();
     for (const ref of p.speechRefs) {
-      if (!base.checkpoints.find(c => c.checkpointId === ref.checkpointId)?.text.includes(ref.quote) || !ref.quote.trim()) throw new Error("core-context-source-evidence-missing");
+      if (!checkpoints.get(ref.checkpointId)?.text.includes(ref.quote) || !ref.quote.trim()) throw new Error("core-context-source-evidence-missing");
       result.add("speech");
     }
     if (p.domainBasis !== undefined) result.add("domain");
     if (p.aiCorrection) {
       const ref = p.aiCorrection.trigger;
-      if (!base.checkpoints.find(c => c.checkpointId === ref.checkpointId)?.text.includes(ref.quote) || !ref.quote.trim()) throw new Error("core-context-source-evidence-missing");
+      if (!checkpoints.get(ref.checkpointId)?.text.includes(ref.quote) || !ref.quote.trim()) throw new Error("core-context-source-evidence-missing");
       result.add("ai_correction");
     }
     for (const ref of p.stateRefs) {
@@ -75,13 +71,17 @@ export function historicalSources(base: CoreReplay) {
       seen.delete(sourceKey);
     }
     if (!result.size) throw new Error("core-context-provenance-missing");
-    return [...result].sort();
+    const resolved = [...result].sort();
+    indexes.origins.set(p, resolved);
+    return [...resolved];
   };
   return { resolve, origins };
 }
 
 export type ContextOptions = {
   requestId: string; newEvidence: readonly CompactEvidenceCheckpoint[];
+  /** Session-owned immutable replay uses a disposable index; external callers retain an isolated clone. */
+  indexes?: SessionIndexes;
   required?: readonly SemanticReference[];
   readOnly?: readonly SemanticReference[];
   /** Explicit host authorization; dependencies remain reference-only. */
@@ -97,12 +97,12 @@ export type ContextOptions = {
 
 /** Pure projection. All indexes and archival lineage remain local; no durable state is trimmed. */
 export function buildCoreInterpretationContext(input: CoreReplay, options: ContextOptions): CoreInterpretationBinding {
-  const base = structuredClone(input), budgets = { ...CORE_CONTEXT_BUDGETS, ...options.budgets };
+  const base = options.indexes ? input : structuredClone(input), indexes = (options.indexes ?? new SessionIndexes()).sync(input), budgets = { ...CORE_CONTEXT_BUDGETS, ...options.budgets };
   for (const value of Object.values(budgets)) if (!Number.isSafeInteger(value) || value < 0) throw new Error("core-context-budget-invalid");
-  const pending = base.checkpoints.filter(c => c.lessonSequence > base.state.processedThroughSequence);
+  const pending = base.checkpoints.slice(base.state.processedThroughSequence);
   if (!options.requestId || !options.newEvidence.length || options.newEvidence.some((c, i) => JSON.stringify(c) !== JSON.stringify(pending[i]))) throw new Error("core-context-pending-prefix-invalid");
   const selected = new Map<string, BoundEntity>(), evidence = new Map<string, CompactEvidenceCheckpoint>();
-  const sources = historicalSources(base), readOnly = new Set((options.readOnly ?? []).map(key));
+  const sources = historicalSources(base, indexes), readOnly = new Set((options.readOnly ?? []).map(key));
   const writable = new Set((options.writable ?? []).map(key));
   const rules = structuredClone([...(options.domainRules ?? [])]);
   if (rules.length > budgets.domainRules || new Set(rules.map(r => r.id)).size !== rules.length || rules.some(r => !/^[a-z][a-z0-9_]{0,39}$/.test(r.id) || !r.text.trim() || !r.basis.trim())) throw new Error("core-context-domain-rules-invalid");
@@ -227,19 +227,19 @@ export function buildCoreInterpretationContext(input: CoreReplay, options: Conte
     return Object.values(units).map((unit, index) => ({ target: { kind, coreId: c.id, id: unit.id }, score: score(unit.value.text), index }));
   })).sort((a, b) => b.score - a.score || b.index - a.index || key(a.target).localeCompare(key(b.target)));
   for (const root of roots.slice(0, budgets.optionalRoots)) admit(root.target, false, undefined, true);
-  const history = base.checkpoints.filter(c => c.lessonSequence <= base.state.processedThroughSequence);
+  const history = base.checkpoints.slice(Math.max(0, base.state.processedThroughSequence - budgets.recentEvidence), base.state.processedThroughSequence);
   for (const checkpoint of (budgets.recentEvidence ? history.slice(-budgets.recentEvidence) : []).reverse()) {
     const handle = addEvidence(checkpoint, "history");
     if (!fits()) { evidence.delete(handle); context.evidence.pop(); }
   }
   for (const unresolved of (options.unresolved ?? []).slice(0, budgets.unresolved)) {
-    const checkpoint = base.checkpoints.find(c => c.checkpointId === unresolved.checkpointId && c.lessonSequence <= options.newEvidence.at(-1)!.lessonSequence);
-    if (!checkpoint || !checkpoint.text.includes(unresolved.phrase) || !unresolved.phrase.trim()) throw new Error("core-context-unresolved-evidence-invalid");
+    const checkpoint = indexes.checkpoints.get(unresolved.checkpointId);
+    if (!checkpoint || checkpoint.lessonSequence > options.newEvidence.at(-1)!.lessonSequence || !checkpoint.text.includes(unresolved.phrase) || !unresolved.phrase.trim()) throw new Error("core-context-unresolved-evidence-invalid");
     const prior = evidence.size, h = addEvidence(checkpoint, options.newEvidence.some(c => c.checkpointId === checkpoint.checkpointId) ? "new" : "history");
     context.unresolved.push({ evidence: h, phrase: unresolved.phrase });
     if (!fits()) { context.unresolved.pop(); if (evidence.size !== prior) { evidence.delete(h); context.evidence.pop(); } }
   }
-  const events = budgets.recentChanges ? base.events.filter(e => e.type === "core.step_accepted").slice(-budgets.recentChanges) : [];
+  const events = budgets.recentChanges ? indexes.accepted.slice(-budgets.recentChanges) : [];
   for (const event of events) {
     if (event.type !== "core.step_accepted") continue;
     const changes: InterpretationContext["recentChanges"][number]["changes"] = [];
@@ -251,7 +251,7 @@ export function buildCoreInterpretationContext(input: CoreReplay, options: Conte
       const replacement = op.action === "SUPERSEDE" ? handleFor(op.replacement) : undefined;
       if (target && (op.action !== "SUPERSEDE" || replacement)) changes.push({ action: op.action, target, ...(replacement ? { replacement } : {}) });
     }
-    context.recentChanges.push({ changes, complete: changes.length === event.step.knowledgeOps.length, consumedSequences: event.step.consumesCheckpointIds.map(id => base.checkpoints.find(c => c.checkpointId === id)!.lessonSequence) });
+    context.recentChanges.push({ changes, complete: changes.length === event.step.knowledgeOps.length, consumedSequences: event.step.consumesCheckpointIds.map(id => indexes.checkpoints.get(id)!.lessonSequence) });
     if (!fits()) context.recentChanges.pop();
   }
   refresh();
