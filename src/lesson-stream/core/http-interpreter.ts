@@ -12,10 +12,12 @@ export function createHttpCoreInterpreter(fetcher: typeof fetch = fetch): CoreLi
     try {
       const response = await fetcher('/api/teaching/core-interpretation', { method: 'POST', signal,
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ context: binding.context }) });
-      const responseText = await response.text();
       let body: { proposal?: unknown; diagnostics?: CoreProviderDiagnostic[]; error?: string };
-      try { body = JSON.parse(responseText) as typeof body; }
-      catch { throw new Error(`core-http-${response.status}-invalid-json`); }
+      try { body = await response.json() as typeof body; }
+      catch {
+        const status = typeof response.status === 'number' && response.status > 0 ? response.status : undefined;
+        throw new Error(status ? `core-http-${status}-invalid-json` : 'core-http-invalid-json');
+      }
       if (Array.isArray(body.diagnostics)) for (const diagnostic of body.diagnostics) {
         try {
           if (diagnostic.stage === 'endpoint') remoteAbortSource = diagnostic.abortSource;
