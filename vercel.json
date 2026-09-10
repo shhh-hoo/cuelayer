@@ -3,6 +3,9 @@
   "functions": {
     "api/teaching/interpretation.ts": {
       "includeFiles": "server/teaching/**"
+    },
+    "api/teaching/core-interpretation.ts": {
+      "includeFiles": "server/teaching/**"
     }
   },
   "routes": [
