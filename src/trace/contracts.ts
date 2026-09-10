@@ -99,6 +99,7 @@ export type SessionTracePayloads = CoreTracePayloads & {
     transcript: string;
     wordCount: number;
     coalescedRevisions?: number;
+    receivedAt?: number;
   };
   "speech.final_received": { latency?: import("./learner-latency").SpeechLatency;
     runId: SpeechRunId;

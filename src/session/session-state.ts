@@ -6,6 +6,12 @@ export function createInitialSessionState(): SessionState {
   return { status: "idle", presentation: { status: "empty", stream: null }, speech: { status: "off", canonical: createInitialCanonicalSpeechState(), debug: { runId: 0, provisionalEvents: 0, committedEvents: 0 } } };
 }
 
+/** Finals can arrive while recorder startup resolves or paused capture drains. */
+export function acceptsImmutableSpeechFinal(state: SessionState, runId: SpeechRunId) {
+  return state.speech.debug.runId === runId && (state.status === "active" || state.status === "paused")
+    && ["starting", "ready", "paused"].includes(state.speech.status);
+}
+
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
   switch (action.type) {
     case "begin-capture":
@@ -36,7 +42,9 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         if (state.speech.status === "starting" || state.speech.status === "ready" || state.speech.status === "paused") return { ...state, speech: { ...state.speech, status: "error", error: { code: action.event.code, message: action.event.message }, debug: { ...state.speech.debug, lastError: { code: action.event.code, message: action.event.message } } } };
         return state;
       }
-      if (state.speech.debug.runId !== action.runId || state.status !== "active" || state.speech.status !== "ready") return state;
+      const finalizedTail = action.event.kind === "committed" && action.event.evidence
+        && acceptsImmutableSpeechFinal(state, action.runId);
+      if (state.speech.debug.runId !== action.runId || (!finalizedTail && (state.status !== "active" || state.speech.status !== "ready"))) return state;
       const eventCount = action.event.kind === "provisional" ? { provisionalEvents: state.speech.debug.provisionalEvents + 1 } : { committedEvents: state.speech.debug.committedEvents + 1 };
       const update = applySpeechEvent(state.speech.canonical, action.event, action.now ?? 0);
       return { ...state, speech: { ...state.speech, canonical: update.state, debug: { ...state.speech.debug, ...eventCount } } };

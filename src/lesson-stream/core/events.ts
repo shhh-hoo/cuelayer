@@ -11,10 +11,12 @@ const checkpoint = z.object({
 }).strict().refine(c => c.endMs >= c.startMs, "checkpoint-time-order");
 const grounding = z.object({
   checkpointId: id,
-  canonicalSpanIds: z.array(z.object({ spanId: id, spanRevision: natural }).strict()).min(1),
+  canonicalSpanIds: z.array(z.object({ spanId: id, spanRevision: natural }).strict()),
   words: z.array(z.object({ text: z.string(), startMs: time, endMs: time, confidence: z.number().min(0).max(1).optional() }).strict()),
   providerEvidence: z.array(z.object({ providerFinalId: id }).strict()),
-}).strict();
+  immutableFinal: z.object({ version: z.literal("immutable-speech-v1"), evidenceId: id, providerFinalId: id,
+    speechRunId: z.union([id, natural]), speechEventId: id, receivedAt: time, receiptSequence: natural }).strict().optional(),
+}).strict().refine(g => g.immutableFinal ? g.canonicalSpanIds.length === 0 : g.canonicalSpanIds.length > 0, "grounding-origin-required");
 const identity = { schemaVersion: z.literal(CORE_EVENT_SCHEMA_VERSION), eventId: id, sessionId: id, sequence: natural.min(1) };
 const timestamp = z.iso.datetime();
 export const coreEventSchema = z.discriminatedUnion("type", [

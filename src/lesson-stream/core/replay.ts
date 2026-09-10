@@ -42,6 +42,13 @@ export function appendCoreEvent(base: CoreReplay, input: unknown): CoreReplay {
     if (checkpoint.lessonSequence !== base.checkpoints.length + 1) throw new Error("core-checkpoint-sequence-invalid");
     if (grounding.checkpointId !== checkpoint.checkpointId
       || JSON.stringify(grounding.providerEvidence.map(p => p.providerFinalId)) !== JSON.stringify(checkpoint.sourceFinalIds)) throw new Error("core-grounding-mismatch");
+    if (grounding.immutableFinal) {
+      const final = grounding.immutableFinal;
+      if (final.evidenceId !== JSON.stringify(["speech-final", final.speechRunId, final.providerFinalId])
+        || checkpoint.checkpointId !== JSON.stringify(["checkpoint", final.evidenceId])
+        || checkpoint.speechRunId !== final.speechRunId
+        || JSON.stringify(checkpoint.sourceFinalIds) !== JSON.stringify([final.evidenceId])) throw new Error("core-final-grounding-mismatch");
+    }
     next = { ...base, checkpoints: [...base.checkpoints, checkpoint], grounding: new Map([...base.grounding, [checkpoint.checkpointId, grounding]]) };
   }
   if (event.type === "core.step_accepted") {

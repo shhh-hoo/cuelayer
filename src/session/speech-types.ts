@@ -10,10 +10,11 @@ export type SpeechRunId = string | number;
 
 export type SpeechEvent =
   | { kind: "provisional"; text: string; words: SpeechWord[] }
-  | { kind: "committed"; text: string; words: SpeechWord[]; speechEventId?: string }
+  | { kind: "committed"; text: string; words: SpeechWord[]; speechEventId?: string; evidence?: import("./immutable-speech-evidence").ImmutableSpeechEvidence }
   | { kind: "error"; code: string; message: string };
 
 export type ProviderFinal = {
+  evidence?: import("./immutable-speech-evidence").ImmutableSpeechEvidence;
   id: string;
   speechEventId?: string;
   text: string;

@@ -1,3 +1,5 @@
+import type { ImmutableSpeechEvidence } from "../../session/immutable-speech-evidence.ts";
+import { checkpointFromSpeechEvidence } from "./speech-evidence.ts";
 import { SessionIndexes } from "./session-indexes.ts";
 import { liveDecisionSchema, type LiveDecision, type LiveProcessing } from "./session-processing.ts";
 import type { CanonicalSpeechSpan, SpeechRunId } from "../../session/speech-types.ts";
@@ -22,6 +24,7 @@ export class CoreLessonStreamRuntime {
   readonly domain = "core" as const;
   readonly indexes = new SessionIndexes();
   private closed = false;
+  private failedEvidenceId?: string;
   private lifetime = new AbortController();
   private writes: Promise<unknown> = Promise.resolve();
   private listeners = new Set<() => void>();
@@ -82,6 +85,7 @@ export class CoreLessonStreamRuntime {
   allocateSpeechRunId(randomUUID: () => string = () => globalThis.crypto.randomUUID()): Promise<SpeechRunId> {
     return this.serialize(async () => {
       if (!this.events.length) await this.appendNow([coreEventSchema.parse(this.envelope("lesson.started"))]);
+      if (this.failedEvidenceId) throw new Error("core-evidence-admission-incomplete");
       const runId = `speech-run-${randomUUID()}`;
       await this.appendNow([coreEventSchema.parse({ ...this.envelope("speech.run_allocated"), runId })]);
       return runId;
@@ -90,17 +94,34 @@ export class CoreLessonStreamRuntime {
   commitClosedSpan(span: CanonicalSpeechSpan, speechRunId: SpeechRunId) {
     // Capture caller-owned evidence before queuing behind any outstanding write.
     const closed = structuredClone(span);
+    return this.commitEvidence(sequence => checkpointFromClosedSpan(closed, speechRunId, sequence));
+  }
+  commitSpeechEvidence(evidence: ImmutableSpeechEvidence) {
+    const captured = structuredClone(evidence);
+    return this.commitEvidence(sequence => checkpointFromSpeechEvidence(captured, sequence));
+  }
+  private commitEvidence(convert: (sequence: number) => ReturnType<typeof checkpointFromClosedSpan>) {
     return this.serialize(async () => {
-      const result = checkpointFromClosedSpan(closed, speechRunId, this.value.checkpoints.length + 1);
+      const result = convert(this.value.checkpoints.length + 1);
       if (!result) return undefined;
       const existing = this.indexes.checkpoints.get(result.checkpoint.checkpointId);
       if (existing) {
         const candidate = { ...result.checkpoint, lessonSequence: existing.lessonSequence };
+        const prior = this.value.grounding.get(existing.checkpointId)!;
+        // A retransmission has a new receipt, but cannot revise immutable content.
+        const grounding = result.grounding.immutableFinal && prior.immutableFinal
+          ? { ...result.grounding, immutableFinal: { ...result.grounding.immutableFinal,
+              receivedAt: prior.immutableFinal.receivedAt, receiptSequence: prior.immutableFinal.receiptSequence, speechEventId: prior.immutableFinal.speechEventId } }
+          : result.grounding;
         if (JSON.stringify(candidate) !== JSON.stringify(existing)
-          || JSON.stringify(result.grounding) !== JSON.stringify(this.value.grounding.get(existing.checkpointId))) throw new Error("core-checkpoint-identity-collision");
+          || JSON.stringify(grounding) !== JSON.stringify(prior)) throw new Error("core-checkpoint-identity-collision");
         return undefined;
       }
-      await this.appendNow([coreEventSchema.parse({ ...this.envelope("evidence.checkpoint_committed"), ...result })]);
+      if (this.failedEvidenceId && this.failedEvidenceId !== result.checkpoint.checkpointId) throw new Error("core-evidence-admission-incomplete");
+      try {
+        await this.appendNow([coreEventSchema.parse({ ...this.envelope("evidence.checkpoint_committed"), ...result })]);
+        this.failedEvidenceId = undefined;
+      } catch (error) { this.failedEvidenceId = result.checkpoint.checkpointId; throw error; }
       return result.checkpoint;
     });
   }
@@ -155,6 +176,7 @@ export class CoreLessonStreamRuntime {
   end(timestamp?: string) {
     return this.serialize(async () => {
       if (this.value.ended) return;
+      if (this.failedEvidenceId) throw new Error("core-evidence-admission-incomplete");
       if (this.pending.length) throw new Error("core-lesson-pending-evidence");
       await this.appendNow([coreEventSchema.parse(this.envelope("lesson.ended", timestamp))]);
     });

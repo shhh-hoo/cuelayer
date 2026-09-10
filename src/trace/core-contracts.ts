@@ -15,6 +15,9 @@ export type CoreVerificationJob = {
 // Field vocabulary matches the independent M6a latency work; HTTP/abort instrumentation stays there.
 export type CoreQueuePressure = { pendingCheckpointCount: number; oldestPendingAgeMs: number | null; requestCheckpointCount: number;
   processedThroughSequence: number; consecutiveFailures: number; paused: boolean; backingOff: boolean };
+export type CoreIngressTiming = { speechEventId: string; providerFinalReceivedAt: number; observedAt: number;
+  admittedAt?: number; finalToAdmissionMs?: number; eligibilityWaitMs?: number; finalToEligibilityMs?: number;
+  dispatchedAt?: number; finalToDispatchMs?: number };
 export type CoreTracePayloads = {
   "core.session_window": import("../lesson-stream/core/session-coordinator.ts").SessionCoordinator["window"] & {
     status: "restored" | "committed"; lane: "LIVE"; timestamp: string;
@@ -33,8 +36,8 @@ export type CoreTracePayloads = {
     diagnostics: string[] };
   "core.projector": { knowledgeRevision: number; cueRevision: number; status: 'rendered' | 'degraded'; reason?: string;
     evidence?: import('../canvas-spatial/Canvas.tsx').CanvasEvidence };
-  "core.checkpoint_committed": { checkpointId: string; lessonSequence: number; eventId: string };
-  "core.request": { scheduledAt?: string; queuedAt?: string; queue?: CoreQueuePressure;
+  "core.checkpoint_committed": { ingress?: CoreIngressTiming; checkpointId: string; lessonSequence: number; eventId: string };
+  "core.request": { ingress?: Array<{ checkpointId: string } & Partial<CoreIngressTiming>>; scheduledAt?: string; queuedAt?: string; queue?: CoreQueuePressure;
     task?: import("../lesson-stream/core/session-processing.ts").SessionTask;
     dispatchReason?: import("../lesson-stream/core/session-coordinator.ts").DispatchReason; requestId: string; checkpointIds: string[]; diagnostics: CoreContextDiagnostics;
     context: InterpretationContext; entities: Array<{ handle: string; target: import("../lesson-stream/core/contracts.ts").SemanticReference; capabilities: string[] }> };

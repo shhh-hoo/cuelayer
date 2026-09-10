@@ -85,16 +85,19 @@ function closesForTerminalPunctuation(text: string) {
   return TERMINAL_PUNCTUATION.test(text.trim());
 }
 
-/** Provider finals remain immutable provenance; deterministic spans own product segmentation. */
+/** Provider finals remain immutable provenance; spans organize the display transcript. */
 export function applySpeechEvent(state: CanonicalSpeechState, event: SpeechEvent, now = 0): CanonicalSpeechUpdate {
   if (event.kind === "error") return { state, changes: [] };
   if (event.kind === "provisional") return { state: { ...state, provisional: provisionalFrom(event, state.finals.length) }, changes: [] };
 
+  // Replayed provider finals must not duplicate the human-readable transcript.
+  if (event.evidence && state.finals.some(final => final.id === event.evidence!.evidenceId)) return { state, changes: [] };
   const final: ProviderFinal = {
-    id: state.identityScope ? `provider-final-${state.identityScope}-${state.finals.length}` : `provider-final-${state.finals.length}`,
+    ...(event.evidence ? { evidence: event.evidence } : {}),
+    id: event.evidence?.evidenceId ?? (state.identityScope ? `provider-final-${state.identityScope}-${state.finals.length}` : `provider-final-${state.finals.length}`),
     ...(event.speechEventId ? { speechEventId: event.speechEventId } : {}),
     text: event.text,
-    words: event.words,
+    words: event.words.map(word => ({ ...word })),
     committedAtMs: now,
   };
   const finals = [...state.finals, final];
@@ -140,7 +143,7 @@ export function applySpeechEvent(state: CanonicalSpeechState, event: SpeechEvent
     changes.push({ decision: "closed", spanId: current.id, spanRevision: current.revision, finalId: final.id, closeReason: "terminal_punctuation" });
   }
 
-  return { state: { finals, spans, provisional: undefined }, changes };
+  return { state: { ...state, finals, spans, provisional: undefined }, changes };
 }
 
 export function closeCanonicalSpeechSpan(state: CanonicalSpeechState, spanId: string, revision: number, reason: CanonicalSpeechSpanCloseReason, now: number): CanonicalSpeechUpdate {
