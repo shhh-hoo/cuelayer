@@ -164,6 +164,20 @@ test("real route: official microphone/ASR adapters, concurrent finals, complete 
   await expect
     .poll(() => page.evaluate(() => window.v2.mic.status))
     .toBe("stopped");
+  // Reproduce a worklet callback queued before stop and delivered after provider close.
+  await page.evaluate(() => {
+    const recorder = (window.v2.mic as any).recorder;
+    recorder.dispatchTypedEvent(
+      "audio",
+      Object.assign(new Event("audio"), { data: new Float32Array(128) }),
+    );
+  });
+  expect(
+    await page.evaluate(() => ({
+      status: window.v2.mic.status,
+      error: window.v2.mic.error,
+    })),
+  ).toEqual({ status: "stopped", error: null });
   await page.reload();
   await page.waitForFunction(() => Boolean(window.v2));
   expect(await page.evaluate(() => window.v2.session.state)).toEqual(

@@ -450,6 +450,12 @@ export function fixtureProposal(task: Task): LiveDecision | StageReview {
     }
     const operations = p.operations.map(convert),
       u = p.unresolved[0];
+    // Adjacent understood filler is one source group, regardless of final fragmentation.
+    const previous = response.groups.at(-1);
+    if (!u && !operations.length && previous?.outcome === "NO_CHANGE") {
+      previous.throughBoundary = through;
+      continue;
+    }
     response.groups.push({
       throughBoundary: through,
       outcome: u ? "CARRY" : operations.length ? "APPLY" : "NO_CHANGE",

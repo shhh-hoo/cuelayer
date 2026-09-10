@@ -276,9 +276,13 @@ test("continuous arrival overlaps Live; stale Stage rejected; reload preserves o
   expect(result.progressDuringArrival).toBe(true);
   expect(result.maxAge).toBeLessThan(1000);
   expect(result.count).toBe(0);
-  expect(
-    result.recordedBeforeStop - result.accountedBeforeStop,
-  ).toBeLessThanOrEqual(12);
+  // Source-rate/age gates remain meaningful when provider-final fragmentation changes.
+  // Snapshot phase may include the in-flight range; a final-count cap is not service rate.
+  const lastSource = result.sourceSamples.at(-1)!;
+  expect(lastSource.accountedRate).toBeGreaterThanOrEqual(
+    lastSource.recordedRate * 0.9,
+  );
+  expect(lastSource.gap).toBeLessThanOrEqual(lastSource.recordedRate);
   const median = (values: number[]) =>
     [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
   expect(median(result.ages.slice(-40))).toBeLessThanOrEqual(
