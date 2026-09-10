@@ -53,6 +53,7 @@ export class Session {
   private reviewedSnapshot = "";
   private epoch = 0;
   private admissionTimes = new Map<string, number>();
+  private currentSourceEvidence = new Set<string>();
   private obligationTimes = new Map<string, number>();
   private admissionGap: Omit<Evidence, "sequence"> | null = null;
   private paused = false;
@@ -203,11 +204,36 @@ export class Session {
     if (event.type === "accepted")
       for (const obligation of event.accepted.unresolved)
         this.obligationTimes.set(obligation.id, performance.now());
-    this.trace.mark("persistence", { eventId: event.id }, start);
+    this.trace.mark(
+      "persistence",
+      {
+        eventId: event.id,
+        type: event.type,
+        ...(event.type === "accepted"
+          ? {
+              taskId: event.accepted.taskId,
+              lane: event.accepted.lane,
+              revision: next.state.revision,
+            }
+          : {}),
+        ...(event.type === "evidence" ? { evidenceId: event.evidence.id } : {}),
+      },
+      start,
+    );
+    if (event.type === "evidence")
+      this.trace.mark("evidence-admitted", {
+        evidenceId: event.evidence.id,
+        sequence: event.evidence.sequence,
+      });
     this.notify();
   }
   async commitEvidence(raw: Omit<Evidence, "sequence">) {
     const captured = structuredClone(raw);
+    this.trace.mark(
+      "evidence-received",
+      { evidenceId: captured.id, run: captured.run },
+      captured.receivedAt,
+    );
     if (captured.audioObservedAt !== null)
       this.trace.mark(
         "audio-to-final",
@@ -252,6 +278,14 @@ export class Session {
           evidence: { ...captured, sequence: this.value.evidence.length + 1 },
         });
         this.admissionGap = null;
+        this.currentSourceEvidence.add(captured.id);
+        this.trace.mark("live-eligible", {
+          evidenceId: captured.id,
+          quietEligibleAt: performance.now() + this.config.coalesceMs,
+          independentMaxWaitMs: this.config.maxWaitMs,
+          liveOccupied: Boolean(this.live.pending),
+          estimate: true,
+        });
       } catch (error) {
         this.admissionGap = captured;
         throw error;
@@ -299,21 +333,34 @@ export class Session {
       evidence.map((e) => e.id),
       dependencies,
     ]);
-    return {
+    const relevant = Object.values(this.value.unresolved).filter(
+      (o) => !o.coreId || coreIds.includes(o.coreId),
+    );
+    const obligations = lane === "Live" ? relevant.slice(-16) : relevant;
+    const sources = new Set(obligations.flatMap((o) => o.evidenceIds));
+    const contextEvidence =
+      lane === "Live"
+        ? this.value.evidence.filter(
+            (e) =>
+              sources.has(e.id) && !evidence.some((item) => item.id === e.id),
+          )
+        : [];
+    const task: Task = {
       id,
       lane,
       evidence: structuredClone(evidence),
+      contextEvidence: structuredClone(contextEvidence),
+      omittedObligations: relevant.length - obligations.length,
       state,
       dependencies,
       allowedCores: coreIds,
-      obligations: structuredClone(
-        Object.values(this.value.unresolved).filter(
-          (o) => !o.coreId || coreIds.includes(o.coreId),
-        ),
-      ),
+      obligations: structuredClone(obligations),
       createdAt: performance.now(),
       attentionEpoch: this.epoch,
     };
+    if (JSON.stringify(task).length > 32000)
+      throw new Rejection("context-budget-blocked");
+    return task;
   }
   private schedule() {
     if (
@@ -419,12 +466,19 @@ export class Session {
       evidenceIds: task.evidence.map((e) => e.id),
     });
     if (task.lane === "Live")
-      for (const evidence of task.evidence)
+      for (const evidence of task.evidence) {
+        if (this.currentSourceEvidence.has(evidence.id))
+          this.trace.mark(
+            "final-to-live-dispatch",
+            { taskId: task.id, evidenceId: evidence.id },
+            evidence.receivedAt,
+          );
         this.trace.mark(
           "evidence-to-live-queued",
           { taskId: task.id, evidenceId: evidence.id },
           this.admissionTimes.get(evidence.id) ?? queuedAt,
         );
+      }
     void queue
       .add(async () => {
         this.tasks[task.lane] = task;
@@ -435,6 +489,7 @@ export class Session {
           queuedAt,
         );
         const started = performance.now();
+        let attempt = 0;
         this.trace.mark("inference-start", {
           taskId: task.id,
           lane: task.lane,
@@ -445,15 +500,25 @@ export class Session {
         ]);
         try {
           const raw = await pRetry(
-            () =>
-              this.interpreter(structuredClone(task), signal, () => {
+            () => {
+              const attemptStart = performance.now();
+              this.trace.mark("inference-attempt", {
+                taskId: task.id,
+                lane: task.lane,
+                attempt: ++attempt,
+              });
+              let first = false;
+              return this.interpreter(structuredClone(task), signal, () => {
+                if (first) return;
+                first = true;
                 this.trace.mark(
                   "first-useful-output",
-                  { taskId: task.id, lane: task.lane },
-                  started,
+                  { taskId: task.id, lane: task.lane, attempt },
+                  attemptStart,
                   parent,
                 );
-              }),
+              });
+            },
             {
               retries: 2,
               minTimeout: 20,
@@ -502,18 +567,28 @@ export class Session {
       });
   }
   async accept(task: Task, raw: unknown, signal?: AbortSignal) {
+    const proposalAt = performance.now();
     return this.writer.add(async () => {
       if (this.disposed) throw new Rejection("session-closed");
       if (this.value.acceptedTaskIds.includes(task.id)) return;
       signal?.throwIfAborted();
-      const start = performance.now(),
-        { proposal, accepted } = validate(this.value, task, raw);
+      const start = performance.now();
+      this.trace.mark("semantic-validation-start", {
+        taskId: task.id,
+        lane: task.lane,
+      });
+      const { proposal, accepted } = validate(this.value, task, raw);
       this.trace.mark(
         "semantic-validation",
         { taskId: task.id, lane: task.lane },
         start,
       );
       await this.append({ type: "accepted", accepted });
+      this.trace.mark(
+        "proposal-to-accepted",
+        { taskId: task.id, lane: task.lane },
+        proposalAt,
+      );
       this.trace.mark("semantic-accepted", {
         revision: this.value.state.revision,
         changed: accepted.operations.length > 0,
@@ -542,6 +617,11 @@ export class Session {
           taskId: task.id,
           lane: task.lane,
         });
+      this.trace.mark("accepted-publication", {
+        taskId: task.id,
+        lane: task.lane,
+        revision: this.value.state.revision,
+      });
       this.notify();
     });
   }

@@ -50,8 +50,9 @@ export function validate(
   requireThat(p.taskId === task.id, "task-binding");
   for (const [key, v] of Object.entries(task.dependencies))
     requireThat(version(replay.state, key) === v, `stale-dependency:${key}`);
-  const evidence = new Map(task.evidence.map((e) => [e.id, e]));
-  for (const e of task.evidence)
+  const readableEvidence = [...task.evidence, ...(task.contextEvidence ?? [])];
+  const evidence = new Map(readableEvidence.map((e) => [e.id, e]));
+  for (const e of readableEvidence)
     requireThat(
       replay.evidence.some(
         (current) => current.id === e.id && current.text === e.text,
@@ -71,6 +72,9 @@ export function validate(
       ),
     );
   const created = new Set<string>();
+  const proposedUnits = new Set(
+    p.operations.filter((op) => op.type === "put").map((op) => op.id),
+  );
   for (const op of p.operations) {
     basis(op.basis);
     if (op.type === "core") {
@@ -89,6 +93,21 @@ export function validate(
           "uncaptured-write",
         );
       validateMeaning(op.meaning);
+      const refs = [
+        ...op.requires,
+        ...(op.meaning.kind === "relation"
+          ? op.meaning.targets
+          : op.meaning.kind === "annotation"
+            ? [op.meaning.target]
+            : []),
+      ];
+      for (const id of refs)
+        requireThat(
+          proposedUnits.has(id) ||
+            (task.state.units[id] &&
+              Object.hasOwn(task.dependencies, `unit/${id}`)),
+          "uncaptured-semantic-dependency",
+        );
     }
     if (op.type === "invalidate")
       requireThat(

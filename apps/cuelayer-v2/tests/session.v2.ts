@@ -301,3 +301,33 @@ it("local correction keeps identity; invalidation must close required dependenci
   expect(s.state.units.pressure.valid).toBe(false);
   expect(s.state.units.mixture.valid).toBe(true);
 });
+it("rejects dependencies that exist durably but were omitted from the host read scope", async () => {
+  const s = await open();
+  for (const i of [0, 2]) await step(s, i);
+  s.pause();
+  await inject(s, "This explanation depends on the earlier relationship.", 10);
+  const task = s.capture("Live", [s.replay.evidence.at(-1)!], []);
+  const raw = fixtureProposal(task);
+  const basis = [
+    { evidenceId: task.evidence[0].id, quote: task.evidence[0].text },
+  ];
+  raw.operations = [
+    { type: "core", id: "new", title: "Explanation", basis },
+    {
+      type: "put",
+      id: "explanation",
+      coreId: "new",
+      basis,
+      requires: ["pressure"],
+      meaning: {
+        kind: "statement",
+        text: "This explanation depends on the earlier relationship.",
+      },
+    },
+  ];
+  raw.dispositions[0].status = "established";
+  await expect(s.accept(task, raw)).rejects.toThrow(
+    "uncaptured-semantic-dependency",
+  );
+  expect(s.window.consumedEvidenceIds).toHaveLength(2);
+});
