@@ -1,0 +1,21 @@
+name: cuelayer-v2
+on:
+  pull_request:
+    paths: ['apps/cuelayer-v2/**', '.github/workflows/cuelayer-v2.yml']
+jobs:
+  deterministic-slice:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/cuelayer-v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run test:browser
