@@ -52,7 +52,10 @@ export function Canvas({ runtime, state, registry, projection, inspection, onIns
       });
       spaces.current = updateSpaces(spaces.current, members);
       const persistent = artifactHomes(spaces.current);
-      const selected = [...runtime.artifacts.values()].filter(a => a.visible).map(a => a.id);
+      const selected = projection.attention.representations.flatMap(intent => {
+        const artifact = [...runtime.artifacts.values()].find(a => a.visible && a.payload.candidateId === intent.id);
+        return artifact ? [artifact.id] : [];
+      });
       const frame = composePresentation(persistent, selected, projection, size);
       const to: MotionBoxes = Object.fromEntries(Object.entries(frame.boxes).map(([id, box]) => [id, { ...box, presentation: Boolean(frame.temporary[id]) }]));
       const motion = planMotion(rendered.current, to, selected);
