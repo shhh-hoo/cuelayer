@@ -1,0 +1,15 @@
+* { box-sizing:border-box; }
+html,body,#root { margin:0; width:100%; height:100%; }
+body { font-family:system-ui,sans-serif; }
+.review-shell { height:100%; display:flex; flex-direction:column; background:#faf9f5; }
+.review-controls { min-height:52px; display:flex; align-items:center; gap:10px; padding:8px 20px; border-bottom:1px solid #d8dfd6; flex-wrap:wrap; }
+.review-controls a { color:#315b58; font-size:13px; }
+button,select { font:13px system-ui,sans-serif; padding:6px 9px; background:#fff; color:#28483f; border:1px solid #bdcbc1; border-radius:4px; }
+button { cursor:pointer; }button:disabled { opacity:.45; cursor:default; }
+.review-controls select { max-width:370px; }
+.review-caption { display:flex; justify-content:space-between; padding:14px 28px 10px; color:#65786e; font-size:14px; }
+.review-caption span:first-child { letter-spacing:.03em; }
+.review-projector { flex:1; min-height:0; }
+.review-diagnostics { position:fixed; z-index:10; inset:100px 24px 24px auto; width:min(620px,90vw); background:#fff; border:1px solid #a6b8ad; box-shadow:0 8px 36px #1233; padding:18px; overflow:auto; }
+.review-diagnostics>div { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.review-diagnostics p { font-size:13px; }.review-diagnostics pre { font-size:11px; white-space:pre-wrap; overflow-wrap:anywhere; }
