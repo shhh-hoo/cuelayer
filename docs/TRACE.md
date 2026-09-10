@@ -127,7 +127,7 @@ Manual session playback and export procedures live in `docs/RUNBOOK.md`.
 
 The existing v3 trace envelope gains additive `core.*` event types and optional `coreRequestId`, `knowledgeRevision`, Core/entity identity and `verificationRequestIndex` correlation. Legacy v2/v3 records and Board event names retain their original meaning. The trace viewer displays Core request identity and the full expandable record; Core authority never emits legacy Board state aliases.
 
-The controlled Core host passes its existing trace emitter to `CoreLiveSession`. The reconstructable chain is:
+The production Core host passes its existing trace emitter to `CoreLiveSession`. The reconstructable chain is:
 
 ```text
 core.checkpoint_committed
@@ -158,3 +158,9 @@ The same optional emitter and bounded local TraceWriter accept two additive reco
 Join records by session and accepted revisions/processed sequence to `core.published` and its accepted event IDs. A runtime subscription can emit representation diagnostics before the controller finishes emitting `core.published`; timestamps alone do not define semantic authority. The runtime subscription is already after durable commit. Initial replay records artifact creation without manufacturing new semantic events. Intermediate animation frames are not traced; settled geometry and manual inspection observations are diagnostic proxies, not evidence of learner comprehension or hardware display visibility.
 
 Malformed production, missing capabilities/payloads, invalid grounding, stale retained parts, invalid measurement, unresolved pressure, renderer failure/empty mount and insufficient automatic fit are representation/spatial failures. They do not roll back accepted Core state, reopen evidence or invoke a provider. No new trace persistence or audio-hot-path work is introduced; emitter failures cannot reset canonical artifact history or change acceptance.
+
+## Production session domain
+
+`session.domain` records `core` or `legacy` and `source: "lesson-domains"` after the durable domain gate resolves and before the selected semantic host mounts. It joins the Core chain above to the normal session identity; legacy restoration retains its historical trace generation. The dedicated `lesson-domains` claim is restoration authority. Missing trace, trace-store failure or a completed trace cannot infer, change or replace a lesson's semantic domain/identity. An ended lesson's trace remains readable and sealed; reopening it does not create another lesson.
+
+The Core HTTP seam returns safe request/response diagnostics for the same reviewed provider envelope/parser. The browser retains the local request binding and emits normalization, validation, accepted event IDs and publication only through the shared controller. M4C representation and projector records continue from persisted publication. No compatibility Board state or synthetic legacy identity is emitted by Core.

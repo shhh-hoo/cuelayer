@@ -53,6 +53,38 @@ export class LocalLessonEventStore<E extends StoredLessonEvent = LessonEvent> {
   static async open<E extends StoredLessonEvent = LessonEvent>(domain: LessonDomain = "legacy") {
     return new LocalLessonEventStore<E>(await openDatabase(), domain);
   }
+  /** Resolve authority before loading either runtime. Only a newly allocated identity may create an empty claim. */
+  static async resolveDomain(sessionId: string, options: { create: boolean; requestedDomain?: LessonDomain }) {
+    const database = await openDatabase();
+    const transaction = database.transaction([EVENTS_STORE, DOMAINS_STORE], "readwrite");
+    const done = transactionDone(transaction);
+    void done.catch(() => undefined);
+    try {
+      const domains = transaction.objectStore(DOMAINS_STORE);
+      const claim = await requestResult(domains.get(sessionId)) as { domain?: unknown } | undefined;
+      const range = IDBKeyRange.bound([sessionId, 0, ""], [sessionId, Number.MAX_SAFE_INTEGER, "\uffff"]);
+      const events = await requestResult(transaction.objectStore(EVENTS_STORE).index(SESSION_SEQUENCE_INDEX).getAll(range)) as StoredLessonEvent[];
+      if (claim && claim.domain !== "core" && claim.domain !== "legacy") throw new Error("lesson-domain-invalid");
+      let domain = claim?.domain as LessonDomain | undefined;
+      if (!domain) {
+        if (events.length) {
+          // Preserve the reviewed pre-claim v3/v4 detection. An unclaimed Core log is corrupt, not a migration opportunity.
+          assertLessonDomain(events, "legacy");
+          domain = "legacy";
+        } else if (options.create) domain = "core";
+        else throw new Error("lesson-domain-missing");
+      }
+      assertLessonDomain(events, domain);
+      if (options.requestedDomain && options.requestedDomain !== domain) throw new Error("lesson-domain-mismatch");
+      if (!claim) domains.add({ sessionId, domain });
+      await done;
+      return domain;
+    } catch (error) {
+      try { transaction.abort(); } catch { /* Already complete. */ }
+      await done.catch(() => undefined);
+      throw error;
+    } finally { database.close(); }
+  }
   close() { this.database.close(); }
 
   private async session(transaction: IDBTransaction, sessionId: string) {

@@ -57,6 +57,7 @@ export type AcceptedContributionAudit = {
 };
 
 export type SessionTracePayloads = CoreTracePayloads & {
+  "session.domain": { domain: "core" | "legacy"; source: "lesson-domains" };
   "latency.stage": import("./learner-latency").LatencyStage;
   "latency.checkpoint": import("./learner-latency").LearnerLatencyRecord & { derived: ReturnType<typeof import("./learner-latency").latencyDerived>; clock: string; unavailable: string };
   "latency.gap": { reason: string; checkpointId: string };
