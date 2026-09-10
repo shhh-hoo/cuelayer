@@ -50,9 +50,9 @@ export class LosslessInterpretationScheduler {
     let tokens = 0;
     for (const checkpoint of this.pending) {
       if (batch.length >= this.maxCheckpoints || (this.retryPrefix && !this.retryPrefix.includes(checkpoint.checkpointId))) break;
-      if (!fitsRequest([...batch, checkpoint])) { this.budgetBlocked = !batch.length; break; }
       const nextTokens = tokensFor(checkpoint);
       if (batch.length && tokens + nextTokens > tokenCap) break;
+      if (!fitsRequest([...batch, checkpoint])) { this.budgetBlocked = !batch.length; break; }
       batch.push(checkpoint);
       tokens += nextTokens;
     }

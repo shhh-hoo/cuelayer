@@ -309,3 +309,13 @@ it("restores bounded coalescing if an incomplete close returns to capture", asyn
   await session.commitClosedSpan(fragment("next")); await vi.advanceTimersByTimeAsync(249); expect(calls).toBe(2);
   await vi.advanceTimersByTimeAsync(1); await settle(session); expect(calls).toBe(3);
 });
+
+it("keeps the context preview and dispatched prefix identical when the token cap shortens a batch", async () => {
+  const calls: string[][] = [];
+  const { session } = await open({ interpreter: async b => { calls.push(b.newEvidenceIds); return proposalFor(b); } });
+  const first = await session.commitClosedSpan(fragment("large-1", "A ".repeat(4_000)));
+  const second = await session.commitClosedSpan(fragment("large-2", "B ".repeat(4_000)));
+  await vi.advanceTimersByTimeAsync(250); await settle(session);
+  expect(calls).toEqual([[first!.checkpointId], [second!.checkpointId]]);
+  expect(session.state.processedThroughSequence).toBe(2);
+});
