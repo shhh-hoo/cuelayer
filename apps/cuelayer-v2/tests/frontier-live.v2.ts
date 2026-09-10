@@ -189,9 +189,20 @@ describe("Gate 1: exact frontier and Live", () => {
     sessions.push(restored);
     expect(restored.replay).toEqual(before);
   });
-  it("later Live resolves durable CARRY using its original source plus new source", async () => {
-    const { s, t } = await manual("Activation energy is");
-    await s.accept(t, fullGroup(t, "CARRY"));
+  it("after reload Live resolves the same durable CARRY using its original range plus new source", async () => {
+    const { s: original, t } = await manual("Activation energy is");
+    await original.accept(t, fullGroup(t, "CARRY"));
+    const carried = original.replay.unresolved;
+    original.close();
+    const s = await Session.open(
+      original.id,
+      async (t) => waitDecision(t),
+      original.store,
+      fast,
+    );
+    sessions.push(s);
+    s.pause();
+    expect(s.replay.unresolved).toEqual(carried);
     await admit(s, "the minimum energy required for successful collisions.");
     const next = s.capture("Live");
     const d = establish(
@@ -636,3 +647,79 @@ it("recovery rates count new source progress during the current observation", as
   expect(restored.window.recordedCharsPerSecond).toBe(0);
   expect(restored.window.accountedCharsPerSecond).toBe(0);
 });
+
+it.each(["word", "phrase", "sentence", "sentence-plus-tail"])(
+  "%s fragmentation preserves quantitative conditions, dependencies, identities and source provenance",
+  async (fragmentation) => {
+    const first =
+      "For an ideal gas mixture, partial pressure equals mole fraction times total pressure.";
+    const second =
+      "The relation holds only if the gas mixture is ideal; pressures use pascals and mole fraction is dimensionless.";
+    const text = `${first} ${second}`;
+    const parts =
+      fragmentation === "word"
+        ? text.split(" ")
+        : fragmentation === "phrase"
+          ? [
+              "For an ideal gas mixture,",
+              "partial pressure equals mole fraction",
+              "times total pressure.",
+              "The relation holds only if the gas mixture is ideal;",
+              "pressures use pascals and mole fraction is dimensionless.",
+            ]
+          : fragmentation === "sentence"
+            ? [first, second]
+            : [
+                `${first} The relation holds only if`,
+                "the gas mixture is ideal; pressures use pascals and mole fraction is dimensionless.",
+              ];
+    const s = await open();
+    s.pause();
+    for (const part of parts) await admit(s, part);
+    const t = s.capture("Live"),
+      req = t.capture!.request;
+    expect(currentQuote(s, t)).toBe(text);
+    const meaning = {
+      kind: "quantity" as const,
+      expression: ["Equal", "p", ["Multiply", "x", "P"]] as [
+        "Equal",
+        string,
+        ["Multiply", string, string],
+      ],
+      symbols: {
+        p: { label: "partial pressure", unit: "Pa" },
+        x: { label: "mole fraction", unit: "1" },
+        P: { label: "total pressure", unit: "Pa" },
+      },
+      conditions: ["only if the gas mixture is ideal"],
+    };
+    const d = establish(t, text, meaning);
+    d.groups[0].operations.push({
+      type: "put",
+      id: req.newUnits[1],
+      coreId: req.newCores[0],
+      meaning: {
+        kind: "annotation",
+        text: "The relation holds only if the gas mixture is ideal.",
+        target: req.newUnits[0],
+      },
+      requires: [req.newUnits[0]],
+      basis: [{ source: req.source.source, quote: text }],
+    });
+    await s.accept(t, d);
+    const [quantity, condition] = Object.values(s.state.units);
+    expect(quantity.id.endsWith(":0")).toBe(true);
+    expect(condition.id.endsWith(":1")).toBe(true);
+    expect(quantity.meaning).toEqual(meaning);
+    expect(condition.meaning).toEqual({
+      kind: "annotation",
+      text: "The relation holds only if the gas mixture is ideal.",
+      target: quantity.id,
+    });
+    expect(condition.requires).toEqual([quantity.id]);
+    expect(quantity.basis.map((b) => b.quote)).toEqual(parts);
+    expect(condition.basis.map((b) => b.quote)).toEqual(parts);
+    expect(s.window.unaccountedChars).toBe(0);
+    expect(s.replay.unresolved).toEqual({});
+  },
+);

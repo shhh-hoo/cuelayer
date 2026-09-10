@@ -57,6 +57,8 @@ export class Session {
   private writer = new PQueue({ concurrency: 1 });
   private listeners = new Set<() => void>();
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private stageTimer: ReturnType<typeof setTimeout> | undefined;
+  private stageYielded = false;
   private lifetime = new AbortController();
   private tasks: { Live: Task | null; Stage: Task | null } = {
     Live: null,
@@ -482,6 +484,11 @@ export class Session {
       this.notify();
     }
   }
+  private clearStageYield() {
+    if (this.stageTimer) clearTimeout(this.stageTimer);
+    this.stageTimer = undefined;
+    this.stageYielded = false;
+  }
   private scheduleStage() {
     if (
       this.disposed ||
@@ -502,6 +509,29 @@ export class Session {
           item.subjectId,
         );
         if (!task || this.failedStage.has(task.inspectionKey!)) continue;
+        const oldest = this.pendingEvidence()[0],
+          now = performance.now();
+        const liveUnderPressure =
+          !this.paused &&
+          oldest &&
+          now - (this.admissionTimes.get(oldest.id) ?? now) > 4000;
+        // Yield new reconciliation admission once to lagging Live, never indefinitely.
+        // Time only controls lane priority; it cannot account or change source meaning.
+        if (liveUnderPressure && !this.stageYielded) {
+          this.stageYielded = true;
+          this.stageTimer = setTimeout(() => {
+            this.stageTimer = undefined;
+            this.scheduleStage();
+          }, 1000);
+          this.trace.mark("stage-deferred-for-live", {
+            policy: "v2-stage-pressure-policy-1",
+            maxDelayMs: 1000,
+            subjectId: item.subjectId,
+          });
+          return;
+        }
+        if (liveUnderPressure && this.stageTimer) return;
+        this.clearStageYield();
         this.captures.set(task.id, structuredClone(task));
         this.enqueue(task, this.stage);
         return;
@@ -633,8 +663,8 @@ export class Session {
             accountedCharsPerSecond: window.accountedCharsPerSecond,
           });
           this.notify();
-          this.scheduleStage();
           this.schedule();
+          this.scheduleStage();
         }
       })
       .catch((error) => {
@@ -802,6 +832,7 @@ export class Session {
     });
   }
   pause() {
+    this.clearStageYield();
     this.userPaused = true;
     this.paused = true;
     this.live.pause();
@@ -836,6 +867,7 @@ export class Session {
     }
   }
   async finish() {
+    this.clearStageYield();
     if (this.admissionGap) throw new Error("evidence-frontier-blocked");
     await this.writer.add(async () => {
       if (!this.value.captureClosed)

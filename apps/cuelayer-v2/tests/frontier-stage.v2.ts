@@ -19,6 +19,7 @@ const open = async (...args: Parameters<typeof openSession>) => {
 afterEach(() => {
   sessions.forEach((s) => s.close());
   sessions.length = 0;
+  vi.restoreAllMocks();
 });
 const still = (t: Task): StageReview => ({
   version: "v2-stage-review-1",
@@ -356,4 +357,40 @@ it("a failed oldest Stage snapshot does not starve a later independent obligatio
   await new Promise((r) => setTimeout(r, 25));
   expect(subjects).toHaveLength(2);
   expect(Object.keys(s.replay.unresolved)).toHaveLength(2);
+});
+
+it("lagging Live defers new Stage once while bounding Stage starvation", async () => {
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  let liveStarted = false,
+    stageStarted = false;
+  const s = await open(async (t) => {
+    if (t.lane === "Stage") {
+      stageStarted = true;
+      return still(t);
+    }
+    liveStarted = true;
+    await held;
+    return fullGroup(t);
+  });
+  s.pause();
+  await admit(s, "An unresolved reference.");
+  const task = s.capture("Live");
+  await s.accept(task, fullGroup(task, "CARRY"));
+  await admit(s, "Please continue.");
+  const now = performance.now.bind(performance);
+  vi.spyOn(performance, "now").mockImplementation(() => now() + 5000);
+  s.resume();
+  await vi.waitFor(() => expect(liveStarted).toBe(true));
+  expect(stageStarted).toBe(false);
+  expect(s.trace.spans.some((x) => x.name === "stage-deferred-for-live")).toBe(
+    true,
+  );
+  await admit(s, "Further source continues to arrive.");
+  expect(s.replay.evidence).toHaveLength(3);
+  await vi.waitFor(() => expect(stageStarted).toBe(true), { timeout: 1800 });
+  expect(s.window.activeLive).not.toBeNull();
+  release();
+  await s.drainLive();
+  expect(s.window.unaccountedChars).toBe(0);
 });
