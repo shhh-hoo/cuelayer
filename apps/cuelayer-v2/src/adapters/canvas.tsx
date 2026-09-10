@@ -335,6 +335,12 @@ export function Board({
       }
     }
     setDegraded(reason);
+    trace.mark("artifact-rendered", {
+      revision: state.revision,
+      targets: frame.targets,
+      forms: frame.selected.map((c) => c.form),
+      degraded: reason,
+    });
     trace.mark(
       "render",
       { revision: state.revision, mode: frame.mode, inspection, reason },
@@ -348,7 +354,9 @@ export function Board({
         if (observed || !container.current) return;
         const safe = container.current.getBoundingClientRect();
         const visible = frame.targets.filter((id) => {
-          const node = container.current!.querySelector(`[data-unit="${id}"]`),
+          const node = container.current!.querySelector<HTMLElement>(
+              `[data-unit="${id}"]`,
+            ),
             rect = node?.getBoundingClientRect();
           const notation = node?.querySelector(".notation");
           const ready =
@@ -364,6 +372,9 @@ export function Board({
             rect.bottom <= safe.bottom + 1 &&
             ready &&
             plotReady &&
+            node!.scrollHeight <= node!.clientHeight + 1 &&
+            node!.scrollWidth <= node!.clientWidth + 1 &&
+            document.visibilityState === "visible" &&
             !node?.querySelector('[role="alert"]')
           );
         });
@@ -380,6 +391,9 @@ export function Board({
               targets: visible,
               required: frame.targets,
               complete: true,
+              versions: Object.fromEntries(
+                visible.map((id) => [id, state.units[id].version]),
+              ),
             },
             started,
           );

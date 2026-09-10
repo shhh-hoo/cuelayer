@@ -8,6 +8,7 @@ export type Span = {
   attributes: Record<string, unknown>;
 };
 export class Trace {
+  readonly sourceId = crypto.randomUUID();
   spans: Span[] = [];
   dropped = 0;
   now = () => performance.now();
@@ -29,7 +30,7 @@ export class Trace {
         name,
         start,
         end,
-        attributes,
+        attributes: { ...attributes, traceSourceId: this.sourceId },
       };
       this.spans.push(span);
       return span.spanId;
@@ -40,9 +41,10 @@ export class Trace {
   async flush(store: EventStore, sessionId: string) {
     try {
       await store.traces.put({
-        id: sessionId,
+        id: `${sessionId}:${this.sourceId}`,
         sessionId,
         spans: structuredClone(this.spans),
+        dropped: this.dropped,
       });
     } catch {
       /* Diagnostics never govern acceptance. */

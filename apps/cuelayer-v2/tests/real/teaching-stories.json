@@ -1,0 +1,14 @@
+{
+  "identity": "cuelayer-v2-real-slice-1",
+  "source": "Authored, de-identified teaching text from the user's requested p_i = x_i P_total, x_i = n_i / n_total, correction, Cue, repetition and incomplete Kc cases. Not private transcript or frozen GOLD. Human review pending.",
+  "steps": [
+    {"id":"pressure","text":"For an ideal gas mixture, partial pressure p_i equals mole fraction x_i multiplied by total pressure P_total. Both pressures are in kilopascals; mole fraction has no units.","expect":"Establish a grounded Equal(p_i, Multiply(x_i, P_total)) with pressure units kPa and dimensionless x_i."},
+    {"id":"fraction","text":"In that same mixture, the mole fraction x_i is the amount n_i of this gas divided by the total amount n_total of all gases. Both amounts are in moles. Keep our partial pressure relationship in mind.","expect":"Establish Equal(x_i, Divide(n_i,n_total)); pressure relationship is necessary previous context, no invented substitution."},
+    {"id":"establish-for-correction","text":"The total pressure in this example is 200 kilopascals.","expect":"Establish the attributable example value without rewriting the general law."},
+    {"id":"correction","text":"Sorry, I said 200 kilopascals. The total pressure in this example is actually 250 kilopascals.","expect":"Correct the same accepted example identity; no duplicated stale value."},
+    {"id":"cue","text":"Look at the partial pressure relationship. Before we continue, explain to your partner why the mole fraction has no units.","expect":"Grounded teacher Cue targeting the valid mole-fraction/pressure knowledge, visible in the sibling region."},
+    {"id":"reworded-repeat","text":"So the fraction of moles is the amount of that component over the combined amount of all the gases, with both amounts measured in moles.","expect":"Distinct evidence identity; resolved no-change if no new meaning. No duplicated relationship."},
+    {"id":"incomplete-kc","text":"For the equilibrium constant Kc, the expression would have that concentration on top, and then...", "expect":"Preserve unresolved meaning; do not invent a complete Kc expression."},
+    {"id":"continued-speech","text":"We will return to the equilibrium expression later. For now the partial pressure of a gas is still its mole fraction times the total pressure.","expect":"Live continues with prior unresolved obligation preserved while Stage can review independently."}
+  ]
+}

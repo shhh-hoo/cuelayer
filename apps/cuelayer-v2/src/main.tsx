@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Session } from "./session";
+import { realInterpreter } from "./adapters/live";
+import { Microphone } from "./adapters/microphone";
 import { deterministicInterpreter, inject, story, delay } from "./story";
 import { decide, Geography } from "./display";
 import { Board, type CanvasHandle } from "./adapters/canvas";
@@ -14,13 +16,32 @@ if (!params.has("session")) {
   params.set("session", sessionId);
   history.replaceState(null, "", `${location.pathname}?${params}`);
 }
+const real = params.get("services") === "real";
+const serviceConfig = real
+  ? await fetch("/api/v2/config").then((r) => r.json())
+  : null;
+let traceSession: Session | undefined;
 const session = await Session.open(
   sessionId,
-  deterministicInterpreter({
-    live: Number(params.get("live") ?? 120),
-    stage: Number(params.get("stage") ?? 1200),
-  }),
+  real
+    ? realInterpreter(() => traceSession?.trace)
+    : deterministicInterpreter({
+        live: Number(params.get("live") ?? 120),
+        stage: Number(params.get("stage") ?? 1200),
+      }),
+  undefined,
+  real
+    ? {
+        coalesceMs: 25,
+        maxWaitMs: 75,
+        maxBatch: 4,
+        deadlineMs: serviceConfig.clientTimeoutMs,
+      }
+    : undefined,
 );
+traceSession = session;
+if (real) session.trace.mark("model-config", serviceConfig);
+const mic = new Microphone(session, () => api.refresh());
 const handle: CanvasHandle = {
   editor: null,
   geography: new Geography(),
@@ -31,6 +52,8 @@ const handle: CanvasHandle = {
 let inputIndex = session.replay.evidence.length;
 const api = {
   session,
+  mic,
+  refresh: () => {},
   handle,
   story,
   inject: async (text: string) => inject(session, text, inputIndex++),
@@ -75,13 +98,19 @@ function App() {
   const revision = session.state.revision;
   const state = useMemo(() => session.state, [revision]);
   useEffect(() => session.subscribe(() => setTick((t) => t + 1)), []);
+  api.refresh = () => setTick((t) => t + 1);
   api.failRepresentation = setFailed;
   api.setMode = setMode;
   const intent = mode
     ? {
         targets:
           mode === "COMPARE"
-            ? ["pressure", "fraction"]
+            ? real
+              ? Object.values(state.units)
+                  .filter((u) => u.valid && u.coreId === state.currentCoreId)
+                  .slice(-2)
+                  .map((u) => u.id)
+              : ["pressure", "fraction"]
             : (session.attention?.targets ?? []),
         mode,
         expiresAt: Infinity,
@@ -112,9 +141,21 @@ function App() {
     }
   };
   const exportSession = async () => {
-    const blob = new Blob([await session.store.exportSession(sessionId)], {
-        type: "application/json",
-      }),
+    await session.trace.flush(session.store, session.id);
+    const blob = new Blob(
+        [
+          JSON.stringify({
+            session: JSON.parse(await session.store.exportSession(sessionId)),
+            diagnostics: await session.store.traces
+              .where("sessionId")
+              .equals(sessionId)
+              .toArray(),
+          }),
+        ],
+        {
+          type: "application/json",
+        },
+      ),
       url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -133,12 +174,25 @@ function App() {
           {state.cores[state.currentCoreId ?? ""]?.title ??
             "A place for the next idea"}
         </div>
-        <button
-          onClick={run}
-          disabled={running || w.orderedCommittedEvidence.length > 0}
-        >
-          {running ? "Teaching…" : "Run teaching story"}
-        </button>
+        {real ? (
+          <button
+            onClick={() =>
+              void (mic.status === "listening" ? mic.stop() : mic.start())
+            }
+            disabled={["starting", "draining", "failed"].includes(mic.status)}
+          >
+            {mic.status === "listening"
+              ? "Stop microphone"
+              : "Enable microphone"}
+          </button>
+        ) : (
+          <button
+            onClick={run}
+            disabled={running || w.orderedCommittedEvidence.length > 0}
+          >
+            {running ? "Teaching…" : "Run teaching story"}
+          </button>
+        )}
       </header>
       {overlay ? (
         <section className="presentation" aria-label="Synthetic presentation">
@@ -177,14 +231,23 @@ function App() {
               <br />
               as the teaching unfolds.
             </div>
-            <p>Run the deterministic story to explore this rebuild.</p>
+            <p>
+              {real
+                ? "Enable the microphone and begin teaching."
+                : "Run the deterministic story to explore this rebuild."}
+            </p>
           </div>
         ) : null}
         {frame.cueVisible &&
         state.cue &&
         session.cuePresentation?.version === state.cueVersion &&
         session.cuePresentation.mainlineVersion === state.mainlineVersion ? (
-          <TeachingCue text={state.cue.text} />
+          <TeachingCue
+            text={state.cue.text}
+            trace={session.trace}
+            revision={revision}
+            cueVersion={state.cueVersion}
+          />
         ) : (
           <div className="cue-region quiet">
             <span>Room to think.</span>
@@ -193,7 +256,11 @@ function App() {
       </section>
       <footer>
         <span className="status-dot" />
-        {running ? "Teaching continues" : "Deterministic teaching experiment"}
+        {real
+          ? `${serviceConfig.observationOnly ? "Observation run · " : ""}Microphone: ${mic.status}`
+          : running
+            ? "Teaching continues"
+            : "Deterministic teaching experiment"}
         <span>
           {w.consumedEvidenceIds.length} / {w.orderedCommittedEvidence.length}{" "}
           evidence accounted for
@@ -209,17 +276,36 @@ function App() {
             <button onClick={() => setMode("FOCUS")}>Focus</button>
             <button onClick={() => setMode("COMPARE")}>Compare</button>
             <button onClick={exportSession}>Export session</button>
+            {real ? (
+              <button
+                onClick={() => mic.forceFinal()}
+                disabled={mic.status !== "listening"}
+              >
+                Request final
+              </button>
+            ) : (
+              <a href="?services=real">Real speech experiment</a>
+            )}
             <p>
-              This authored story uses no microphone, ASR connection or model
-              calls.
+              {real
+                ? `Speechmatics receives audio; OpenAI receives bounded teaching context. Diagnostic history is stored locally. Model: ${serviceConfig.model}; provider deadline: ${serviceConfig.providerTimeoutMs / 1000}s${serviceConfig.observationOnly ? " (observation only)" : ""}.`
+                : "This authored story uses no microphone, ASR connection or model calls."}
             </p>
           </div>
         </details>
       </footer>
-      {error || session.error ? (
+      {error || session.error || mic.error ? (
         <div role="alert" className="runtime-error">
-          {error ?? session.error}
-          <button onClick={() => session.resume()}>Retry pending work</button>
+          {error ?? session.error ?? mic.error}
+          <button
+            onClick={() =>
+              void (mic.error
+                ? mic.retry().catch((e) => setError(String(e)))
+                : session.resume())
+            }
+          >
+            Retry pending work
+          </button>
         </div>
       ) : null}
     </main>
@@ -228,6 +314,7 @@ function App() {
 const root = createRoot(document.getElementById("root")!);
 root.render(<App />);
 import.meta.hot?.dispose(() => {
+  void mic.stop();
   session.close();
   root.unmount();
 });

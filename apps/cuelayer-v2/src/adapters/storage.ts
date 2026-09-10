@@ -2,7 +2,10 @@ import Dexie, { type Table } from "dexie";
 import { same, type Event } from "../contract";
 export class EventStore extends Dexie {
   events!: Table<Event, string>;
-  traces!: Table<{ id: string; sessionId: string; spans: unknown[] }, string>;
+  traces!: Table<
+    { id: string; sessionId: string; spans: unknown[]; dropped?: number },
+    string
+  >;
   constructor(name = "cuelayer-v2") {
     super(name);
     this.version(1).stores({

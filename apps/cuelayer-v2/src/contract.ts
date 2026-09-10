@@ -203,6 +203,9 @@ export type Task = {
   id: string;
   lane: "Live" | "Stage";
   evidence: Evidence[];
+  // Read-only original sources of bounded unresolved context; never new consumption.
+  contextEvidence?: Evidence[];
+  omittedObligations?: number;
   dependencies: Dependencies;
   state: TeachingState;
   obligations: Obligation[];
