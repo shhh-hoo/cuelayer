@@ -156,3 +156,19 @@ When the production Board domain migrates from legacy `SET_ACTIVE` / bounded `Re
 M3 runtime correctness is checked separately from the frozen semantic model corpora. Deterministic tests inject transports and exercise the real Core provider envelope/parser, bounded context, normalizer/validator, lossless scheduler, atomic event persistence, replay, Cue references, verification dispatcher, finalization and trace writer. The live runtime does not use the offline exemplar adapter as a persistence boundary.
 
 CI runs `npm run eval:core:validate` in addition to the legacy frozen validator and full test/build/hygiene checks. The optional `--fresh-holdout` validation is also deterministic. Both commands report `mode: exemplar-contract` and `modelCalls: 0`; passing the 24-case and eight-case fixture contracts is not a model score. The frozen historical 19/24, 5/8 and 21/24 model results remain unchanged and must not be rescored.
+
+## Teaching Representation architecture regression
+
+The representation gate is deterministic and separate from semantic interpretation/model evaluation. `src/teaching-representation/architecture.test.ts` exercises accepted Core snapshots → producer admission → lightweight M4A candidates → selected host payloads → artifact reconciliation. `src/canvas-spatial/semantic-space.test.ts` covers measured local growth, incremental pressure propagation, unchanged distant spaces, repeatability and temporary composition. The extracted motion tests check swept collision intervals and interrupted travel. The development entry test inspects the actual production bundle for accidental representation/domain/dev imports.
+
+The original authored Chemistry acceptance sequence and seven Mathematics GOLD checkpoints remain in `src/dev/teaching-representation/lesson.ts` and `trig-lesson.ts`. `fixtures.ts` supplies explicit reference bindings and review attention, and appends one reducer-accepted Math comparison withdrawal. It registers trusted text, accepted-relation, energy-profile, equation and finite-function capabilities through the generic implementation registry. Fixture attention requests semantic targets/media/roles; it does not select exact authored artifact names or pass renderer payloads into M4A.
+
+```sh
+npm test -- src/teaching-representation/architecture.test.ts src/canvas-spatial/semantic-space.test.ts src/canvas-spatial/motion.test.ts src/dev/teaching-representation/entry.test.ts
+```
+
+Required checks include candidate availability without display; atomic rejection of malformed/ungrounded proposals; stable payload/candidate/artifact binding; selected-only visibility; revalidation on PRESERVE and historical reuse; local relation withdrawal without deleting surviving nodes; Math curve counts `0,1,1,2,2,3,3,2` under one plot identity; and isolation from Core/Cue mutation. Core/M4A contract bytes and frozen corpora remain unchanged.
+
+Browser review uses both development stories at 1280×720. Walk every checkpoint, inspect PAIR/WIDEN/COMPARE and return, record visible artifact IDs/DOM instance continuity, measured bounds, clipping, curve/relation withdrawal and console output. In the separate diagnostics panel, use **Grow selected artifact** to increase actual rendered width and verify that only pressured neighboring spaces move. Check shared-projector drag/zoom through an accepted update and **Follow teaching**. Store screenshots, geometry, logs and review observations only under ignored `.cuelayer/` or `artifacts/`.
+
+This gate establishes a bounded architecture seam, not generic semantic entailment, arbitrary graph layout, classroom comprehension, production/shared-surface cutover or AI representation autonomy. The finite Chemistry and Math meaning checks belong to capabilities, not Canvas. Pure domain-only grounding without a committed checkpoint is conservatively rejected by the current adapter to M4A's evidence requirement.
