@@ -1,0 +1,435 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #193e40;
+  background: #f5f6f1;
+  font-synthesis: none;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button {
+  font: inherit;
+  border: 1px solid #b8cecb;
+  border-radius: 20px;
+  padding: 9px 17px;
+  background: #fafffb;
+  color: #194e4c;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.app {
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: 72px 1fr 42px;
+  overflow: hidden;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  padding: 0 26px;
+  border-bottom: 1px solid #dce4dd;
+  background: #fafbf6;
+}
+.brand {
+  font-size: 24px;
+  letter-spacing: -1px;
+  font-weight: 750;
+}
+.brand span {
+  font-weight: 400;
+}
+.brand b {
+  font-size: 10px;
+  margin-left: 9px;
+  background: #dcebe2;
+  border-radius: 4px;
+  padding: 4px;
+  letter-spacing: 0;
+  vertical-align: middle;
+}
+.lesson-title {
+  font-size: 13px;
+  color: #536e6b;
+  flex: 1;
+}
+header button {
+  font-size: 12px;
+  background: #1e6158;
+  color: white;
+  border: 0;
+}
+.learner {
+  min-height: 0;
+  position: relative;
+  display: grid;
+  grid-template-rows: 34px 1fr 108px;
+}
+.surface-label {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 25px 0;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: #697d77;
+}
+.surface-label span:last-child {
+  letter-spacing: 0;
+  font-size: 11px;
+}
+.board {
+  position: relative;
+  min-height: 0;
+  margin: 0 12px;
+  isolation: isolate;
+}
+.board .tl-background {
+  background: #f5f6f1;
+}
+.knowledge {
+  height: 100%;
+  width: 100%;
+  padding: 20px;
+  background: #fffefa;
+  border: 1px solid #c8d8cc;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px #23473b09;
+  color: #173f3e;
+  overflow: hidden;
+}
+.knowledge.historical {
+  background: #f4f5ef;
+}
+.artifact-eyebrow {
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 1.4px;
+  color: #678780;
+  margin-bottom: 13px;
+}
+.statement {
+  font-size: 24px;
+  line-height: 1.45;
+  margin: 16px 0;
+}
+.annotation {
+  font-size: 21px;
+  line-height: 1.5;
+}
+.notation {
+  font-size: 21px;
+  min-height: 45px;
+}
+.katex-display {
+  margin: 8px 0 15px !important;
+}
+.conditions {
+  font-size: 13px;
+  line-height: 1.5;
+  padding-top: 12px;
+  margin-top: 10px;
+  border-top: 1px solid #e1e8e0;
+  color: #45675e;
+}
+.knowledge dl {
+  font-size: 13px;
+  margin: 10px 0;
+}
+.knowledge dl div {
+  display: flex;
+  gap: 9px;
+  margin: 6px 0;
+  align-items: baseline;
+}
+.knowledge dt {
+  font-weight: 650;
+  min-width: 48px;
+}
+.knowledge dd {
+  margin: 0;
+}
+.knowledge dd span {
+  color: #657d72;
+  font-size: 11px;
+}
+.cue-region {
+  position: relative;
+  height: 108px;
+  background: #edf2e9;
+}
+.cue-anchor {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 1px;
+}
+.teaching-cue {
+  width: min(580px, calc(100vw - 44px));
+  max-width: calc(100% - 24px);
+  padding: 13px 20px;
+  border-left: 3px solid #ae8535;
+  background: #fffaf0;
+  box-shadow: 0 3px 10px #4c482408;
+  border-radius: 5px;
+}
+.teaching-cue small {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: #8a681e;
+  font-weight: 700;
+}
+.teaching-cue p {
+  font-size: 18px;
+  line-height: 1.3;
+  margin: 7px 0 0;
+}
+.quiet {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #91a091;
+  font-size: 12px;
+  font-style: italic;
+  background: transparent;
+}
+.follow {
+  position: absolute;
+  right: 22px;
+  bottom: 120px;
+  z-index: 500;
+  background: #205e56;
+  color: #fff;
+  font-size: 12px;
+}
+.degraded {
+  position: absolute;
+  inset: 12px auto auto 12px;
+  max-width: 90%;
+  padding: 10px;
+  background: #fff2d4;
+  color: #775513;
+  font-size: 13px;
+  z-index: 400;
+}
+.empty {
+  position: absolute;
+  top: 35%;
+  left: 12%;
+  pointer-events: none;
+}
+.empty > div {
+  font-size: clamp(28px, 4vw, 48px);
+  line-height: 1.25;
+  letter-spacing: -1.5px;
+  color: #729287;
+}
+.empty p {
+  font-size: 13px;
+  color: #8b9e91;
+  margin-top: 24px;
+}
+footer {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 0 22px;
+  border-top: 1px solid #dce4dd;
+  font-size: 10px;
+  color: #718376;
+}
+footer > span:nth-of-type(2) {
+  margin-left: auto;
+}
+.status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #649d77;
+}
+details {
+  margin-left: 14px;
+}
+summary {
+  cursor: pointer;
+}
+details > div {
+  position: absolute;
+  bottom: 42px;
+  right: 15px;
+  width: 340px;
+  background: #fffef8;
+  padding: 18px;
+  border: 1px solid #dce4dd;
+  z-index: 999;
+  font-size: 12px;
+}
+details button {
+  font-size: 11px;
+  margin-right: 5px;
+}
+.runtime-error {
+  position: absolute;
+  top: 76px;
+  left: 20px;
+  background: #fff0eb;
+  padding: 12px;
+  font-size: 12px;
+  z-index: 999;
+}
+.presentation {
+  display: none;
+}
+.overlay {
+  grid-template-columns: 42% 58%;
+}
+.overlay header,
+.overlay footer {
+  grid-column: 1/-1;
+}
+.overlay .presentation {
+  display: flex;
+  flex-direction: column;
+  padding: 70px 36px;
+  background: #203f43;
+  color: #f6f1e4;
+  grid-column: 1;
+  grid-row: 2;
+}
+.presentation small {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #96b1a4;
+}
+.presentation h1 {
+  font-size: clamp(24px, 3.4vw, 45px);
+  font-weight: 450;
+  line-height: 1.2;
+  letter-spacing: -1px;
+  margin-top: 50px;
+}
+.presentation p {
+  font-size: 13px;
+  color: #b7c8bb;
+  line-height: 1.7;
+}
+.presentation-line {
+  width: 60px;
+  height: 3px;
+  background: #d0ab62;
+  margin-top: 35px;
+}
+.overlay .learner {
+  grid-column: 2;
+  grid-row: 2;
+}
+.overlay .teaching-cue {
+  width: calc(100% - 30px);
+}
+.knowledge .MafsView {
+  border-radius: 4px;
+  background: transparent !important;
+  --mafs-bg: transparent;
+  --mafs-fg: #244d48;
+  --mafs-line-color: #dce5dc;
+  --mafs-origin-color: #829c91;
+}
+@media (max-width: 750px) {
+  header {
+    height: 64px;
+    padding: 0 15px;
+    gap: 12px;
+  }
+  .app {
+    grid-template-rows: 64px 1fr 38px;
+  }
+  .brand {
+    font-size: 20px;
+  }
+  .lesson-title {
+    display: none;
+  }
+  header button {
+    margin-left: auto;
+    font-size: 10px;
+    padding: 9px 12px;
+  }
+  .surface-label {
+    padding: 10px 14px 0;
+    font-size: 8px;
+  }
+  .surface-label span:last-child {
+    font-size: 9px;
+  }
+  .board {
+    margin: 0 6px;
+  }
+  .learner {
+    grid-template-rows: 30px 1fr 108px;
+  }
+  footer {
+    padding: 0 12px;
+    font-size: 8px;
+    gap: 6px;
+  }
+  footer > span:nth-of-type(2) {
+    display: none;
+  }
+  details {
+    margin-left: auto;
+  }
+  .teaching-cue p {
+    font-size: 16px;
+  }
+  .overlay {
+    grid-template-columns: 1fr;
+  }
+  .overlay .presentation {
+    display: none;
+  }
+  .overlay .learner {
+    grid-column: 1;
+  }
+  .empty {
+    left: 8%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0s !important;
+    transition-duration: 0s !important;
+  }
+}
+
+.knowledge[data-role="context"] {
+  background: #f0f4eb;
+  border-color: #d9e2d5;
+}
+.knowledge[data-role="context"] .artifact-eyebrow {
+  color: #7f9385;
+}
+.relation-structure {
+  font-size: 19px;
+}
+.relation-structure ul {
+  display: flex;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+}
+.relation-structure li {
+  flex: 1;
+  border: 1px solid #d5e1d4;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 16px;
+}

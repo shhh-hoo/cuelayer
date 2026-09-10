@@ -218,3 +218,22 @@ npm run report:bundle
 The bundle command builds the actual production graph without writing build output and reports module IDs/counts, per-chunk raw/gzip/brotli bytes and the initial static load. Compression uses Node's built-in zlib. Baseline PR31 (`8f54e9b428835b808b810eb09142897ad18459bf`) is 122 modules, 446,635 raw, 130,930 gzip and 112,302 brotli bytes. Compare combined emitted chunks consistently; compression totals sum separately compressed chunks. Use `-- --root PATH` to measure another checkout. Core controller/client code is lazy-loaded after the stored Core domain resolves; legacy controller code loads only for legacy restoration.
 
 Browser review must use `/session` with local injected interpretation, synthetic committed speech and real IndexedDB persistence. Instrumentation/transport overrides may be supplied by an ignored review-server plugin; do not add a production URL domain toggle or import development fixtures into the application. Test desktop 1280×720, narrow 390×844 and reduced motion; hold persistence, revise accepted content, shift/refocus mainlines, inspect/follow, fail/recover representation, reopen and finalize pending evidence. Also restore a reviewed historical v3/v4 fixture. Check settled geometry, visible artifact identities, console and requests. Record evidence only in ignored `.cuelayer/reviews/m5/`. No microphone, external model/verifier call or new model evaluation is part of this gate. The existing zoom floor and limited accepted-content fallback remain unchanged.
+
+## Run the isolated V2 deterministic slice
+
+From the repository root:
+
+```sh
+cd apps/cuelayer-v2
+npm ci
+npx playwright install chromium
+npm run dev
+```
+
+Open `http://127.0.0.1:5192/` and select **Run teaching story**. `?mode=overlay` enables the synthetic presentation-overlay fixture. The address acquires a session identity; reloading it restores the V2 log and unresolved work. A fresh address without a session parameter allocates a separate V2 session. **Session details** provides FOCUS/COMPARE and versioned local export. Drag/wheel temporarily inspect the shared Board; **Follow Teaching** restores the latest current frame. The normal production `npm run dev` entry and `/session` route remain unchanged.
+
+No microphone, Speechmatics connection, credential lookup, OpenAI call or paid provider is part of this entry. `window.v2` is the deliberate deterministic test harness for this isolated experiment; it is not a production/debug API to expose at cutover. The injected timing query parameters and fixture interpreter must remain scoped to this package.
+
+V2 uses a separate `cuelayer-v2` Dexie database and never opens old session databases. Evidence retention is explicit: retain until the user exports/deletes the session; `EventStore.deleteSession` is the versioned deletion boundary. There is no implicit legacy import, automatic old-session deletion, or provider-memory recovery. A failed nondurable final blocks later admission in the current owner and must be retried; browser loss before that final persists cannot recover its text.
+
+Run the V2 typecheck, unit, build, browser and complexity commands in `EVALUATION.md`. Screenshot and JSON output lands under ignored `.cuelayer/v2/`. Do not publish generated session evidence or treat these synthetic examples as frozen model GOLD. tldraw's visible development license notice and its production-license requirement are not suppressed; deployment requires a separate decision. This runbook does not authorize deployment, merge, real audio or model evaluation.
