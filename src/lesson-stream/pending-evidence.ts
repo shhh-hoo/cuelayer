@@ -18,6 +18,8 @@ export class LosslessInterpretationScheduler {
   private retryPrefix?: string[];
   private budgetBlocked = false;
 
+  constructor(private readonly maxCheckpoints = MAX_REQUEST_CHECKPOINTS) {}
+
   reset() {
     this.pending = [];
     this.inFlight = undefined;
@@ -47,7 +49,7 @@ export class LosslessInterpretationScheduler {
     const batch: CompactEvidenceCheckpoint[] = [];
     let tokens = 0;
     for (const checkpoint of this.pending) {
-      if (batch.length >= MAX_REQUEST_CHECKPOINTS || (this.retryPrefix && !this.retryPrefix.includes(checkpoint.checkpointId))) break;
+      if (batch.length >= this.maxCheckpoints || (this.retryPrefix && !this.retryPrefix.includes(checkpoint.checkpointId))) break;
       if (!fitsRequest([...batch, checkpoint])) { this.budgetBlocked = !batch.length; break; }
       const nextTokens = tokensFor(checkpoint);
       if (batch.length && tokens + nextTokens > tokenCap) break;
@@ -82,6 +84,9 @@ export class LosslessInterpretationScheduler {
 
   get isBudgetBlocked() { return this.budgetBlocked; }
   get currentWork() { return this.inFlight; }
+  pendingHead(limit: number) { return this.pending.slice(0, limit); }
+  get oldestPendingCheckpoint() { return this.pending[0]; }
+  get pendingRange() { return this.pending.length ? { first: this.pending[0]!.lessonSequence, last: this.pending.at(-1)!.lessonSequence } : undefined; }
   get pendingCheckpoints() { return [...this.pending]; }
   get pendingCount() { return this.pending.length; }
 }

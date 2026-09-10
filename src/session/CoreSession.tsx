@@ -1,20 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CoreLiveSession } from '../lesson-stream/core/live-session';
 import type { SessionTraceController } from '../trace/use-session-trace';
 import { SessionWorkspace } from './SessionWorkspace';
 import type { SessionTeachingHook } from './session-teaching';
 import { openCoreSession } from './core-session';
+import { ClosedSpeechCursor } from './closed-speech-cursor';
 
 export const useCoreTeaching: SessionTeachingHook = input => {
   const [live, setLive] = useState<CoreLiveSession>();
   const [error, setError] = useState<string>();
   const [, refresh] = useState(0);
+  const speechCursor = useRef(new ClosedSpeechCursor());
   const current = useRef(input); current.current = input;
   useEffect(() => {
     let cancelled = false;
     let owner: CoreLiveSession | undefined;
     let unsubscribe: (() => void) | undefined;
-    setLive(undefined); setError(undefined);
+    setLive(undefined); setError(undefined); speechCursor.current = new ClosedSpeechCursor();
     void Promise.resolve().then(() => cancelled ? undefined : openCoreSession({ sessionId: input.sessionId, speechRunId: current.current.speechRunId, trace: input.onTrace })).then(session => {
       if (!session) return;
       if (cancelled) { session.close(); return; }
@@ -35,9 +37,12 @@ export const useCoreTeaching: SessionTeachingHook = input => {
     if (!live || live.runtime.replay.ended || input.sessionStatus === 'ended') return;
     let cancelled = false;
     void (async () => {
-      for (const span of input.canonicalSpeech.spans.filter(span => span.status === 'closed')) {
-        if (cancelled) return;
+      const cursor = speechCursor.current;
+      while (!cancelled) {
+        const span = cursor.next(input.canonicalSpeech.spans, input.speechRunId);
+        if (!span) break;
         await live.commitClosedSpan(span, input.speechRunId);
+        if (!cancelled) cursor.committed(span);
       }
     })().catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : 'checkpoint-commit-failed'); });
     return () => { cancelled = true; };
@@ -55,16 +60,7 @@ export const useCoreTeaching: SessionTeachingHook = input => {
   }, [live]);
   const resumeInterpretation = useCallback(() => { setError(undefined); live?.resume(); refresh(n => n + 1); }, [live]);
   const health = live?.health;
-  const events = live?.runtime.events;
-  const oldestPendingAt = useMemo(() => {
-    const pendingIds = new Set(live?.runtime.pending.map(item => item.checkpointId));
-    let oldest: number | undefined;
-    for (const event of events ?? []) if (event.type === 'evidence.checkpoint_committed' && pendingIds.has(event.checkpoint.checkpointId)) {
-      const time = Date.parse(event.timestamp); oldest = oldest === undefined ? time : Math.min(oldest, time);
-    }
-    return oldest;
-  }, [live, events]);
-  const oldestPendingAgeMs = oldestPendingAt === undefined ? 0 : Math.max(0, Date.now() - oldestPendingAt);
+  const oldestPendingAgeMs = health?.oldestPendingAgeMs ?? 0;
   return { domain: 'core', source: live?.runtime, ended: live?.runtime.replay.ended ?? false,
     status: !live ? (error ? 'degraded' : 'restoring') : health?.error || error ? 'degraded' : health?.inFlight ? 'interpreting' : 'ready',
     error: error ?? health?.error, pendingCount: health?.pendingCount ?? 0,

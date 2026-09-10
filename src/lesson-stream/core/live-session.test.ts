@@ -56,7 +56,7 @@ describe("controlled Core live pipeline", () => {
     expect(published.payload.stateDigest).toBe(persistedAuditDigest(session.state));
     expect(published.payload.eventIds).toEqual(store.events.filter(e => e.type === "core.step_accepted").map(e => e.eventId));
     const requestId = published.correlation!.coreRequestId;
-    for (const trace of traces.filter(t => t.type !== "core.checkpoint_committed")) expect(trace.correlation?.coreRequestId).toBe(requestId);
+    for (const trace of traces.filter(t => t.type !== "core.checkpoint_committed" && t.type !== "core.session_window")) expect(trace.correlation?.coreRequestId).toBe(requestId);
     const context = traces.find(t => t.type === "core.request");
     if (context?.type !== "core.request") throw new Error("expected-context");
     expect(context.payload.diagnostics).toMatchObject({ version: "core-interpretation-context-v3", evidenceCount: 1, baseKnowledgeRevision: 0, baseCueRevision: 0 });
@@ -255,7 +255,7 @@ describe("Core lesson finalization and restoration", () => {
     const ended = session.finalize(); await vi.advanceTimersByTimeAsync(100); expect(await ended).toBe(false);
     expect(store.events.at(-1)?.type).toBe("evidence.checkpoint_committed"); session.close();
     const restored = await CoreLiveSession.open({ sessionId: session.runtime.sessionId, lessonDomain: "core", store, speechRunId: "run-1", interpreter: async b => proposalFor(b) });
-    sessions.push(restored); await finish(restored); expect(restored.state.processedThroughSequence).toBe(1); expect(await restored.finalize()).toBe(true);
+    sessions.push(restored); await vi.advanceTimersByTimeAsync(750); await finish(restored); expect(restored.state.processedThroughSequence).toBe(1); expect(await restored.finalize()).toBe(true);
   });
   it("unresolved verification cannot delay semantic finalization", async () => {
     const { session, traces } = await setup({ interpreter: async b => proposalFor(b, true, true), verificationSink: () => new Promise(() => undefined) });

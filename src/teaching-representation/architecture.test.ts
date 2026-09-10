@@ -174,9 +174,10 @@ it('keeps generic Teaching Representation/Canvas imports and branches subject-ag
     }
   }
 });
-it('preserves existing Core/M4A contract bytes and exact seven Math GOLD checkpoints', () => {
+it('pins the versioned Core runtime extension, unchanged M4A and exact seven Math GOLD checkpoints', () => {
   const digest = (file: string) => createHash('sha256').update(readFileSync(new URL(file, import.meta.url))).digest('hex');
-  expect(digest('../lesson-stream/core/contracts.ts')).toBe('ce5b8da41bd8a5e62de63fc696c7ff84287260ef9f4856ca13860abc6db20d89');
+  // Session foundation adds only optional, versioned liveProcessing to accepted steps. Semantic GOLD stays frozen.
+  expect(digest('../lesson-stream/core/contracts.ts')).toBe('8ca98aa5e72ae6de79549c041bb6d4c478937a5ae11f59ab21b5140fd4f63f64');
   expect(digest('../learner-projection/contracts.ts')).toBe('0b647ca2fc811e089bf0d054ce74475bf21dd9633e0ddd62eda60f85c3a238b8');
   expect(MATH_STORY.slice(0, 7)).toEqual(TRIG_LESSON);
 });

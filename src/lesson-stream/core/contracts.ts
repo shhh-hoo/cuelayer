@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { liveProcessingSchema } from "./session-processing.ts";
 import type { CompactEvidenceCheckpoint, GroundingRecord } from "../contracts.ts";
 
 /** Core semantic generation; normal production sessions still use legacy. */
@@ -82,6 +83,7 @@ export const coreStepSchema = z.object({
   stateRefs: z.array(stateReference),
   warnings: z.array(z.object({ code: id, detail: z.string().optional() }).strict()),
   acceptedAt: z.iso.datetime(),
+  liveProcessing: liveProcessingSchema.optional(),
 }).strict();
 
 export type CoreStep = z.infer<typeof coreStepSchema>;
