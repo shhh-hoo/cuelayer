@@ -5,7 +5,7 @@
       "includeFiles": "server/teaching/**"
     },
     "api/teaching/core-interpretation.ts": {
-      "includeFiles": "server/teaching/**"
+      "includeFiles": "{server/teaching/**,src/**}"
     }
   },
   "routes": [
