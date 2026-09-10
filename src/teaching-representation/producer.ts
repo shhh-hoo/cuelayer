@@ -5,7 +5,8 @@ import { immutableCopy, type AcceptedTeachingState, type GroundedPayload, type G
 import { groundReferences, sameReference, validReference } from './grounding.ts';
 import type { CapabilityRegistry } from './registry.ts';
 
-const identity = z.string().trim().min(1).max(512);
+// Production identities encode complete semantic tuples without lossy hashing.
+const identity = z.string().min(1).max(16_384);
 const proposalSchema = z.object({ candidateId: identity, artifactId: identity, payloadId: identity, capabilityId: identity,
   target: semanticReferenceSchema, space: z.object({ key: identity, anchor: semanticReferenceSchema }).strict(), data: z.unknown(),
 }).strict();

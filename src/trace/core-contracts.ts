@@ -13,6 +13,14 @@ export type CoreVerificationJob = {
   checkpointIds: string[]; query: string; claim: string; candidateEvidence: string;
 };
 export type CoreTracePayloads = {
+  "core.representation": { knowledgeRevision: number; cueRevision: number; processedThroughSequence: number;
+    candidateIds: string[]; selectedIds: string[]; projection: import('../learner-projection/contracts.ts').LearnerProjection;
+    changes: import('../teaching-representation/artifact-runtime.ts').ArtifactChange[];
+    admission: Array<Pick<import('../teaching-representation/contracts.ts').GroundedPayload, 'candidateId' | 'artifactId' | 'payloadId' | 'producerId' | 'capabilityId' | 'references' | 'evidenceCheckpointIds' | 'space'>>;
+    artifacts: Array<{ id: string; revision: number; visible: boolean; space: import('../teaching-representation/contracts.ts').GroundedPayload['space'] }>;
+    diagnostics: string[] };
+  "core.projector": { knowledgeRevision: number; cueRevision: number; status: 'rendered' | 'degraded'; reason?: string;
+    evidence?: import('../canvas-spatial/Canvas.tsx').CanvasEvidence };
   "core.checkpoint_committed": { checkpointId: string; lessonSequence: number; eventId: string };
   "core.request": { requestId: string; checkpointIds: string[]; diagnostics: CoreContextDiagnostics;
     context: InterpretationContext; entities: Array<{ handle: string; target: import("../lesson-stream/core/contracts.ts").SemanticReference; capabilities: string[] }> };

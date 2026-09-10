@@ -147,3 +147,14 @@ Context diagnostics record version, characters/token estimate, Core/candidate/en
 Verification has its own `core.verification` records correlated by session ID, Core request ID and original request index. States are enqueued, started, completed, failed, timeout, cancelled or dropped; unconfigured sinks and queue pressure have explicit reasons. `core.verification_dropped` records normalization drops after semantic acceptance. None of these records is a lesson event, evidence rule or scheduler pending checkpoint.
 
 Payload construction, sanitization and listener failures are isolated from domain behavior. The existing bounded asynchronous `TraceWriter` remains the persistence path; no Core trace work is added to PCM/audio delivery. Missing/gapped trace cannot change replay or acceptance.
+
+## Core shared-projector trace (M4C)
+
+The same optional emitter and bounded local TraceWriter accept two additive records after the Core publication boundary:
+
+- `core.representation`: accepted knowledge/Cue revisions and processed sequence; available candidate IDs; admitted candidate/artifact/payload/producer/capability bindings; committed evidence and accepted reference grounding; exact M4A projection/selected IDs; CREATE/UPDATE/PRESERVE/WITHDRAW changes; artifact revision/visibility and anchored Space assignment; production/revalidation rejection reasons.
+- `core.projector`: the accepted revisions at rendering, rendered/degraded status, explicit failure reason, measured Space/local/persistent geometry, temporary composition, visible and failed artifact IDs, rendered boxes, camera, inspection, motion and automatic-fit status.
+
+Join records by session and accepted revisions/processed sequence to `core.published` and its accepted event IDs. A runtime subscription can emit representation diagnostics before the controller finishes emitting `core.published`; timestamps alone do not define semantic authority. The runtime subscription is already after durable commit. Initial replay records artifact creation without manufacturing new semantic events. Intermediate animation frames are not traced; settled geometry and manual inspection observations are diagnostic proxies, not evidence of learner comprehension or hardware display visibility.
+
+Malformed production, missing capabilities/payloads, invalid grounding, stale retained parts, invalid measurement, unresolved pressure, renderer failure/empty mount and insufficient automatic fit are representation/spatial failures. They do not roll back accepted Core state, reopen evidence or invoke a provider. No new trace persistence or audio-hot-path work is introduced; emitter failures cannot reset canonical artifact history or change acceptance.

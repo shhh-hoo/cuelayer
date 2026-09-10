@@ -33,7 +33,8 @@ it("normal browser/API routes remain legacy and cannot activate the controlled C
   const files = reachable(["src/main.tsx", "api/teaching/interpretation.ts", "vite.config.ts"]);
   expect(files).toContain("src/lesson-stream/runtime.ts");
   expect(files).toContain("server/teaching/provider-contract.ts");
-  expect(files.some(path => path.startsWith("src/lesson-stream/core/") || path.startsWith("server/teaching/core/"))).toBe(false);
+  expect(files.filter(path => path.startsWith("src/lesson-stream/core/") || path.startsWith("server/teaching/core/")).sort()).toEqual(["src/lesson-stream/core/contracts.ts", "src/lesson-stream/core/trace.ts"]);
+  expect(files).toContain("src/session/CoreTeachingSurface.tsx");
   expect(files).not.toContain("src/lesson-stream/open-runtime.ts");
 });
 it("makes the controlled Core controller/provider bridge reachable without introducing legacy semantic names in Core code", () => {

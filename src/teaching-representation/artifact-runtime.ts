@@ -12,9 +12,9 @@ export type Artifact = {
   visible: boolean;
   role?: 'dominant' | 'companion';
 };
-export type ArtifactRuntime = { sessionId: string; artifacts: Map<string, Artifact> };
+export type ArtifactRuntime = { sessionId: string; artifacts: Map<string, Artifact>; bindings: Map<string, string> };
 export type ArtifactChange = { id: string; action: 'CREATE' | 'UPDATE' | 'PRESERVE' | 'WITHDRAW' };
-export const emptyArtifactRuntime = (sessionId: string): ArtifactRuntime => ({ sessionId, artifacts: new Map() });
+export const emptyArtifactRuntime = (sessionId: string): ArtifactRuntime => ({ sessionId, artifacts: new Map(), bindings: new Map() });
 const binding = (p: GroundedPayload) => JSON.stringify([p.candidateId, p.artifactId, p.payloadId, p.capabilityId, p.producerId, referenceKey(p.target), p.space.key, referenceKey(p.space.anchor)]);
 
 /** Reconcile against accepted truth on EVERY call, even PRESERVE/inspection.
@@ -27,6 +27,7 @@ export function reconcileArtifacts(previous: ArtifactRuntime, state: AcceptedTea
   const runtime = emptyArtifactRuntime(state.sessionId), changes: ArtifactChange[] = [], diagnostics: string[] = [];
   const snapshot = immutableCopy(state), context = immutableCopy(grounding);
   const prior = previous.sessionId === state.sessionId ? previous.artifacts : new Map<string, Artifact>();
+  if (previous.sessionId === state.sessionId) runtime.bindings = new Map(previous.bindings);
   const current = production.sessionId === state.sessionId && !production.diagnostics.length ? production : undefined;
   const byCandidate = new Map([...prior.values()].map(a => [a.payload.candidateId, a]));
   const selected = new Map(projection.attention.representations.map(intent => [intent.id, intent]));
@@ -35,9 +36,12 @@ export function reconcileArtifacts(previous: ArtifactRuntime, state: AcceptedTea
     const old = byCandidate.get(candidateId), intent = selected.get(candidateId);
     const offered = current?.payloads.get(candidateId);
     const source = offered ?? old?.payload;
-    if (!source || (!old && !intent)) continue;
+    if (!source) { if (intent) diagnostics.push(`${candidateId}: selected-payload-missing`); continue; }
+    if (!old && !intent) continue;
     try {
       if (source.candidateId !== candidateId || (old && binding(old.payload) !== binding(source))) throw new Error('artifact-binding-changed');
+      const keys = [`candidate:${candidateId}`, `artifact:${source.artifactId}`, `payload:${source.payloadId}`];
+      for (const key of keys) if (runtime.bindings.has(key) && runtime.bindings.get(key) !== binding(source)) throw new Error('artifact-identity-rebound');
       if (!old && [...prior.values()].some(a => a.id === source.artifactId || a.payload.payloadId === source.payloadId)) throw new Error('artifact-identity-rebound');
       const payload = validatePayload(structuredClone(source), snapshot, context, registry, offered ? 'proposal' : 'reuse');
       const capability = registry.resolve(payload.capabilityId);
@@ -54,6 +58,7 @@ export function reconcileArtifacts(previous: ArtifactRuntime, state: AcceptedTea
       const changed = old?.fingerprint !== fingerprint;
       runtime.artifacts.set(payload.artifactId, { id: payload.artifactId, payload,
         revision: old ? old.revision + Number(changed) : 1, fingerprint, visible, role: visible ? intent!.role : undefined });
+      for (const key of keys) runtime.bindings.set(key, binding(payload));
       changes.push({ id: payload.artifactId, action: !old ? 'CREATE' : old.visible && !visible ? 'WITHDRAW' : changed ? 'UPDATE' : 'PRESERVE' });
     } catch (error) {
       diagnostics.push(`${candidateId}: ${error instanceof Error ? error.message : String(error)}`);
