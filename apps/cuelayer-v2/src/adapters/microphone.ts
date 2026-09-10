@@ -252,7 +252,8 @@ export class Microphone {
       await this.context.close();
     }
   }
-  async stop() {
+  async stop(finalize = true) {
+    const wasListening = this.status === "listening";
     this.recorder?.stopRecording();
     this.status = "draining";
     this.changed();
@@ -270,6 +271,18 @@ export class Microphone {
       this.fail(error instanceof Error ? error.message : "speech-stop-failed");
     } finally {
       if (this.context?.state !== "closed") await this.context?.close();
+      this.changed();
+    }
+    if (finalize && wasListening && this.status === "stopped") {
+      try {
+        await this.session.finish();
+      } catch (error) {
+        this.session.error =
+          error instanceof Error ? error.message : "final-drain-failed";
+        this.session.trace.mark("final-drain-failed", {
+          reason: this.session.error,
+        });
+      }
       this.changed();
     }
   }

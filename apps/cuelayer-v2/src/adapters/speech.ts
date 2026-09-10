@@ -1,8 +1,15 @@
 import type { Evidence } from "../contract";
+import { codePointBoundary } from "../source";
 export type SpeechMessage = {
   message: "AddPartialTranscript" | "AddTranscript" | "EndOfUtterance";
   metadata: { transcript: string; start_time: number; end_time: number };
   channel?: string;
+  results?: {
+    type: string;
+    start_time?: number;
+    end_time?: number;
+    alternatives?: { content: string }[];
+  }[];
 };
 export type Preparation = {
   stability: "VOLATILE" | "PREFLIGHT";
@@ -45,6 +52,7 @@ export class SpeechEvidenceAdapter {
       receivedAt: performance.now(),
       audioObservedAt,
       stability: "COMMITTED",
+      ...providerAlignment(message),
     });
     this.preparation = null;
   }
@@ -52,4 +60,48 @@ export class SpeechEvidenceAdapter {
     if (this.preparation)
       this.preparation = { ...this.preparation, stability: "PREFLIGHT" };
   }
+}
+
+/** Use only alignment recoverable exactly from actual provider tokens; never reconstruct text. */
+export function providerAlignment(
+  message: SpeechMessage,
+): Pick<Evidence, "alignment"> {
+  if (!message.results?.length) return {};
+  const text = message.metadata.transcript,
+    cuts = new Set([0, text.length]);
+  let at = 0,
+    lastTime = message.metadata.start_time;
+  for (const result of message.results) {
+    const token = result.alternatives?.[0]?.content;
+    if (!token) return {};
+    const start = text.indexOf(token, at);
+    if (
+      start < 0 ||
+      text.slice(at, start).trim() ||
+      !codePointBoundary(text, start) ||
+      !codePointBoundary(text, start + token.length)
+    )
+      return {};
+    if (result.type === "word") {
+      if (
+        !Number.isFinite(result.start_time) ||
+        !Number.isFinite(result.end_time) ||
+        result.start_time! < lastTime ||
+        result.end_time! < result.start_time! ||
+        result.end_time! > message.metadata.end_time
+      )
+        return {};
+      lastTime = result.end_time!;
+    }
+    cuts.add(start);
+    cuts.add(start + token.length);
+    at = start + token.length;
+  }
+  if (text.slice(at).trim()) return {};
+  return {
+    alignment: {
+      version: "speechmatics-words-1",
+      boundaries: [...cuts].sort((a, b) => a - b),
+    },
+  };
 }

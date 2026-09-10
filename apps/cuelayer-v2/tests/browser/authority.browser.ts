@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, fixtureUnit } from "./fixtures";
 test("durable frontier, partial safety and screenshot stability through no-change", async ({
   page,
 }) => {
@@ -55,7 +55,9 @@ test("durable frontier, partial safety and screenshot stability through no-chang
   expect(result.blocked).toBe(0);
   expect(result.failures[1]).toContain("frontier-blocked");
   expect(result.consumed).toBe(2);
-  await expect(page.locator('[data-unit="pressure"] .katex')).toBeVisible();
+  await expect(
+    (await fixtureUnit(page, "pressure")).locator(".katex"),
+  ).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   const before = await page
     .getByTestId("board")
@@ -102,8 +104,14 @@ test("motion allowed: drag interrupts camera and latest Follow Teaching recovers
     ),
   ).toEqual(commands);
   await page.getByRole("button", { name: "Follow Teaching" }).click();
-  await expect(page.locator('[data-unit="ammonia"] .katex')).toBeVisible();
-  expect(await page.evaluate(() => window.v2.session.state.currentCoreId)).toBe(
-    "reactions",
-  );
+  await expect(
+    (await fixtureUnit(page, "ammonia")).locator(".katex"),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        window.v2.session.state.cores[window.v2.session.state.currentCoreId!]
+          .title,
+    ),
+  ).toBe("Chemical equilibrium");
 });

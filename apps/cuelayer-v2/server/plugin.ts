@@ -5,7 +5,7 @@ import { StringDecoder } from "node:string_decoder";
 import { pipeline } from "node:stream/promises";
 import { createSpeechmaticsJWT } from "@speechmatics/auth";
 import { modelProfile, openLiveResponse } from "./live";
-import type { Task } from "../src/contract";
+import type { ProviderRequest } from "./live";
 
 /** Local experiment endpoints. No production route or credential-bearing client. */
 export function realServices(): Plugin {
@@ -71,7 +71,7 @@ export function realServices(): Plugin {
               }
             }
             body += decoder.end();
-            const task = JSON.parse(body) as Task;
+            const task = JSON.parse(body) as ProviderRequest;
             if (!process.env.OPENAI_API_KEY) {
               json(503, { error: "model-not-configured" });
               return;
@@ -81,6 +81,8 @@ export function realServices(): Plugin {
               process.env.OPENAI_API_KEY,
               process.env.OPENAI_MODEL || modelProfile.model,
               controller.signal,
+              (size) =>
+                res.setHeader("X-V2-Provider-Request-Bytes", String(size)),
             );
             const forwarded = new Stream<unknown>(async function* () {
               try {

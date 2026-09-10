@@ -8,9 +8,15 @@ if (!process.argv.includes("--generated-audio"))
   throw new Error(
     "Explicit --generated-audio required; see the runbook's authored source and local generation command.",
   );
-const audio = resolve("../../.cuelayer/v2/real/generated-speech.wav");
+const option = (name, fallback) =>
+  process.argv
+    .find((a) => a.startsWith(`--${name}=`))
+    ?.slice(name.length + 3) ?? fallback;
+const baseUrl = option("url", "http://127.0.0.1:5192");
+const audioDir = option("audio-dir", "../../.cuelayer/v2/real");
+const audio = resolve(audioDir, "generated-speech.wav");
 const source = await readFile(
-  "../../.cuelayer/v2/real/generated-speech.txt",
+  resolve(audioDir, "generated-speech.txt"),
   "utf8",
 );
 const sha256 = createHash("sha256")
@@ -55,12 +61,14 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 try {
   await page.goto(
-    `http://127.0.0.1:5192/?services=real&session=audio-replay-${crypto.randomUUID()}`,
+    `${baseUrl}/?services=real&session=audio-replay-${crypto.randomUUID()}`,
   );
   await page.waitForFunction(() => Boolean(window.v2));
   const config = await page.evaluate(() =>
     fetch("/api/v2/config").then((r) => r.json()),
   );
+  if (!config.modelConfigured || !config.speechConfigured)
+    throw new Error("real-services-not-configured");
   await page.getByRole("button", { name: "Enable microphone" }).click();
   await page.waitForFunction(
     () => ["listening", "failed"].includes(window.v2.mic.status),
@@ -118,6 +126,7 @@ try {
         sha256,
         duration,
         config,
+        baseUrl,
         errors,
         samples,
         snapshot,

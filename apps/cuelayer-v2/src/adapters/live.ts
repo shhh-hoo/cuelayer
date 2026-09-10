@@ -1,7 +1,8 @@
-import { hostSlots } from "../model-context";
+import { bytes } from "../projection";
+import { stageReviewSchema } from "../stage";
 import { Stream } from "openai/core/streaming";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses";
-import { proposalSchema } from "../contract";
+import { liveDecisionSchema } from "../live-wire";
 import { TransientFailure, type Interpreter } from "../session";
 import type { Trace } from "./trace";
 
@@ -23,17 +24,30 @@ export function realInterpreter(
     };
     let text = "",
       first = false,
-      completed = false;
+      completed = false,
+      firstByte = false;
     try {
       observe("model-request", {
-        contextCharacters: JSON.stringify(task).length,
+        contextCharacters: JSON.stringify(
+          task.review?.request ?? task.capture?.request,
+        ).length,
+        serializedRequestBytes: bytes(
+          task.review?.request ?? task.capture?.request,
+        ),
       });
       const response = await request("/api/v2/live", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(task),
+        body: JSON.stringify(task.review?.request ?? task.capture?.request),
         signal: controller.signal,
       });
+      const providerBytes = Number(
+        response.headers.get("X-V2-Provider-Request-Bytes"),
+      );
+      if (providerBytes > 0)
+        observe("model-provider-payload", {
+          serializedProviderRequestBytes: providerBytes,
+        });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         observe("model-http-failure", {
@@ -49,14 +63,27 @@ export function realInterpreter(
         throw new Error(reason);
       }
       if (!response.body) throw new Error("model-missing-stream");
+      const observedBody = response.body.pipeThrough(
+        new TransformStream<Uint8Array, Uint8Array>({
+          transform(chunk, controller) {
+            if (!firstByte && chunk.byteLength) {
+              firstByte = true;
+              firstOutput();
+              observe("model-first-byte", {
+                boundary: "first-forwarded-provider-stream-byte",
+              });
+            }
+            controller.enqueue(chunk);
+          },
+        }),
+      );
       for await (const event of Stream.fromReadableStream<
         ResponseStreamEvent | { type: "v2.failure"; reason: string }
-      >(response.body, controller)) {
+      >(observedBody, controller)) {
         if (event.type === "v2.failure") throw new Error(event.reason);
         if (event.type === "response.output_text.delta") {
           if (!first && event.delta) {
             first = true;
-            firstOutput();
             observe("model-first-output");
           }
           text += event.delta;
@@ -90,19 +117,15 @@ export function realInterpreter(
         throw new Error("model-malformed-json");
       }
       // Complete JSON is still only a proposal. Session.accept is the truth boundary.
-      const parsed = proposalSchema.safeParse(raw);
+      const parsed = (
+        task.lane === "Live" ? liveDecisionSchema : stageReviewSchema
+      ).safeParse(raw);
       if (!parsed.success) throw new Error("model-schema-invalid");
-      const slots = await hostSlots(task);
-      for (const op of parsed.data.operations) {
-        if (op.type === "core" && !slots.newCoreIds.includes(op.id))
-          throw new Error("model-unissued-core-id");
-        if (
-          op.type === "put" &&
-          !task.state.units[op.id] &&
-          !slots.newUnitIds.includes(op.id)
-        )
-          throw new Error("model-unissued-unit-id");
-      }
+      observe(
+        task.lane === "Live"
+          ? "schema-valid-live-decision"
+          : "schema-valid-stage-review",
+      );
       return raw;
     } catch (error) {
       observe("model-failure", {

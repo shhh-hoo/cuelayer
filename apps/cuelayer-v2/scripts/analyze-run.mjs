@@ -33,9 +33,10 @@ const stats = (values) => {
   };
 };
 const interval = (name) => stats(named(name).map((s) => s.end - s.start));
-const first = named("first-useful-output").filter(
-  (s) => s.attributes.lane === "Live",
-);
+const first = [
+  ...named("first-provider-byte"),
+  ...named("first-useful-output"),
+].filter((s) => s.attributes.lane === "Live");
 const complete = named("model-complete").filter(
   (s) => s.attributes.lane === "Live",
 );
@@ -56,8 +57,14 @@ for (const a of accepted.filter((s) => s.attributes.changed)) {
     proposal = JSON.parse(output?.attributes.output ?? "null");
   } catch {}
   const targets =
-    proposal?.operations.filter((o) => o.type === "put").map((o) => o.id) ?? [];
-  const cue = proposal?.operations.some((o) => o.type === "cue" && o.value);
+    a.attributes.changedUnits ??
+    proposal?.operations?.filter((o) => o.type === "put").map((o) => o.id) ??
+    [];
+  const cue = (
+    proposal?.operations ??
+    proposal?.groups?.flatMap((g) => g.operations) ??
+    []
+  ).some((o) => o.type === "cue" && o.value);
   const dom = spans.find(
     (s) =>
       s.end >= a.end &&
@@ -68,7 +75,15 @@ for (const a of accepted.filter((s) => s.attributes.changed)) {
         (s.name === "cue-visible-dom" && cue)),
   );
   if (!dom) continue;
-  const consumed = evidence.filter((e) => a.attributes.consumed.includes(e.id));
+  const consumed = evidence.filter(
+    (e) =>
+      (a.attributes.consumed ?? []).includes(e.id) ||
+      (a.attributes.sourceRanges ?? []).some(
+        (r) =>
+          e.sequence >= Math.max(1, r.start.sequence) &&
+          e.sequence <= r.end.sequence,
+      ),
+  );
   const last = consumed.at(-1);
   useful.push({
     taskId: a.attributes.taskId,
@@ -131,11 +146,156 @@ const failures = named("proposal-rejected").map((s) => ({
   taskId: s.attributes.taskId,
 }));
 const final = snapshots.at(-1);
+const cursorChars = (r, c) =>
+  c
+    ? r.evidence
+        .slice(0, Math.max(0, c.sequence - 1))
+        .reduce((n, e) => n + e.text.length, 0) + c.offset
+    : 0;
+const r = final?.replay,
+  recordedChars = r?.evidence.reduce((n, e) => n + e.text.length, 0) ?? 0;
+const accountedChars = r?.accounted
+  ? cursorChars(r, r.accounted)
+  : (r?.evidence
+      .filter((e) => r.consumed[e.id])
+      .reduce((n, e) => n + e.text.length, 0) ?? 0);
+const obligations = Object.values(r?.unresolved ?? {});
+const carryChars = obligations.reduce(
+  (n, o) =>
+    n +
+    (o.range
+      ? cursorChars(r, o.range.end) - cursorChars(r, o.range.start)
+      : r.evidence
+          .filter((e) => o.evidenceIds.includes(e.id))
+          .reduce((n, e) => n + e.text.length, 0)),
+  0,
+);
+const durationMs = spans.length
+  ? Math.max(...spans.map((s) => s.end)) -
+    Math.min(...spans.map((s) => s.start))
+  : 0;
+const calls = Object.fromEntries(
+  ["Live", "Stage"].map((lane) => [
+    lane,
+    named("model-request").filter((s) => s.attributes.lane === lane).length,
+  ]),
+);
+const sourceMetrics = {
+  recordedChars,
+  accountedChars,
+  unaccountedChars: recordedChars - accountedChars,
+  carryChars,
+  carryCount: obligations.length,
+  oldestCarryAgeMs: final?.window?.unresolvedMeaningAge ?? null,
+  openTailAgeMs:
+    final?.window?.openTailAge ?? final?.window?.oldestPendingAge ?? null,
+  stageReviewAgeMs: final?.window?.stagePendingAge ?? null,
+  carryCreated: named("semantic-accepted").reduce(
+    (n, s) => n + (s.attributes.carryCreated?.length ?? 0),
+    0,
+  ),
+  carryResolved: named("semantic-accepted").reduce(
+    (n, s) => n + (s.attributes.carryResolved?.length ?? 0),
+    0,
+  ),
+  accountedCharsPerWallSecond: durationMs
+    ? accountedChars / (durationMs / 1000)
+    : null,
+  atInputEnd: run.speechEnd
+    ? {
+        recordedChars: run.speechEnd.recorded,
+        accountedChars: run.speechEnd.accounted,
+        gapChars: run.speechEnd.gap,
+        arrivalCharsPerSecond:
+          run.speechEnd.recorded / ((run.speechEnd.at - run.begin) / 1000),
+        accountedCharsPerSecond:
+          run.speechEnd.accounted / ((run.speechEnd.at - run.begin) / 1000),
+      }
+    : null,
+  recordedCharsPerWallSecond: durationMs
+    ? recordedChars / (durationMs / 1000)
+    : null,
+  terminalGroups: Object.fromEntries(
+    ["APPLY", "NO_CHANGE", "CARRY"].map((outcome) => [
+      outcome,
+      events
+        .filter((e) => e.type === "accepted")
+        .flatMap((e) => e.accepted.processing?.groups ?? [])
+        .filter((g) => g.outcome === outcome).length,
+    ]),
+  ),
+  failureClasses: Object.fromEntries(
+    [
+      "schema",
+      "alias",
+      "reference",
+      "grounding",
+      "context-blocked",
+      "semantic-no-op",
+    ].map((kind) => [
+      kind,
+      failures.filter(
+        (f) =>
+          String(f.reason).includes(kind) ||
+          (kind === "schema" && String(f.reason).includes("malformed")),
+      ).length,
+    ]),
+  ),
+  noAttentionProduced: named("no-attention-produced").length,
+  carryResolutionPerMinute: durationMs
+    ? named("semantic-accepted").reduce(
+        (n, s) => n + (s.attributes.carryResolved?.length ?? 0),
+        0,
+      ) /
+      (durationMs / 60000)
+    : null,
+  calls,
+  callsPerMinute: Object.fromEntries(
+    Object.entries(calls).map(([lane, n]) => [
+      lane,
+      durationMs ? n / (durationMs / 60000) : null,
+    ]),
+  ),
+  waitCount: named("live-wait").length,
+  waitSuppressions: named("identical-inspection-suppressed").length,
+  attention: Object.fromEntries(
+    ["expired", "superseded", "suppressed", "published"].map((kind) => [
+      kind,
+      named(`attention-${kind}`).length,
+    ]),
+  ),
+  inputTokens: named("model-complete").reduce(
+    (n, s) => n + (s.attributes.usage?.input_tokens ?? 0),
+    0,
+  ),
+  outputTokens: named("model-complete").reduce(
+    (n, s) => n + (s.attributes.usage?.output_tokens ?? 0),
+    0,
+  ),
+  reasoningTokens: named("model-complete").reduce(
+    (n, s) =>
+      n + (s.attributes.usage?.output_tokens_details?.reasoning_tokens ?? 0),
+    0,
+  ),
+  usageAvailable: named("model-complete").some((s) => s.attributes.usage),
+  httpRequestBytes: (run.requests ?? []).map((r) => r.bytes),
+  providerRequestBytes: named("model-provider-payload").map(
+    (s) => s.attributes.serializedProviderRequestBytes,
+  ),
+  providerFailures: failures,
+  usefulSemanticApply: accepted.filter((s) => s.attributes.changed).length,
+  liveOccupancyFraction: durationMs
+    ? named("proposal-complete")
+        .filter((s) => s.attributes.lane === "Live")
+        .reduce((n, s) => n + s.end - s.start, 0) / durationMs
+    : null,
+};
 const report = {
   identity: run.identity,
   scenario: run.scenario,
   config: run.config,
   metrics,
+  sourceMetrics,
   useful,
   quality: {
     liveAccepted: accepted.length,
@@ -171,7 +331,9 @@ const report = {
   ],
 };
 await writeFile(
-  path.replace(/run\.json$/, "analysis.json"),
+  path.endsWith("run.json")
+    ? path.replace(/run\.json$/, "analysis.json")
+    : path.replace(/\.json$/, ".analysis.json"),
   JSON.stringify(report, null, 2),
 );
 console.log(
@@ -185,6 +347,7 @@ console.log(
           { ...v, rawMs: undefined },
         ]),
       ),
+      sourceMetrics,
       quality: {
         ...report.quality,
         failures: failures.map((f) => ({ lane: f.lane, reason: f.reason })),

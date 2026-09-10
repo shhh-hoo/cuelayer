@@ -32,9 +32,10 @@ const session = await Session.open(
   undefined,
   real
     ? {
-        coalesceMs: 25,
-        maxWaitMs: 75,
-        maxBatch: 4,
+        coalesceMs: 250,
+        maxWaitMs: 750,
+        sourceChars: 2400,
+        maxRequestBytes: 28000,
         deadlineMs: serviceConfig.clientTimeoutMs,
       }
     : undefined,
@@ -98,6 +99,10 @@ function App() {
   const revision = session.state.revision;
   const state = useMemo(() => session.state, [revision]);
   useEffect(() => session.subscribe(() => setTick((t) => t + 1)), []);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((t) => t + 1), 250);
+    return () => clearInterval(timer);
+  }, []);
   api.refresh = () => setTick((t) => t + 1);
   api.failRepresentation = setFailed;
   api.setMode = setMode;
@@ -105,12 +110,10 @@ function App() {
     ? {
         targets:
           mode === "COMPARE"
-            ? real
-              ? Object.values(state.units)
-                  .filter((u) => u.valid && u.coreId === state.currentCoreId)
-                  .slice(-2)
-                  .map((u) => u.id)
-              : ["pressure", "fraction"]
+            ? Object.values(state.units)
+                .filter((u) => u.valid && u.coreId === state.currentCoreId)
+                .slice(-2)
+                .map((u) => u.id)
             : (session.attention?.targets ?? []),
         mode,
         expiresAt: Infinity,
@@ -179,7 +182,10 @@ function App() {
             onClick={() =>
               void (mic.status === "listening" ? mic.stop() : mic.start())
             }
-            disabled={["starting", "draining", "failed"].includes(mic.status)}
+            disabled={
+              session.replay.captureClosed ||
+              ["starting", "draining", "failed"].includes(mic.status)
+            }
           >
             {mic.status === "listening"
               ? "Stop microphone"
@@ -262,16 +268,22 @@ function App() {
             ? "Teaching continues"
             : "Deterministic teaching experiment"}
         <span>
-          {w.consumedEvidenceIds.length} / {w.orderedCommittedEvidence.length}{" "}
-          evidence accounted for
+          {w.status === "LAGGING"
+            ? "Interpretation is falling behind"
+            : w.status === "INTERPRETATION_PAUSED"
+              ? "Interpretation paused"
+              : w.status === "SEALED"
+                ? "Session saved"
+                : `${w.unaccountedChars} source characters awaiting interpretation`}
         </span>
         <details>
           <summary>Session details</summary>
           <div>
             <p>
-              Live pending: {w.livePendingCount} · Unresolved:{" "}
-              {Object.keys(w.unresolved).length} · Stage:{" "}
-              {w.activeStage ? "reviewing" : "available"}
+              Open source: {w.unaccountedChars} characters · Oldest:{" "}
+              {(w.oldestPendingAge / 1000).toFixed(1)}s · Carried source:{" "}
+              {w.carryChars} characters in {Object.keys(w.unresolved).length}{" "}
+              obligations · Stage: {w.activeStage ? "reviewing" : "available"}
             </p>
             <button onClick={() => setMode("FOCUS")}>Focus</button>
             <button onClick={() => setMode("COMPARE")}>Compare</button>
@@ -314,7 +326,7 @@ function App() {
 const root = createRoot(document.getElementById("root")!);
 root.render(<App />);
 import.meta.hot?.dispose(() => {
-  void mic.stop();
+  void mic.stop(false);
   session.close();
   root.unmount();
 });

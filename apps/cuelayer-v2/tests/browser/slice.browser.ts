@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { type Page } from "@playwright/test";
-import { test, expect } from "./fixtures";
+import { test, expect, fixtureUnit } from "./fixtures";
 const open = async (page: Page, query = "") => {
   await page.goto(`/?session=${crypto.randomUUID()}${query}`);
   await page.waitForFunction(() => Boolean(window.v2?.handle.editor));
@@ -46,11 +46,15 @@ test("deterministic complete teaching story; independent delayed Stage", async (
       page.evaluate(() => window.v2.session.window.consumedEvidenceIds.length),
     )
     .toBe(11);
-  await expect(page.locator('[data-unit="sine"] [data-plot]')).toBeVisible();
+  await expect(
+    (await fixtureUnit(page, "sine")).locator("[data-plot]"),
+  ).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(() =>
-        Boolean(window.v2.session.state.units["fraction-share"]),
+        Object.values(window.v2.session.state.units).some(
+          (u) => u.meaning.kind === "annotation",
+        ),
       ),
     )
     .toBe(true);
@@ -60,14 +64,17 @@ test("deterministic complete teaching story; independent delayed Stage", async (
       () => Object.keys(window.v2.session.replay.unresolved).length,
     ),
   ).toBe(1);
-  expect(await page.evaluate(() => window.v2.session.state.currentCoreId)).toBe(
-    "functions",
-  );
+  expect(
+    await page.evaluate(
+      () =>
+        window.v2.session.state.cores[window.v2.session.state.currentCoreId!]
+          .title,
+    ),
+  ).toBe("A function over a domain");
   expect(
     await page.evaluate(() =>
       window.v2.session.trace.spans.some(
-        (s) =>
-          s.name === "attention-discarded" && s.attributes.lane === "Stage",
+        (s) => s.name === "semantic-accepted" && s.attributes.lane === "Stage",
       ),
     ),
   ).toBe(true);
@@ -159,8 +166,12 @@ for (const [name, query, viewport] of [
     await page.setViewportSize(viewport);
     await open(page, query);
     for (const i of [0, 2, 3, 4]) await step(page, i);
-    await expect(page.locator('[data-unit="pressure"] .katex')).toBeVisible();
-    await expect(page.locator('[data-unit="fraction"] .katex')).toBeVisible();
+    await expect(
+      (await fixtureUnit(page, "pressure")).locator(".katex"),
+    ).toBeVisible();
+    await expect(
+      (await fixtureUnit(page, "fraction")).locator(".katex"),
+    ).toBeVisible();
     await readable(page);
     await expect(page.getByTestId("teaching-cue")).toBeVisible();
     const safe = await page.getByTestId("board").boundingBox(),
@@ -180,7 +191,9 @@ for (const [name, query, viewport] of [
     await step(page, 7);
     expect(await page.evaluate(() => window.v2.handle.inspection)).toBe(true);
     await page.getByRole("button", { name: "Follow Teaching" }).click();
-    await expect(page.locator('[data-unit="ammonia"] .katex')).toBeVisible();
+    await expect(
+      (await fixtureUnit(page, "ammonia")).locator(".katex"),
+    ).toBeVisible();
     await readable(page);
     await step(page, 8);
     await readable(page);
@@ -214,13 +227,26 @@ test("continuous arrival overlaps Live; stale Stage rejected; reload preserves o
     .toBe(true);
   const result = await page.evaluate(async () => {
     const ages: number[] = [];
+    const sourceSamples: {
+      gap: number;
+      carry: number;
+      recordedRate: number;
+      accountedRate: number;
+    }[] = [];
     let overlap = false,
       maxAge = 0,
       progressDuringArrival = false;
     for (let i = 0; i < 240; i++) {
       await window.v2.inject("Continue the explanation.");
       overlap ||= Boolean(window.v2.session.window.activeLive);
-      ages.push(window.v2.session.window.oldestPendingAge);
+      const working = window.v2.session.window;
+      sourceSamples.push({
+        gap: working.unaccountedChars,
+        carry: working.carryChars,
+        recordedRate: working.recordedCharsPerSecond,
+        accountedRate: working.accountedCharsPerSecond,
+      });
+      ages.push(working.oldestPendingAge);
       maxAge = Math.max(maxAge, window.v2.session.window.oldestPendingAge);
       progressDuringArrival ||=
         window.v2.session.window.consumedEvidenceIds.length > 10;
@@ -235,6 +261,7 @@ test("continuous arrival overlaps Live; stale Stage rejected; reload preserves o
       accountedBeforeStop,
       recordedBeforeStop,
       ages,
+      sourceSamples,
       overlap,
       maxAge,
       progressDuringArrival,
@@ -287,7 +314,9 @@ test("representation failure and growth preserve semantic identity", async ({
     before.state,
   );
   await page.evaluate(() => window.v2.failRepresentation(false));
-  await expect(page.locator('[data-unit="fraction"] .katex')).toBeVisible();
+  await expect(
+    (await fixtureUnit(page, "fraction")).locator(".katex"),
+  ).toBeVisible();
   for (const i of [7, 8, 10]) await step(page, i);
   const after = await page.evaluate(() => [
     ...window.v2.handle.geography.homes,

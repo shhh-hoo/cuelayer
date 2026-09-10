@@ -11,6 +11,9 @@ import {
   type Replay,
   type Task,
 } from "./contract";
+import { captureLive, DEFAULT_BUDGET, bytes } from "./projection";
+import { captureStage, validateStage, reviewCandidates } from "./stage";
+import { position, recorded, rangeSize, sourcePieces } from "./source";
 import { validate, Rejection } from "./acceptance";
 import { EventStore } from "./adapters/storage";
 import { Trace } from "./adapters/trace";
@@ -37,6 +40,15 @@ export type WorkingWindow = {
   oldestPendingAge: number;
   stagePendingAge: number;
   unresolvedMeaningAge: number;
+  recordedFrontier: Replay["recorded"];
+  accountedFrontier: Replay["accounted"];
+  unaccountedChars: number;
+  carryChars: number;
+  openTailAge: number;
+  status: "READY" | "WAITING" | "LAGGING" | "INTERPRETATION_PAUSED" | "SEALED";
+  repeatedWaitSuppressions: number;
+  recordedCharsPerSecond: number;
+  accountedCharsPerSecond: number;
 };
 export class Session {
   private value = emptyReplay();
@@ -50,7 +62,20 @@ export class Session {
     Live: null,
     Stage: null,
   };
-  private reviewedSnapshot = "";
+  private failedStage = new Set<string>();
+  private userPaused = false;
+  private captures = new Map<string, Task>();
+  private captureCounter = 0;
+  private salt = btoa(
+    String.fromCharCode(...crypto.getRandomValues(new Uint8Array(12))),
+  )
+    .replaceAll("+", "-")
+    .replaceAll("/", "_");
+  private suppressed = 0;
+  private failedKey: string | null = null;
+  private startedAt = performance.now();
+  private initialRecordedChars = 0;
+  private initialAccountedChars = 0;
   private epoch = 0;
   private admissionTimes = new Map<string, number>();
   private currentSourceEvidence = new Set<string>();
@@ -69,10 +94,11 @@ export class Session {
     readonly store: EventStore,
     private interpreter: Interpreter,
     readonly config = {
-      coalesceMs: 25,
-      maxBatch: 4,
-      deadlineMs: 5000,
-      maxWaitMs: 75,
+      coalesceMs: 250,
+      deadlineMs: 8000,
+      maxWaitMs: 750,
+      sourceChars: 2400,
+      maxRequestBytes: 28000,
     },
   ) {
     this.speech = new SpeechEvidenceAdapter(`run:${crypto.randomUUID()}`, (e) =>
@@ -98,6 +124,18 @@ export class Session {
         for (const obligation of event.accepted.unresolved)
           session.obligationTimes.set(obligation.id, restoredAt);
     }
+    if (session.value.eventVersion === 1) {
+      session.paused = true;
+      session.error = "legacy-session-read-only";
+    }
+    session.initialRecordedChars = position(
+      session.value.evidence,
+      session.value.recorded,
+    );
+    session.initialAccountedChars = position(
+      session.value.evidence,
+      session.value.accounted,
+    );
     session.trace.mark("recovery", { evidence: session.value.evidence.length });
     session.schedule();
     session.scheduleStage();
@@ -110,12 +148,8 @@ export class Session {
     return structuredClone(this.value.state);
   }
   get window(): WorkingWindow {
-    const pending = this.value.evidence.filter(
-      (e) => !this.value.consumed[e.id],
-    );
-    const unreviewed = this.value.evidence.find(
-      (e) => this.value.consumed[e.id] && !this.value.reviewed.includes(e.id),
-    );
+    const pending = this.pendingEvidence();
+    const concerns = reviewCandidates(this.value);
     const obligations = Object.values(this.value.unresolved),
       now = performance.now();
     return {
@@ -126,11 +160,44 @@ export class Session {
       semanticVersion: this.value.state.revision,
       activeLive: structuredClone(this.tasks.Live),
       activeStage: structuredClone(this.tasks.Stage),
-      stageReviewCoverage: [...this.value.reviewed],
+      stageReviewCoverage: Object.keys(this.value.reviewInspections),
       capturedDependencies: [this.tasks.Live, this.tasks.Stage].flatMap((t) =>
         t ? [{ ...t.dependencies }] : [],
       ),
-      pendingReconciliationObligations: obligations.map((o) => o.id),
+      pendingReconciliationObligations: reviewCandidates(this.value).map(
+        (o) => o.subjectId,
+      ),
+      recordedFrontier: this.value.recorded,
+      accountedFrontier: this.value.accounted,
+      unaccountedChars:
+        position(this.value.evidence, this.value.recorded) -
+        position(this.value.evidence, this.value.accounted),
+      carryChars: obligations.reduce(
+        (n, o) => n + (o.range ? rangeSize(this.value.evidence, o.range) : 0),
+        0,
+      ),
+      openTailAge: pending.length
+        ? Math.max(0, now - (this.admissionTimes.get(pending[0].id) ?? now))
+        : 0,
+      status: this.value.ended
+        ? "SEALED"
+        : this.paused
+          ? "INTERPRETATION_PAUSED"
+          : pending.length &&
+              now - (this.admissionTimes.get(pending[0].id) ?? now) > 4000
+            ? "LAGGING"
+            : pending.length
+              ? "WAITING"
+              : "READY",
+      repeatedWaitSuppressions: this.suppressed,
+      recordedCharsPerSecond:
+        (position(this.value.evidence, this.value.recorded) -
+          this.initialRecordedChars) /
+        Math.max(0.001, (now - this.startedAt) / 1000),
+      accountedCharsPerSecond:
+        (position(this.value.evidence, this.value.accounted) -
+          this.initialAccountedChars) /
+        Math.max(0.001, (now - this.startedAt) / 1000),
       livePendingCount: pending.length,
       oldestPendingAge: pending.length
         ? Math.max(0, now - (this.admissionTimes.get(pending[0].id) ?? now))
@@ -140,7 +207,7 @@ export class Session {
         now -
           Math.min(
             this.tasks.Stage?.createdAt ?? now,
-            unreviewed ? (this.admissionTimes.get(unreviewed.id) ?? now) : now,
+            ...concerns.map((c) => now - Math.max(0, Date.now() - c.createdAt)),
           ),
       ),
       unresolvedMeaningAge: obligations.length
@@ -172,18 +239,16 @@ export class Session {
     }
   }
   private async append(
-    payload:
-      | { type: "evidence"; evidence: Evidence }
-      | {
-          type: "accepted";
-          accepted: Extract<Event, { type: "accepted" }>["accepted"];
-        }
-      | { type: "ended" },
+    payload: Event extends infer E
+      ? E extends Event
+        ? Omit<E, "schema" | "sessionId" | "id" | "sequence" | "at">
+        : never
+      : never,
   ) {
     const sequence = this.value.sequence + 1;
     const event: Event = {
       ...payload,
-      schema: "cuelayer-v2-event-1",
+      schema: "cuelayer-v2-event-2",
       sessionId: this.id,
       id: `${this.id}:${sequence}`,
       sequence,
@@ -225,9 +290,33 @@ export class Session {
         evidenceId: event.evidence.id,
         sequence: event.evidence.sequence,
       });
+    if (event.type === "evidence")
+      this.trace.mark("recorded-frontier", {
+        R: next.recorded,
+        chars: position(next.evidence, next.recorded),
+      });
+    if (event.type === "accepted" && event.accepted.processing)
+      this.trace.mark("accounted-frontier", {
+        A: next.accounted,
+        chars: position(next.evidence, next.accounted),
+        groups: event.accepted.processing.groups,
+        taskId: event.accepted.taskId,
+      });
     this.notify();
   }
+  private pendingEvidence() {
+    const at = position(this.value.evidence, this.value.accounted);
+    return this.value.evidence.filter(
+      (e) =>
+        position(this.value.evidence, {
+          evidenceId: e.id,
+          sequence: e.sequence,
+          offset: e.text.length,
+        }) > at,
+    );
+  }
   async commitEvidence(raw: Omit<Evidence, "sequence">) {
+    const beforeAdmission = this.value.evidence.length;
     const captured = structuredClone(raw);
     this.trace.mark(
       "evidence-received",
@@ -296,70 +385,46 @@ export class Session {
         captured.receivedAt,
       );
     });
+    if (
+      this.failedKey &&
+      !this.disposed &&
+      this.value.evidence.length > beforeAdmission
+    ) {
+      this.paused = false;
+      this.failedKey = null;
+      this.error = null;
+    }
     this.schedule();
   }
-  capture(lane: Task["lane"], evidence: Evidence[], coreIds: string[]): Task {
-    const state = this.state,
-      dependencies: Record<string, number> = {};
-    for (const id of coreIds) {
-      dependencies[`core/${id}`] = version(state, `core/${id}`);
-      dependencies[`members/${id}`] = version(state, `members/${id}`);
-      for (const unit of state.cores[id]?.unitIds ?? [])
-        dependencies[`unit/${unit}`] = version(state, `unit/${unit}`);
+  capture(
+    lane: Task["lane"],
+    _evidence?: Evidence[],
+    coreIds?: string[],
+  ): Task {
+    if (lane === "Stage") {
+      const task = captureStage(
+        this.value,
+        this.id,
+        `${this.salt}${(++this.captureCounter).toString(36)}`,
+        this.epoch,
+      );
+      if (!task) throw new Rejection("no-eligible-stage-review");
+      this.captures.set(task.id, structuredClone(task));
+      return task;
     }
-    if (lane === "Live") {
-      dependencies.mainline = state.mainlineVersion;
-      dependencies.cue = state.cueVersion;
-    } else {
-      state.currentCoreId = null;
-      state.mainlineVersion = 0;
-      state.cue = null;
-      state.cueVersion = 0;
-    }
-    state.cores = Object.fromEntries(
-      Object.entries(state.cores).filter(([id]) => coreIds.includes(id)),
-    );
-    state.units = Object.fromEntries(
-      Object.entries(state.units).filter(([, u]) => coreIds.includes(u.coreId)),
-    );
-    if (
-      Object.keys(state.units).length > 64 ||
-      JSON.stringify({ state, evidence }).length > 32000
-    )
-      throw new Rejection("context-budget-blocked");
-    const id = JSON.stringify([
+    const task = captureLive(
+      this.value,
       this.id,
-      lane,
-      evidence.map((e) => e.id),
-      dependencies,
-    ]);
-    const relevant = Object.values(this.value.unresolved).filter(
-      (o) => !o.coreId || coreIds.includes(o.coreId),
+      `${this.salt}${(++this.captureCounter).toString(36)}`,
+      this.epoch,
+      {
+        ...DEFAULT_BUDGET,
+        sourceChars: this.config.sourceChars,
+        maxRequestBytes: this.config.maxRequestBytes,
+      },
+      coreIds,
     );
-    const obligations = lane === "Live" ? relevant.slice(-16) : relevant;
-    const sources = new Set(obligations.flatMap((o) => o.evidenceIds));
-    const contextEvidence =
-      lane === "Live"
-        ? this.value.evidence.filter(
-            (e) =>
-              sources.has(e.id) && !evidence.some((item) => item.id === e.id),
-          )
-        : [];
-    const task: Task = {
-      id,
-      lane,
-      evidence: structuredClone(evidence),
-      contextEvidence: structuredClone(contextEvidence),
-      omittedObligations: relevant.length - obligations.length,
-      state,
-      dependencies,
-      allowedCores: coreIds,
-      obligations: structuredClone(obligations),
-      createdAt: performance.now(),
-      attentionEpoch: this.epoch,
-    };
-    if (JSON.stringify(task).length > 32000)
-      throw new Rejection("context-budget-blocked");
+    this.captures.set(task.id, structuredClone(task));
     return task;
   }
   private schedule() {
@@ -371,9 +436,7 @@ export class Session {
       this.live.size
     )
       return;
-    const pending = this.value.evidence.filter(
-      (e) => !this.value.consumed[e.id],
-    );
+    const pending = this.pendingEvidence();
     if (!pending.length) return;
     if (this.timer) clearTimeout(this.timer);
     // Quiet coalescing and independent oldest-item deadline are domain policy.
@@ -383,10 +446,7 @@ export class Session {
       (this.admissionTimes.get(pending[0].id) ?? performance.now()) +
         this.config.maxWaitMs,
     );
-    const wait =
-      pending.length >= this.config.maxBatch
-        ? 0
-        : Math.max(0, eligible - performance.now());
+    const wait = Math.max(0, eligible - performance.now());
     this.timer = setTimeout(() => {
       this.timer = undefined;
       this.dispatchLive();
@@ -395,68 +455,65 @@ export class Session {
   private dispatchLive() {
     if (this.disposed || this.paused || this.live.pending || this.live.size)
       return;
-    const evidence = this.value.evidence
-      .filter((e) => !this.value.consumed[e.id])
-      .slice(0, this.config.maxBatch);
-    if (!evidence.length) return;
+    if (!this.pendingEvidence().length) return;
     try {
-      const task = this.capture(
-        "Live",
-        evidence,
-        Object.keys(this.value.state.cores),
-      );
+      const task = this.capture("Live");
+      if (
+        this.value.inspections[task.inspectionKey!] ||
+        task.inspectionKey === this.failedKey
+      ) {
+        if (this.value.inspections[task.inspectionKey!] === "OUTPUT_CAPACITY") {
+          this.paused = true;
+          this.error = "output-capacity-zero-progress";
+        }
+        this.captures.delete(task.id);
+        this.suppressed++;
+        this.trace.mark("identical-inspection-suppressed", {
+          inspectionKey: task.inspectionKey,
+          reason: this.value.inspections[task.inspectionKey!] ?? "failure",
+        });
+        return;
+      }
       this.enqueue(task, this.live);
     } catch (error) {
       this.error = String(error);
       this.paused = true;
+      this.trace.mark("context-blocked", { reason: this.error });
       this.notify();
     }
   }
   private scheduleStage() {
     if (
       this.disposed ||
-      this.paused ||
+      this.userPaused ||
       this.value.ended ||
+      this.value.captureClosed ||
       this.stage.pending ||
       this.stage.size
     )
       return;
-    const obligations = Object.values(this.value.unresolved);
-    if (!obligations.length) return;
-    const processed = this.value.evidence.filter(
-      (e) => this.value.consumed[e.id],
-    );
-    const unreviewed = processed.filter(
-      (e) => !this.value.reviewed.includes(e.id),
-    );
-    const obligationIds = new Set(obligations.flatMap((o) => o.evidenceIds));
-    // Oldest review gaps cannot be skipped by coalescing; exact recent context and unresolved sources accompany them.
-    const evidence = [
-      ...new Map(
-        [
-          ...unreviewed.slice(0, 32),
-          ...processed.slice(-8),
-          ...processed.filter((e) => obligationIds.has(e.id)),
-        ].map((e) => [e.id, e]),
-      ).values(),
-    ].sort((a, b) => a.sequence - b.sequence);
-    const key = JSON.stringify([
-      evidence.map((e) => e.id),
-      obligations.map((o) => o.id),
-      this.value.state.revision,
-    ]);
-    if (key === this.reviewedSnapshot) return;
-    this.reviewedSnapshot = key;
-    const cores = [
-      ...new Set(obligations.flatMap((o) => (o.coreId ? [o.coreId] : []))),
-    ];
-    try {
-      this.enqueue(this.capture("Stage", evidence, cores), this.stage);
-    } catch (error) {
-      this.trace.mark("stage-context-blocked", { reason: String(error) });
-      this.notify();
+    for (const item of reviewCandidates(this.value)) {
+      try {
+        const task = captureStage(
+          this.value,
+          this.id,
+          `${this.salt}${(++this.captureCounter).toString(36)}`,
+          this.epoch,
+          item.subjectId,
+        );
+        if (!task || this.failedStage.has(task.inspectionKey!)) continue;
+        this.captures.set(task.id, structuredClone(task));
+        this.enqueue(task, this.stage);
+        return;
+      } catch (error) {
+        this.trace.mark("stage-context-blocked", {
+          subjectId: item.subjectId,
+          reason: String(error),
+        });
+      }
     }
   }
+
   private enqueue(task: Task, queue: PQueue) {
     const queuedAt = performance.now();
     this.trace.mark("work-created", {
@@ -464,6 +521,11 @@ export class Session {
       lane: task.lane,
       dependencies: task.dependencies,
       evidenceIds: task.evidence.map((e) => e.id),
+      range: task.capture?.range,
+      requestBytes: task.capture ? bytes(task.capture.request) : 0,
+      sourceChars: task.capture
+        ? rangeSize(this.value.evidence, task.capture.range)
+        : 0,
     });
     if (task.lane === "Live")
       for (const evidence of task.evidence) {
@@ -512,7 +574,7 @@ export class Session {
                 if (first) return;
                 first = true;
                 this.trace.mark(
-                  "first-useful-output",
+                  "first-provider-byte",
                   { taskId: task.id, lane: task.lane, attempt },
                   attemptStart,
                   parent,
@@ -535,7 +597,6 @@ export class Session {
             parent,
           );
           await this.accept(task, raw, signal);
-          if (task.lane === "Live") this.error = null;
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);
           this.trace.mark("proposal-rejected", {
@@ -543,22 +604,37 @@ export class Session {
             lane: task.lane,
             reason,
           });
-          if (reason.startsWith("stale-dependency")) {
-            if (task.lane === "Stage") this.reviewedSnapshot = "";
+          if (
+            reason.startsWith("stale-dependency") ||
+            reason === "stale-generation"
+          ) {
+            // The changed dependency/generation produces a fresh eligible capture.
+          } else if (task.lane === "Stage") {
+            this.failedStage.add(task.inspectionKey!);
           } else if (!this.disposed && task.lane === "Live") {
             this.error = reason;
             this.paused = true;
+            this.failedKey = task.inspectionKey ?? null;
           }
         } finally {
           this.tasks[task.lane] = null;
+          this.captures.delete(task.id);
           const window = this.window;
           this.trace.mark("pending", {
             livePendingCount: window.livePendingCount,
             oldestPendingAge: window.oldestPendingAge,
             stagePendingAge: window.stagePendingAge,
+            unaccountedChars: window.unaccountedChars,
+            carryChars: window.carryChars,
+            openTailAge: window.openTailAge,
+            unresolvedMeaningAge: window.unresolvedMeaningAge,
+            status: window.status,
+            recordedCharsPerSecond: window.recordedCharsPerSecond,
+            accountedCharsPerSecond: window.accountedCharsPerSecond,
           });
           this.notify();
           this.scheduleStage();
+          this.schedule();
         }
       })
       .catch((error) => {
@@ -577,13 +653,84 @@ export class Session {
         taskId: task.id,
         lane: task.lane,
       });
-      const { proposal, accepted } = validate(this.value, task, raw);
+      const captured = this.captures.get(task.id);
+      if (!captured || !same(captured, task) || task.sessionId !== this.id)
+        throw new Rejection("task-binding");
+      const result =
+        task.lane === "Live"
+          ? validate(this.value, captured, raw)
+          : validateStage(this.value, captured, raw);
+      const { proposal, accepted } = result;
+      const decision = "decision" in result ? result.decision : null;
       this.trace.mark(
         "semantic-validation",
         { taskId: task.id, lane: task.lane },
         start,
       );
+      if (decision && !decision.groups.length) {
+        await this.append({
+          type: "inspected",
+          inspectionKey: task.inspectionKey!,
+          outcome: decision.suffixStatus as
+            "WAIT_MORE_INPUT" | "OUTPUT_CAPACITY",
+        });
+        this.trace.mark(
+          decision.suffixStatus === "WAIT_MORE_INPUT"
+            ? "live-wait"
+            : "output-capacity-blocked",
+          { taskId: task.id },
+        );
+        if (decision.suffixStatus === "OUTPUT_CAPACITY") {
+          this.error = "output-capacity-zero-progress";
+          this.paused = true;
+          this.failedKey = task.inspectionKey!;
+        }
+        this.notify();
+        return;
+      }
       await this.append({ type: "accepted", accepted });
+      if (task.lane === "Live") this.error = null;
+      if (
+        task.lane === "Stage" &&
+        this.failedKey &&
+        !this.userPaused &&
+        this.pendingEvidence().length
+      ) {
+        try {
+          const refreshed = captureLive(
+            this.value,
+            this.id,
+            "eligibility",
+            this.epoch,
+            {
+              ...DEFAULT_BUDGET,
+              sourceChars: this.config.sourceChars,
+              maxRequestBytes: this.config.maxRequestBytes,
+            },
+          );
+          if (refreshed.inspectionKey !== this.failedKey) {
+            this.paused = false;
+            this.failedKey = null;
+            this.error = null;
+          }
+        } catch {
+          /* Still context blocked. */
+        }
+      }
+      if (
+        decision?.suffixStatus === "WAIT_MORE_INPUT" &&
+        this.pendingEvidence().length &&
+        position(this.value.evidence, this.value.recorded) ===
+          position(this.value.evidence, task.capture!.range.end)
+      ) {
+        const tail = this.capture("Live");
+        await this.append({
+          type: "inspected",
+          inspectionKey: tail.inspectionKey!,
+          outcome: "WAIT_MORE_INPUT",
+        });
+        this.captures.delete(tail.id);
+      }
       this.trace.mark(
         "proposal-to-accepted",
         { taskId: task.id, lane: task.lane },
@@ -596,27 +743,56 @@ export class Session {
         taskId: task.id,
         lane: task.lane,
         consumed: accepted.dispositions.map((d) => d.evidenceId),
+        sourceRanges: accepted.processing?.groups.map((g) => g.range) ?? [],
+        changedUnits: accepted.operations
+          .filter((op) => op.type === "put")
+          .map((op) => op.id),
+        carryCreated: accepted.unresolved.map((o) => o.id),
+        carryResolved: accepted.resolved,
+        accountedChars:
+          accepted.processing?.groups.reduce(
+            (n, g) => n + rangeSize(this.value.evidence, g.range),
+            0,
+          ) ?? 0,
+        reviewKeys: accepted.reviews?.map((r) => r.key) ?? [],
       });
-      if (
-        proposal.attention &&
-        task.attentionEpoch === this.epoch &&
-        performance.now() - task.createdAt < 750
-      ) {
-        if (proposal.operations.some((op) => op.type === "cue"))
-          this.cuePresentation = {
-            version: this.state.cueVersion,
-            mainlineVersion: this.state.mainlineVersion,
-          };
-        this.attention = {
-          ...proposal.attention,
-          expiresAt: performance.now() + 750,
-        };
-        this.epoch++;
-      } else if (proposal.attention)
-        this.trace.mark("attention-discarded", {
-          taskId: task.id,
-          lane: task.lane,
-        });
+      if (task.lane === "Live") {
+        let attentionOutcome = "no-attention-produced";
+        if (proposal.attention) {
+          const validTargets = proposal.attention.targets.every(
+            (id) => this.value.state.units[id]?.valid,
+          );
+          const sameTeaching =
+            task.generation === this.value.generation &&
+            (task.capture?.request.currentCore === null ||
+              task.dependencies.mainline === this.value.state.mainlineVersion ||
+              accepted.operations.some((op) => op.type === "mainline"));
+          const newerSource =
+            task.capture &&
+            position(this.value.evidence, task.capture.range.end) <
+              position(this.value.evidence, this.value.recorded);
+          if (!validTargets || !sameTeaching)
+            attentionOutcome = "attention-suppressed";
+          else if (task.attentionEpoch !== this.epoch || newerSource)
+            attentionOutcome = "attention-superseded";
+          else if (performance.now() - task.createdAt >= 750)
+            attentionOutcome = "attention-expired";
+          else {
+            if (accepted.operations.some((op) => op.type === "cue"))
+              this.cuePresentation = {
+                version: this.value.state.cueVersion,
+                mainlineVersion: this.value.state.mainlineVersion,
+              };
+            this.attention = {
+              ...proposal.attention,
+              expiresAt: performance.now() + 750,
+            };
+            this.epoch++;
+            attentionOutcome = "attention-published";
+          }
+        }
+        this.trace.mark(attentionOutcome, { taskId: task.id, lane: task.lane });
+      }
       this.trace.mark("accepted-publication", {
         taskId: task.id,
         lane: task.lane,
@@ -626,6 +802,7 @@ export class Session {
     });
   }
   pause() {
+    this.userPaused = true;
     this.paused = true;
     this.live.pause();
     this.stage.pause();
@@ -634,8 +811,9 @@ export class Session {
     this.notify();
   }
   resume() {
+    this.userPaused = false;
     this.paused = false;
-    this.error = null;
+    if (!this.failedKey) this.error = null;
     this.live.start();
     this.stage.start();
     this.schedule();
@@ -644,17 +822,35 @@ export class Session {
   async drainLive() {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
-    while (this.value.evidence.some((e) => !this.value.consumed[e.id])) {
+    while (this.pendingEvidence().length) {
+      const before = position(this.value.evidence, this.value.accounted);
       if (this.paused) throw new Error(this.error ?? "paused");
       this.dispatchLive();
       await this.live.onIdle();
+      if (before === position(this.value.evidence, this.value.accounted)) {
+        if (this.paused) throw new Error(this.error ?? "paused");
+        return; // successful WAIT is an idle open tail, not a fake drain.
+      }
       if (this.timer) clearTimeout(this.timer);
       this.timer = undefined;
     }
   }
   async finish() {
     if (this.admissionGap) throw new Error("evidence-frontier-blocked");
+    await this.writer.add(async () => {
+      if (!this.value.captureClosed)
+        await this.append({
+          type: "capture-closed",
+          generation: this.value.generation + 1,
+        });
+    });
+    if (this.failedKey) {
+      this.paused = false;
+      this.failedKey = null;
+    }
     await this.drainLive();
+    if (this.pendingEvidence().length)
+      throw new Error("final-drain-incomplete");
     await this.writer.add(() => this.append({ type: "ended" }));
     this.close();
   }

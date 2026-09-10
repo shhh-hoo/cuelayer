@@ -252,3 +252,28 @@ Paid runs require task authorization. `node scripts/evaluate-real.mjs --live` se
 For a generated-audio experiment, create ignored `.cuelayer/v2/real/generated-speech.txt` and `.wav` at the repository root. Use the pressure and mole-fraction statements and grounded partner prompt from `tests/real/teaching-stories.json`. A local macOS fixture can be made with `say -v Samantha -r 145 -f ../../.cuelayer/v2/real/generated-speech.txt -o ../../.cuelayer/v2/real/generated-speech.aiff`, followed by `ffmpeg -i ../../.cuelayer/v2/real/generated-speech.aiff -ar 48000 -ac 1 -c:a pcm_s16le ../../.cuelayer/v2/real/generated-speech.wav`. Review the source before calling `node scripts/evaluate-audio.mjs --generated-audio`. The harness validates duration with ffprobe, hashes the file, supplies it as Chromium's emulated microphone, and uses real Speechmatics and OpenAI. This is explicitly **not owner microphone dogfood**. It observes backlog for at most 35 seconds after capture stops; incomplete drain is a result, not success. Actual owner dogfood uses the browser's normal microphone button, a separate fresh session, and local export.
 
 The scripts store source identity, actual transcript, durable events, bounded traces, configuration, DOM and screenshots in ignored `.cuelayer/v2/real/`. Session details exports these locally; no trace upload is automatic. Do not commit raw outputs or promote authored stories into reviewed GOLD without human review. Never use another private session as provider evaluation input.
+
+### Incremental Semantic Frontier V2
+
+The current implementation is stacked on PR43; its model/provider profile is unchanged. New sessions use the separate Live/Stage strict schemas. Scheduling defaults are 250 ms quiet coalescing, 750 ms maximum eligible wait, and source/context byte budgets defined by `Session.config` and `DEFAULT_BUDGET`, with no provider-final count limit. A WAIT or failed semantic snapshot is not made eligible by pressing retry or by time alone. New source or relevant state/context changes wake it; explicit capture close is a distinct durable basis change. A zero-progress capacity failure stays observable. Stop microphone drains provider finals, then attempts a bounded final semantic drain and sealing; an unsuccessful drain leaves the microphone stopped and the session recoverable/unsealed. A sealed session requires a fresh session identity for new capture. Historical event-1 logs are read-only.
+
+Run from `apps/cuelayer-v2/`:
+
+```sh
+npm test
+npm run typecheck
+npm run build
+CUELAYER_V2_BASE_URL=http://127.0.0.1:5193 npm run test:browser
+node --import tsx scripts/evaluate-frontier.mjs --offline-baseline --baseline=/absolute/path/to/preserved-pr43
+```
+
+The offline comparison reads the preserved PR43 checkout, reproduces its shared-Stage disposition contradiction, and measures serialized provider requests without any provider call. It writes only ignored `.cuelayer/v2/frontier/` evidence. The optional `tsx` loader is available through the repository root development dependencies.
+
+Only with explicit paid-service authorization, start OLD and NEW on separate loopback ports with the same private environment-file configuration and observation deadline. Keep the old checkout unchanged. The comparison command sends only the tracked authored scenarios to fresh sessions:
+
+```sh
+node scripts/evaluate-frontier.mjs --live --old-url=http://127.0.0.1:5192 --new-url=http://127.0.0.1:5193
+node scripts/analyze-run.mjs /absolute/path/to/.cuelayer/v2/frontier/paired-run/scenario-NEW.json
+```
+
+`--cases=fragmented-chemistry,administration` selects a bounded subset; `--tracks=OLD` or `--tracks=NEW` selects a track. Do not switch models silently. Use `node scripts/evaluate-audio.mjs --generated-audio --url=http://127.0.0.1:5193 --audio-dir=/absolute/path/to/ignored/generated-audio` for the separate audio track; do not claim a physical microphone trial from emulated audio. Provider errors, growing source lag and carried meaning remain failures/limitations even when all offline checks pass.

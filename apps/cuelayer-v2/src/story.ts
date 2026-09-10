@@ -3,10 +3,17 @@ import {
   type Grounding,
   type Meaning,
   type Operation,
-  type Proposal,
+  type LegacyProposal,
   type Task,
 } from "./contract";
 import type { Interpreter, Session } from "./session";
+import {
+  projectMeaning,
+  type LiveDecision,
+  type WireOperation,
+} from "./live-wire";
+import { type StageReview } from "./stage";
+import { type TeachingState } from "./contract";
 export const story = [
   "A gas mixture contains several components. We are studying partial pressures.",
   "The Kc expression is ... I will clarify that later.",
@@ -43,8 +50,8 @@ const fraction = quantity(
   },
   ["Amounts measured in moles"],
 );
-export function fixtureProposal(task: Task): Proposal {
-  const proposal: Proposal = {
+function authoredLegacyDecision(task: Task): LegacyProposal {
+  const proposal: LegacyProposal = {
     version: "v2-proposal-1",
     taskId: task.id,
     complete: true,
@@ -277,4 +284,191 @@ export async function inject(session: Session, text: string, index: number) {
     { message: "AddTranscript", metadata },
     observed,
   );
+}
+
+// The finite story oracle below uses the same provider-facing contracts as real inference.
+// Its authored names are resolved through host slots; they are never runtime identity authority.
+
+export function fixtureProposal(task: Task): LiveDecision | StageReview {
+  const c = task.review ?? task.capture!;
+  const coreNames: Record<string, string> = {},
+    unitNames: Record<string, string> = {};
+  for (const core of Object.values(task.state.cores))
+    coreNames[core.id] =
+      core.title === "Gas mixtures"
+        ? "gases"
+        : core.title === "Chemical equilibrium"
+          ? "reactions"
+          : "functions";
+  for (const u of Object.values(task.state.units))
+    unitNames[u.id] =
+      u.meaning.kind === "quantity"
+        ? u.meaning.symbols.p_i
+          ? "pressure"
+          : u.meaning.symbols.n_i
+            ? "fraction"
+            : "sine"
+        : u.meaning.kind === "reaction"
+          ? "ammonia"
+          : u.meaning.kind === "relation"
+            ? "comparison"
+            : u.meaning.kind === "annotation"
+              ? "fraction-share"
+              : "mixture";
+  const unit = (id: string) => unitNames[id] ?? id,
+    core = (id: string) => coreNames[id] ?? id;
+  const state: TeachingState = {
+    ...structuredClone(task.state),
+    currentCoreId: task.state.currentCoreId
+      ? core(task.state.currentCoreId)
+      : null,
+    cores: Object.fromEntries(
+      Object.values(task.state.cores).map((c) => [
+        core(c.id),
+        { ...c, id: core(c.id), unitIds: c.unitIds.map(unit) },
+      ]),
+    ),
+    units: Object.fromEntries(
+      Object.values(task.state.units).map((u) => [
+        unit(u.id),
+        {
+          ...u,
+          id: unit(u.id),
+          coreId: core(u.coreId),
+          requires: u.requires.map(unit),
+          meaning:
+            u.meaning.kind === "annotation"
+              ? { ...u.meaning, target: unit(u.meaning.target) }
+              : u.meaning.kind === "relation"
+                ? { ...u.meaning, targets: u.meaning.targets.map(unit) }
+                : u.meaning,
+        },
+      ]),
+    ),
+  };
+  const mapped: Task = {
+    ...task,
+    state,
+    obligations: task.obligations.map((o) => ({
+      ...o,
+      coreId: o.coreId ? core(o.coreId) : null,
+    })),
+  };
+  const names: Record<string, string> = {};
+  for (const [a, id] of Object.entries(c.cores))
+    if (coreNames[id]) names[coreNames[id]] = a;
+  for (const [a, id] of Object.entries(c.units))
+    if (unitNames[id]) names[unitNames[id]] = a;
+  let nc = 0,
+    nu = 0;
+  const ca = (id: string) =>
+    names[id] ?? (names[id] = task.capture!.request.newCores[nc++]);
+  const ua = (id: string) =>
+    names[id] ?? (names[id] = c.request.newUnits[nu++]);
+  const readableSources = task.review
+    ? task.review.request.context
+    : [
+        {
+          source: task.capture!.request.source.source,
+          text: task.capture!.request.source.text.replace(/<b[^>]+>/g, ""),
+        },
+        ...task.capture!.request.context,
+      ];
+  const basis = (refs: Grounding[]) =>
+    refs.flatMap((r) => {
+      const source = readableSources.find((s) => s.text.includes(r.quote));
+      return source ? [{ source: source.source, quote: r.quote }] : [];
+    });
+  const convert = (op: Operation): WireOperation => {
+    const b = basis(op.basis);
+    if (op.type === "core") return { ...op, id: ca(op.id), basis: b };
+    if (op.type === "put")
+      return {
+        ...op,
+        id: ua(op.id),
+        coreId: ca(op.coreId),
+        requires: op.requires.map(ua),
+        meaning: projectMeaning(op.meaning, ua),
+        basis: b,
+      };
+    if (op.type === "invalidate") return { ...op, id: ua(op.id), basis: b };
+    if (op.type === "mainline")
+      return { ...op, coreId: ca(op.coreId), basis: b };
+    return {
+      ...op,
+      value: op.value
+        ? {
+            ...op.value,
+            targets: op.value.targets.map(ua),
+            basis: basis(op.value.basis),
+          }
+        : null,
+      basis: b,
+    };
+  };
+  if (task.lane === "Stage") {
+    const p = authoredLegacyDecision(mapped);
+    return {
+      version: "v2-stage-review-1",
+      scope: task.review!.namespace,
+      results: task.review!.items.map((i) => ({
+        item: i.id,
+        outcome: p.resolve.includes(i.subjectId) ? "RESOLVED" : "STILL_OPEN",
+        operations: p.resolve.includes(i.subjectId)
+          ? p.operations
+              .map(convert)
+              .filter(
+                (
+                  op,
+                ): op is Extract<
+                  WireOperation,
+                  { type: "put" | "invalidate" }
+                > => op.type === "put" || op.type === "invalidate",
+              )
+          : [],
+        supersededBy: null,
+      })),
+    };
+  }
+  const response: LiveDecision = {
+    version: "v2-live-decision-1",
+    scope: task.capture!.namespace,
+    groups: [],
+    suffixStatus: "NONE",
+    reviewRequests: [],
+    attentionCandidate: null,
+  };
+  for (const e of task.evidence) {
+    const p = authoredLegacyDecision({ ...mapped, evidence: [e] });
+    const through = Object.keys(task.capture!.boundaries).find((a) => {
+      const b = task.capture!.boundaries[a];
+      return b.evidenceId === e.id && b.offset === e.text.length;
+    });
+    if (!through) {
+      response.suffixStatus = "WAIT_MORE_INPUT";
+      break;
+    }
+    const operations = p.operations.map(convert),
+      u = p.unresolved[0];
+    response.groups.push({
+      throughBoundary: through,
+      outcome: u ? "CARRY" : operations.length ? "APPLY" : "NO_CHANGE",
+      operations,
+      carry: u
+        ? {
+            kind: "CONTEXT_REQUIRED",
+            phrase: u.phrase,
+            core: u.coreId ? ca(u.coreId) : null,
+          }
+        : null,
+      resolutions: [],
+    });
+    mapped.state = reduceOperations(mapped.state, p.operations);
+    if (p.attention)
+      response.attentionCandidate = {
+        ...p.attention,
+        targets: p.attention.targets.map(ua),
+      };
+  }
+  return response;
 }

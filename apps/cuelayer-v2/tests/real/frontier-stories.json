@@ -1,0 +1,98 @@
+{
+  "identity": "cuelayer-v2-frontier-authored-1",
+  "status": "Authored evaluation scenarios, not human-reviewed GOLD. Review actual accepted meaning manually.",
+  "cases": [
+    {
+      "id": "fragmented-chemistry",
+      "fragments": [
+        "For an ideal",
+        "gas mixture,",
+        "partial pressure",
+        "equals mole fraction",
+        "times total pressure.",
+        "Both pressures are",
+        "in pascals and",
+        "mole fraction is dimensionless."
+      ],
+      "intervalMs": 350,
+      "expected": "One quantitative relationship with ideal-mixture condition and correct pressure/dimensionless units; no fragment obligations merely from boundaries."
+    },
+    {
+      "id": "mathematics",
+      "fragments": [
+        "For a rectangle, area A equals length l times width w.",
+        "Length and width are in metres; area is in square metres."
+      ],
+      "intervalMs": 1500,
+      "expected": "A=l*w with labels and units, no invented numerical substitution."
+    },
+    {
+      "id": "non-stem",
+      "fragments": [
+        "A narrator is the voice that tells a story.",
+        "The narrator need not be the author."
+      ],
+      "intervalMs": 1300,
+      "expected": "Preserve narrator definition and distinction from author, including negation."
+    },
+    {
+      "id": "administration",
+      "fragments": [
+        "Please",
+        "open your books",
+        "to the next page.",
+        "We will begin",
+        "in a moment."
+      ],
+      "intervalMs": 300,
+      "expected": "NO_CHANGE/QUIET is appropriate; no scientific fact or learner work Cue is required."
+    },
+    {
+      "id": "correction",
+      "fragments": [
+        "The pressure is 200 kilopascals.",
+        "Correction: the pressure is 250 kilopascals."
+      ],
+      "intervalMs": 7000,
+      "expected": "One current pressure identity at 250 kPa, history preserves any earlier 200 acceptance."
+    },
+    {
+      "id": "unresolved-reference",
+      "fragments": [
+        "This value is larger than the previous one.",
+        "The referents are not specified here."
+      ],
+      "intervalMs": 1300,
+      "expected": "Grounded UNRESOLVED_REFERENCE/CONTEXT_REQUIRED, never invented referents."
+    },
+    {
+      "id": "interrupted-thought",
+      "fragments": [
+        "Activation energy is the minimum energy",
+        "Let us change the subject. A narrator tells the story."
+      ],
+      "intervalMs": 1500,
+      "expected": "First incomplete thought may CARRY once, later independent narrator fact progresses."
+    },
+    {
+      "id": "sustained",
+      "fragments": [
+        "A narrator tells the story.",
+        "The narrator need not be the author.",
+        "First-person narration uses a character's own voice.",
+        "Third-person narration describes characters from outside their own voices.",
+        "A metaphor describes one thing in terms of another.",
+        "A simile makes an explicit comparison.",
+        "Please turn the page.",
+        "An argument presents a claim supported by reasons.",
+        "Evidence supports the reasons given for a claim.",
+        "A counterargument challenges an argument.",
+        "A conclusion follows from the stated reasons.",
+        "A claim is not established merely by repetition."
+      ],
+      "intervalMs": 1100,
+      "repeat": 3,
+      "expected": "Keep qualifiers and distinctions. Accounted character rate must keep pace with arrival; report CARRY burden and age as well as backlog. No false entailments."
+    }
+  ]
+}
