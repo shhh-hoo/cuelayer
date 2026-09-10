@@ -167,7 +167,7 @@ The original authored Chemistry acceptance sequence and seven Mathematics GOLD c
 npm test -- src/teaching-representation/architecture.test.ts src/canvas-spatial/semantic-space.test.ts src/canvas-spatial/motion.test.ts src/dev/teaching-representation/entry.test.ts
 ```
 
-Required checks include candidate availability without display; atomic rejection of malformed/ungrounded proposals; stable payload/candidate/artifact binding; selected-only visibility; revalidation on PRESERVE and historical reuse; local relation withdrawal without deleting surviving nodes; Math curve counts `0,1,1,2,2,3,3,2` under one plot identity; and isolation from Core/Cue mutation. Core/M4A contract bytes and frozen corpora remain unchanged.
+Required checks include candidate availability without display; atomic rejection of malformed/ungrounded proposals; stable payload/candidate/artifact binding; selected-only visibility; revalidation on PRESERVE and historical reuse; local relation withdrawal without deleting surviving nodes; Math curve counts `0,1,1,2,2,3,3,2` under one plot identity; and isolation from Core/Cue mutation. Core/M4A contract bytes and frozen corpora remain unchanged in that historical gate.
 
 Browser review uses both development stories at 1280×720. Walk every checkpoint, inspect PAIR/WIDEN/COMPARE and return, record visible artifact IDs/DOM instance continuity, measured bounds, clipping, curve/relation withdrawal and console output. In the separate diagnostics panel, use **Grow selected artifact** to increase actual rendered width and verify that only pressured neighboring spaces move. Check shared-projector drag/zoom through an accepted update and **Follow teaching**. Store screenshots, geometry, logs and review observations only under ignored `.cuelayer/` or `artifacts/`.
 
@@ -181,12 +181,89 @@ This gate establishes a bounded architecture seam, not generic semantic entailme
 
 Browser acceptance uses `/dev/core-projector` at 1280×720 and 390×844 with reduced motion. Review accepted entry/revision, WIDEN/COMPARE and return, native artifact-internal resizing without changing accepted state or outer Canvas dimensions, teacher drag/wheel, revision and withdrawal during inspection, Follow teaching, mainline shift/refocus, clipping/overlap, node continuity, console output and network requests. The optional diagnostics disclosure supplies the measured homes, transient boxes, visible IDs and failure reasons. Store screenshots and logs in ignored `.cuelayer/reviews/`; do not commit generated evidence.
 
-The actual production-bundle regression permits only the generic representation/Canvas modules and the reviewed `accepted.content` implementation. It excludes development entries, Chemistry/Math capabilities and graph-layout packages. The import-boundary regression now follows the normal domain-gated Core route to its controller and reviewed shared surface, excluding legacy semantic reducers and development/subject capabilities. The separate legacy branch remains available for historical restoration. Full validation includes typecheck, all tests, production build, both frozen exemplar validators, clean repository hygiene and diff checks. No historical model evaluations, provider or verifier calls are part of this gate.
+The implemented production-bundle regression permits only the generic representation/Canvas modules and the reviewed `accepted.content` implementation. It excludes development entries, Chemistry/Math capabilities and graph-layout packages. The import-boundary regression follows the normal domain-gated Core route to its controller and reviewed shared surface, excluding legacy semantic reducers and development/subject capabilities. The separate legacy branch remains available for historical restoration. Full validation includes typecheck, all tests, production build, both frozen exemplar validators, clean repository hygiene and diff checks. No historical model evaluations, provider or verifier calls are part of this gate. The next-version capability allow-list must be deliberately revised for individually reviewed production capabilities; it must not freeze accepted text as the permanent product or permit wholesale import of demo code.
 
 ## Normal production-route regression
 
 The cutover suite uses the actual `/session` component, durable IndexedDB domain gate, Core live controller and HTTP seam. Synthetic committed canonical speech and injected local proposals are the primary evidence; authored accepted GOLD snapshots are not the production-route proof. The suite checks persist-before-publish through learner DOM, provider/output/storage failures, identity-preserving revision, representation failure/recovery, replay without evidence duplication, historical v3/v4 restoration, domain mismatch, finalization and no dual semantic writer. Production composition tests additionally isolate diagnostic/verification failure, competing acceptance and retryable incomplete finalization. Existing Core tests retain independent knowledge/Cue conflict, timeout and cancellation coverage.
 
-`npm run report:bundle` measures the actual emitted production graph using built-in gzip/brotli compression. The production import regression follows static dependencies of each domain branch and the generated Core chunk, forbidding legacy semantic reducers, development fixtures, Chemistry/Math and graph-layout dependencies on the new Core route. Generated measurements belong in ignored review evidence.
+`npm run report:bundle` measures the actual emitted production graph using built-in gzip/brotli compression. The production import regression follows static dependencies of each domain branch and the generated Core chunk, forbidding legacy semantic reducers, development fixtures, Chemistry/Math and graph-layout dependencies on the current Core route. Generated measurements belong in ignored review evidence.
 
 Browser acceptance of `/session` covers desktop, narrow/reduced-motion, durable Core claim, synthetic speech ingress, delayed persistence, revision/identity, mainline shift/refocus, teacher inspection, representation failure/recovery, exact reload, semantic finalization and historical legacy replay. The Runbook defines reproduction and evidence storage. These deterministic checks establish integration correctness only. M6 classroom/model/microphone acceptance remains a separate HOLD gate; no frozen corpus or historical model result is changed or rerun.
+
+## Next-version joint acceptance — specification, not a passing result
+
+This section evaluates `session-first-surface-design-v1` from `SYSTEM_CONTRACT.md`. It defines required evidence for future implementation. It does not claim that Live/Stage, streaming, recovery records, new capabilities or the following tests/metrics already exist. Keep one evaluation identity per active contract; introduce the necessary reviewed fixtures deliberately instead of rewriting frozen historical gold or inventing CLI commands in documentation.
+
+### Evidence separation and source handling
+
+Use four distinct tracks:
+
+1. **Incident reproduction:** preserve the corresponding original trace/audio and exact code/configuration in ignored local storage. A retrospective textual diagnosis is not a substitute for the trace and does not prove its quoted timings, object counts or viewport coordinates. Do not combine an earlier solids trace with a later equilibrium diagnosis as though they were one session.
+2. **Accepted-state display replay:** reviewed synthetic accepted states test selection, representation, choreography and visibility without live inference. This does not certify upstream extraction or ASR.
+3. **Timed evidence-to-surface regression:** timestamped committed evidence plus injected proposals exercises the actual Window, scheduler, stream reader, acceptance, persistence and normal `/session` route. Golden accepted states must not be injected past the layer under test.
+4. **Authorized live evaluation:** real audio and provider calls measure ASR, model quality, latency, cost and sustained usability. Use a new reviewed set, not the frozen M2 corpora; record failure and absence as outcomes, not missing rows.
+
+Private real captions, traces and generated screenshots remain ignored and are not uploaded to the public repository as GOLD. Derive de-identified synthetic cases, explicitly label what was authored and obtain review of expected meaning/frames. Include one additional Chemistry story, one Mathematics story and a non-STEM holdout with wording/structures not used to tune the implementation. An independent holdout is not a renamed development example.
+
+### The first display regression story
+
+The supplied equilibrium/partial-pressure diagnosis defines the following desired progression, conditional on sufficient source grounding. These expectations are design requirements until implemented and independently reviewed:
+
+| Teaching checkpoint | Expected current frame | Prohibited shortcut |
+| --- | --- | --- |
+| Lesson preview | Preserve or minimal topic anchor when useful. | Automatically create several dominant agenda-prose cards or learner TASK from an agenda verb. |
+| Unclear Kc expression | Keep last valid knowledge; retain unresolved evidence. | Confidently generate a scientific formula from ambiguous transcription. |
+| Grounded Kp explanation | Useful compact accepted form preserving scope. | Invent missing conditions or claim generic parsing from one exact phrase. |
+| Accepted partial-pressure relationship | `p_i = x_i P_total` with grounded operands. | Literal prose as the only available production form, or unsupported symbols. |
+| Optional total-pressure note | Attached, subordinate annotation if useful. | Another dominant full-size card; hiding a mandatory condition as optional Support. |
+| Accepted mole-fraction relationship | `x_i = n_i / n_total` dominant, prior equation necessary context. | Old Calculate Kc Cue pulling camera bounds, fabricated causal arrows or unrequested substitution. |
+| Mainline shift/return | Readable new neighborhood; previous identities and homes remain revisitable. | Horizontal singleton conveyor as policy, duplicate knowledge copies or implicit deletion. |
+
+### Runtime and semantic acceptance regressions
+
+Required deterministic cases cover: a proposition split across at least three ASR fragments; accepted no-op followed by completion; same-ID retransmission versus genuine repeated teacher wording; exact negation/quantity/condition preservation; teacher self-correction; explicit and ambiguous topic return; teacher versus AI Cue origin and agenda-versus-task speech acts; no answer leakage; bounded pending work under continuous input; Live progress while Stage is deliberately delayed; Stage coalescing without lost coverage; no cancellation starvation; and evidence-to-meaning progress restored after reload.
+
+Verify separate recorded, Live-processed, Stage-reviewed and unresolved progress. A no-op cannot erase unresolved content. Stage reconciliation must not re-consume evidence, forge checkpoints, duplicate identities, relabel stale base revisions or bypass host-captured entity/scope/absence/mainline dependencies. Test both unrelated concurrent updates that remain valid and relevant updates that require rejection. Test stale attention independently from a useful historical semantic patch. Lost acknowledgements/retries must resolve idempotently against the durable accepted prefix.
+
+Pause persistence across normal-route acceptance and prove no speculative artifact is published. Crash/reopen between evidence recording, inference, atomic acceptance/disposition recording and notification; restore exactly the accepted state and remaining obligations. End capture with pending Live/Stage work and exercise the documented closure/incomplete policy. No implicit late mutation of sealed lessons; no trace/provider-memory dependency for recovery. Preserve legacy v3/v4 and historical Core v5 replay.
+
+### Streaming and local runtime regressions
+
+Break transport chunks at arbitrary UTF-8 and JSON boundaries; deliver malformed, oversized, refused, incomplete, stalled and disconnected streams. Verify bounded draft memory, no partial semantic publication, abort-source diagnosis, zero repeated token-driven React rendering and persistence-before-publication. Observe actual early chunks on both local and deployment paths so proxy buffering cannot masquerade as streaming. For the initial single-patch contract, report completion latency honestly rather than treating first delta as useful output. Multi-unit streaming requires its own reviewed closure/dependency/idempotency tests before partial-response acceptance.
+
+Compare incremental context/provenance indexes with full deterministic replay. Measure context-building and acceptance CPU with increasing lesson history, not only short fixtures; check that normal requests do not repeatedly replay the whole session. Worker use must retain one writer and correct versioned snapshots. Ensure PCM delivery precedes diagnostic work. Validate audio-time mapping over delayed finals, pause/resume, device-rate changes and reconnects; report unmapped samples rather than guessed latency.
+
+### Representation and readability regressions
+
+Candidate admission must be kind-agnostic at the semantic request boundary: a request for object meaning can select math/relations/annotation/grouping instead of pre-forced TEXT. Check that a valid candidate can remain undisplayed and that text is selected when exact wording is genuinely best. Ground every mathematical operator, operand, symbol and condition; type-valid AST alone is not proof of equivalence. Negative tests swap numerator/denominator, negate a relation, remove a condition, change units, misbind symbols or introduce an unsupported transformation. Reject or faithfully degrade; do not fix the semantic gold to match the renderer.
+
+Exercise relation-only, Support-only, correction and invalidation updates as attention triggers; preserve only the required neighborhood and genuinely useful Support. Distinguish FOCUS, dimension-aligned COMPARE and topology-preserving WIDEN. Verify FOCUS temporary composition with the same canonical IDs and immutable home input, home return, stable DOM identity, cross-Core necessary context without duplicates, and local Space growth without global compaction. Joining uncertain or cross-space relations must not silently merge unrelated neighborhoods.
+
+Use measured geometry in normal `/session` at 1280×720 and 390×844, including reduced motion, delayed font/resource resize, controls, Cue/Work safe-area reservation and presentation overlays. At each supported settled automatic frame assert: dominant and required context are fully within the safe area; readable-size policy is met; no required qualifier is removed; no unrelated overlay clipping; companion Cue world coordinates do not affect Board bounds; no rescue pan is needed. During manual inspection, preserve camera override while semantic validation and stale withdrawal continue. Follow teaching applies only the latest valid intent.
+
+An impossible oversized-content case must explicitly select faithful compact/staged content or report unsupported/degraded status. Do not delete internal `fits=false` diagnostics, set success flags without DOM evidence, or insist that arbitrary content fits any viewport. An automated rectangle check is complemented by human readability/meaning review.
+
+### Initial engineering targets and reporting
+
+These are proposed acceptance targets, not measured performance or vendor guarantees. Freeze the chosen code/configuration and workload before comparison; report sample counts and uncertainty. Measure useful visible response only for independently labeled opportunities, with misses and coverage reported alongside latency.
+
+| Metric | Initial target / reporting rule |
+| --- | --- |
+| Sufficiently complete teaching evidence end → first correct, useful, readable frame | p50 ≤ 2.5 s, p95 ≤ 4 s. With real audio, include ASR; with text replay, label ASR excluded. |
+| Live provider request → complete admissible patch | p50 ≤ 0.8 s, p95 ≤ 1.5 s as a test target; separately report validation rejection and no-useful-change rate. |
+| Continuous workload | At least 20 minutes without continuously increasing pending age or unreported unresolved/review debt. Include retry failures and actual checkpoint throughput per batch. |
+| Late Stage | Ordinary Live work continues; relevant history can reconcile; expired attention never reclaims the camera. |
+| Quality and coverage | All curated critical correctness cases pass; independently adjudicate live ambiguity, factual inversion, Cue false positives, missed opportunities and unsupported representation. No all-QUIET or text-only shortcut. |
+| Readability | Supported settled frames meet measured safe-area and readable-size requirements; report explicit unsupported cases and inspection exceptions separately. |
+| Local performance | Record context/index/acceptance/render CPU, main-thread stalls, retained history/heap and bundle delta; compare long-session growth with the baseline before imposing a machine-independent CPU budget. |
+
+Instrument a single correlation chain across capture/audio time, ASR final, canonical closure, durable evidence, dispatch/queue start, HTTP/provider first delta/completion, validation/persistence/publication, selection and actual visible frame. Separate one-time microphone/token/socket startup from steady-state ASR. Use monotonic durations per clock domain and record mapping uncertainty; do not subtract unsynchronized server and client wall clocks. Capture actual provider model/usage, output and reasoning tokens, cache usage where returned, request weight and failure source without secrets. A configured output ceiling is not actual generated output and cannot by itself explain latency.
+
+Compare ASR settings, Live model/reasoning profile, output grammar, context weight, cold/cache behavior and coalescing separately before an end-to-end combined run. Deadline extension removes censoring, not latency. Streaming, faster first token and successful schema parsing are not sufficient product metrics.
+
+### Integrated release gate
+
+Evaluate runtime/semantic quality and display/readability in parallel, then join them in a small normal-route vertical slice. Do not postpone latency until after every display capability, or improve speed while knowingly preserving unusable framing. Development harnesses isolate failures, but acceptance requires normal `/session` without manual authored attention plans.
+
+Report exact base/final SHAs, schema/policy/profile identities, changed files, deterministic commands actually run, frozen hashes, candidate/selected forms, visible frames, long-session queue behavior, live call counts and known unsupported cases. Preserve historical frozen evaluators. New production capability and schema boundaries are deliberately reviewed, not hidden behind claims that all old contract bytes remain unchanged. Paid/audio runs require explicit authorization; documentation-only PRs do not claim these implementation gates passed.
