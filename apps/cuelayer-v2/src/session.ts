@@ -858,12 +858,19 @@ export class Session {
       if (this.paused) throw new Error(this.error ?? "paused");
       this.dispatchLive();
       await this.live.onIdle();
-      if (before === position(this.value.evidence, this.value.accounted)) {
-        if (this.paused) throw new Error(this.error ?? "paused");
-        return; // successful WAIT is an idle open tail, not a fake drain.
-      }
       if (this.timer) clearTimeout(this.timer);
       this.timer = undefined;
+      if (before === position(this.value.evidence, this.value.accounted)) {
+        if (this.paused) throw new Error(this.error ?? "paused");
+        // No advancement can also mean an obsolete generation/dependency was
+        // rejected. Only a successfully inspected CURRENT snapshot may stop
+        // the drain; capture-close or new source must still get its own turn.
+        const current = this.capture("Live");
+        this.captures.delete(current.id);
+        if (current.inspectionKey === this.failedKey)
+          throw new Error(this.error ?? "failed-inspection");
+        if (this.value.inspections[current.inspectionKey!]) return;
+      }
     }
   }
   async finish() {

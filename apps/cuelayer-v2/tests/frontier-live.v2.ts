@@ -308,7 +308,11 @@ describe("Gate 1: exact frontier and Live", () => {
   it("quote matching cannot escape the processing group", async () => {
     const { s, t } = await manual("First fact. Second fact.");
     const d = establish(t, "Second fact.");
-    d.groups[0].throughBoundary = boundary(s, t, cursorAt(s.replay.evidence, 11));
+    d.groups[0].throughBoundary = boundary(
+      s,
+      t,
+      cursorAt(s.replay.evidence, 11),
+    );
     d.suffixStatus = "WAIT_MORE_INPUT";
     await expect(s.accept(t, d)).rejects.toThrow(
       "grounding-outside-processing-group",
@@ -421,6 +425,36 @@ describe("Gate 1: exact frontier and Live", () => {
     await new Promise((r) => setTimeout(r, 30));
     expect(model).toHaveBeenCalledTimes(1);
     expect(s.window.unaccountedChars).toBe(6);
+  });
+  it("draining a resumed failed snapshot rejects without redispatch or a hot loop", async () => {
+    const model = vi.fn(async () => null);
+    const s = await open(model);
+    await admit(s, "Please continue.");
+    await vi.waitFor(() => expect(s.error).not.toBeNull());
+    s.resume();
+    await expect(s.drainLive()).rejects.toThrow();
+    expect(model).toHaveBeenCalledTimes(1);
+    expect(s.window.unaccountedChars).toBeGreaterThan(0);
+  });
+  it("capture close during Live waits for the new generation's final drain", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const modes: string[] = [];
+    const s = await open(async (t) => {
+      modes.push(t.capture!.request.mode);
+      if (modes.length === 1) await held;
+      return fullGroup(t);
+    });
+    await admit(s, "Please turn the page.");
+    await vi.waitFor(() => expect(modes).toEqual(["CONTINUOUS"]));
+    const finished = s.finish();
+    await vi.waitFor(() => expect(s.replay.captureClosed).toBe(true));
+    release();
+    await expect(finished).resolves.toBeUndefined();
+    expect(modes).toEqual(["CONTINUOUS", "FINALIZE"]);
+    expect(s.replay.ended).toBe(true);
+    expect(s.window.unaccountedChars).toBe(0);
+    expect(s.window.activeLive).toBeNull();
   });
   it("new finals persist during slow Live; next capture has more than four finals", async () => {
     let release!: () => void;
