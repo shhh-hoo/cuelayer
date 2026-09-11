@@ -18,7 +18,6 @@ import {
 } from "../src/source";
 import { liveDecisionSchema } from "../src/live-wire";
 import { liveRequest } from "../server/live";
-import { z } from "zod";
 import {
   admit,
   openSession,
@@ -411,6 +410,7 @@ describe("Gate 1: exact frontier and Live", () => {
     expect(r.input[0].content).not.toContain('"properties"');
     const check = (o: any) => {
       if (o && typeof o === "object") {
+        expect(o).not.toHaveProperty("oneOf");
         if (o.type === "object") {
           expect(o.additionalProperties).toBe(false);
           expect(o.required?.sort()).toEqual(Object.keys(o.properties).sort());
@@ -418,7 +418,11 @@ describe("Gate 1: exact frontier and Live", () => {
         for (const x of Object.values(o)) check(x);
       }
     };
-    check(z.toJSONSchema(liveDecisionSchema));
+    check(r.text.format.schema);
+    const operations = (r.text.format.schema as any).properties.groups.items
+      .properties.operations.items;
+    expect(operations.anyOf).toHaveLength(5);
+    expect(operations.anyOf[1].properties.meaning.anyOf).toHaveLength(5);
   });
   it("LEGACY_UNSPECIFIED and renderer failures cannot become new CARRY kinds", async () => {
     const { t } = await manual("Hello.");

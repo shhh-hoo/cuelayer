@@ -2,6 +2,7 @@ import { afterEach, it, expect, vi } from "vitest";
 import { Session } from "../src/session";
 import { type Task } from "../src/contract";
 import { stageReviewSchema, type StageReview } from "../src/stage";
+import { liveRequest } from "../server/live";
 import {
   admit,
   openSession,
@@ -51,6 +52,14 @@ it("Stage has a distinct strict contract, host-captured scope, and no consumptio
     t = s.capture("Stage");
   expect(t.review!.request).not.toHaveProperty("source");
   expect(t.review!.request).not.toHaveProperty("accountThrough");
+  const provider = await liveRequest(t.review!.request);
+  expect(provider.text.format.strict).toBe(true);
+  const schema = provider.text.format.schema as any;
+  expect(JSON.stringify(schema)).not.toContain('"oneOf"');
+  const operations =
+    schema.properties.results.items.properties.operations.items;
+  expect(operations.anyOf).toHaveLength(2);
+  expect(operations.anyOf[0].properties.meaning.anyOf).toHaveLength(5);
   const d = still(t);
   expect(stageReviewSchema.safeParse({ ...d, dispositions: [] }).success).toBe(
     false,
