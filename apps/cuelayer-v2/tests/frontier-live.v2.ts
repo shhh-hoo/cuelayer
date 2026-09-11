@@ -18,6 +18,7 @@ import {
 } from "../src/source";
 import { liveDecisionSchema } from "../src/live-wire";
 import { liveRequest } from "../server/live";
+import { expandBasis } from "../src/projection";
 import {
   admit,
   openSession,
@@ -276,6 +277,43 @@ describe("Gate 1: exact frontier and Live", () => {
     expect(s.window.unaccountedChars).toBe(0);
     expect(s.state.revision).toBe(0);
     expect(s.attention).toBeNull();
+  });
+  it("processing groups disambiguate repeated quotes without deduplicating source", async () => {
+    const s = await open();
+    s.pause();
+    const text = "A narrator tells the story.";
+    await admit(s, text);
+    await admit(s, text);
+    const t = s.capture("Live");
+    const d = establish(t, text);
+    await expect(s.accept(t, d)).rejects.toThrow(
+      "ungrounded-or-ambiguous-quote",
+    );
+    expect(s.replay.accounted).toEqual(ORIGIN);
+    const middle = cursorAt(s.replay.evidence, text.length);
+    d.groups[0].throughBoundary = boundary(s, t, middle);
+    d.groups.push(fullGroup(t).groups[0]);
+    await s.accept(t, d);
+    expect(s.window.unaccountedChars).toBe(0);
+    expect(
+      Object.values(s.state.units)[0].basis.map((b) => b.evidenceId),
+    ).toEqual(["e0"]);
+    const later = expandBasis(s.replay.evidence, t.capture!.range, text, {
+      start: middle,
+      end: t.capture!.range.end,
+    });
+    expect(later.map((b) => b.evidenceId)).toEqual(["e1"]);
+    expect(later[0].range.start).toEqual(middle);
+  });
+  it("quote matching cannot escape the processing group", async () => {
+    const { s, t } = await manual("First fact. Second fact.");
+    const d = establish(t, "Second fact.");
+    d.groups[0].throughBoundary = boundary(s, t, cursorAt(s.replay.evidence, 11));
+    d.suffixStatus = "WAIT_MORE_INPUT";
+    await expect(s.accept(t, d)).rejects.toThrow(
+      "grounding-outside-processing-group",
+    );
+    expect(s.replay.accounted).toEqual(ORIGIN);
   });
   it("unknown/cross-task aliases and schema failures account zero source", async () => {
     const { s, t } = await manual("A mole fraction is a ratio.");

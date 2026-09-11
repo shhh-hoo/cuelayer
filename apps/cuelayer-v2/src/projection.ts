@@ -380,7 +380,9 @@ export function expandBasis(
   evidence: Evidence[],
   range: SourceRange,
   quote: string,
+  within?: SourceRange,
 ) {
+  if (!quote) throw new Error("ungrounded-quote");
   let text = "",
     map: (number | null)[] = [];
   for (const p of sourcePieces(evidence, range)) {
@@ -395,13 +397,23 @@ export function expandBasis(
     text += p.text;
     for (let i = 0; i < p.text.length; i++) map.push(start + i);
   }
-  const at = text.indexOf(quote);
-  if (at < 0 || text.indexOf(quote, at + 1) >= 0)
-    throw new Error("ungrounded-or-ambiguous-quote");
-  const refs = map
-    .slice(at, at + quote.length)
-    .filter((p): p is number => p !== null);
-  if (!refs.length) throw new Error("ungrounded-quote");
+  const lower = within ? position(evidence, within.start) : -Infinity;
+  const upper = within ? position(evidence, within.end) : Infinity;
+  const matches: number[][] = [];
+  let at = -1;
+  let outside = false;
+  while ((at = text.indexOf(quote, at + 1)) >= 0) {
+    const refs = map
+      .slice(at, at + quote.length)
+      .filter((p): p is number => p !== null);
+    if (!refs.length) throw new Error("ungrounded-quote");
+    if (refs[0] < lower || refs.at(-1)! + 1 > upper) outside = true;
+    else matches.push(refs);
+  }
+  if (!matches.length && outside)
+    throw new Error("grounding-outside-processing-group");
+  if (matches.length !== 1) throw new Error("ungrounded-or-ambiguous-quote");
+  const refs = matches[0];
   const selected = {
     start: cursorAt(evidence, refs[0]),
     end: cursorAt(evidence, refs.at(-1)! + 1),

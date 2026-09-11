@@ -84,7 +84,12 @@ export function expandOperations(
     refs.flatMap((ref) => {
       const range = c.sources[ref.source];
       requireThat(range, "unknown-or-cross-task-source-alias");
-      const expanded = expandBasis(replay.evidence, range, ref.quote);
+      const expanded = expandBasis(
+        replay.evidence,
+        range,
+        ref.quote,
+        ref.source === task.capture?.request.source.source ? group : undefined,
+      );
       if (group && ref.source === task.capture?.request.source.source)
         for (const r of expanded)
           requireThat(
