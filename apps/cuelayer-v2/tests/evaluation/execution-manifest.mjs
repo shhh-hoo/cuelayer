@@ -295,6 +295,10 @@ export function validateAuthorization(
     Date.parse(authorization.expires_at) <= now
   )
     throw Error("authorization-expired-or-not-yet-valid");
+  if (manifest.continuation && (
+    authorization.allow_budget_cap_removal !== true ||
+    authorization.continuation_sha256 !== sha256(manifest.continuation)
+  )) throw Error("continuation-authorization-required");
   return true;
 }
 

@@ -30,6 +30,7 @@ const revised = new Set(
     "contract.mjs",
     "provenance.mjs",
     "execution-manifest.mjs",
+    "execute-canary.mjs",
     "cli.mjs",
     "canaries/stage-clarified.json",
   ].map((f) => "apps/cuelayer-v2/tests/evaluation/" + f),
@@ -103,8 +104,53 @@ async function source(parentPath, productRoot) {
   return { parent, parentResult, provenance, product, scenarios, originals };
 }
 
-export async function prepareRepairExecution(parentPath, productRoot, out) {
+export async function continuationRecord(manifestPath) {
+  const previous = await readJSON(manifestPath);
+  if (sha256(previous) !== "e802c0443c43da0e118beab63ab56d1c026662f5686af7765f0b4fefe28f332f")
+    throw Error("unapproved-continuation-source");
+  const directory = resolve(manifestPath, "..");
+  const seal = await readJSON(resolve(directory, "live-evidence-seal.json"));
+  for (const f of seal.files)
+    if (sha256(await readFile(resolve(directory, f.path))) !== f.sha256)
+      throw Error("continuation-evidence-drift:" + f.path);
+  const result = await readJSON(resolve(directory, "execution-result.json"));
+  const retained = [];
+  const remaining = [];
+  for (const row of result.canaries) {
+    const calls = result.budget.filter((c) => c.run_id === row.run_id);
+    if (calls.length) {
+      const detail = await readJSON(resolve(directory, row.run_id, "result.json"));
+      if (detail.hard_fail || detail.status === "INVALID" || detail.adjudication_status === "ADJUDICATION_REQUIRED")
+        throw Error("continuation-hard-stop");
+      retained.push({ ...row, evidence: resolve(directory, row.run_id, "result.json") });
+    } else {
+      if (row.started) {
+        const detail = await readJSON(resolve(directory, row.run_id, "result.json"));
+        if (detail.provider_attempt_count !== 0 || detail.operational?.reason !== "budget-exhausted")
+          throw Error("continuation-only-undispatched-budget-stop");
+      }
+      remaining.push(row.run_id);
+    }
+  }
+  if (retained.length !== 1 || retained[0].run_id !== "quantitative" || remaining.join(",") !== CANARIES.slice(1).join(","))
+    throw Error("continuation-cohort-drift");
+  return {
+    identity: "gate3b-budget-amendment-continuation-1",
+    previous_manifest: resolve(manifestPath),
+    previous_manifest_sha256: sha256(previous),
+    previous_result_sha256: sha256(result),
+    previous_evidence_seal_sha256: sha256(seal),
+    retained_runs: retained,
+    remaining_canaries: remaining,
+    prior_budget: result.budget,
+    budget_override: { max_cost_usd: null, max_requests: null },
+    reason: "User explicitly removed usage limits and instructed completion of the remaining frozen canaries; no replacement provider run.",
+  };
+}
+
+export async function prepareRepairExecution(parentPath, productRoot, out, continuationPath = null) {
   const s = await source(parentPath, productRoot);
+  const continuation = continuationPath ? await continuationRecord(continuationPath) : null;
   await mkdir(out, { recursive: false });
   await mkdir(resolve(out, "canaries"));
   const canaries = [],
@@ -237,7 +283,13 @@ export async function prepareRepairExecution(parentPath, productRoot, out) {
       phase: "3b-1",
       status: "NOT_RUN",
     })),
+    ...(continuation ? { continuation } : {}),
   };
+  if (continuation) {
+    const previous = await readJSON(continuation.previous_manifest);
+    if (!same(manifest.canaries.map((c) => c.request_sha256), previous.canaries.map((c) => c.request_sha256)))
+      throw Error("continuation-request-bytes-changed");
+  }
   await exclusive(resolve(out, "request-diffs.json"), diffs);
   await exclusive(resolve(out, "execution-manifest.json"), manifest);
   await exclusive(resolve(out, "execution-manifest-seal.json"), {
@@ -282,6 +334,8 @@ export async function verifyRepairExecution(path) {
       sha256(await readJSON(resolve(path, "../request-diffs.json")))
   )
     throw Error("repair-manifest-drift");
+  if (manifest.continuation && !same(manifest.continuation, await continuationRecord(manifest.continuation.previous_manifest)))
+    throw Error("continuation-identity-drift");
   const snapshots = [];
   for (const c of manifest.canaries) {
     const raw = await readFile(c.path),

@@ -60,6 +60,7 @@ export async function run() {
                 required("previous-execution"),
                 required("product"),
                 required("out"),
+                option("continue-from") ? required("continue-from") : null,
               )
             : await prepareExecution(
                 required("baseline-manifest"),
