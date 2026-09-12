@@ -1,6 +1,6 @@
-import { startBrowserHarness } from "./browser.mjs";
+import { startBrowserHarness, clockMapping } from "./browser.mjs";
 import { drive } from "./driver.mjs";
-import { classifyFault, exclusive } from "./evidence.mjs";
+import { classifyFault, exclusive, toDriver } from "./evidence.mjs";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -13,6 +13,7 @@ export async function driverFaultProof(provenance, product, out) {
     );
     await h.page.waitForFunction(() => Boolean(window.v2?.session));
     await h.page.evaluate(() => window.v2.session.pause());
+    const clock_start = await clockMapping(h.page);
     const events = Array.from({ length: 4 }, (_, i) => ({
       event_id: "fault-" + i,
       at_ms: i * 100,
@@ -35,13 +36,14 @@ export async function driverFaultProof(provenance, product, out) {
       h.page.evaluate(
         (event) => ({
           event_id: event.event_id,
-          page_received_at: performance.timeOrigin + performance.now(),
+          page_received_at: performance.now(),
           admitted_at: null,
         }),
         row,
       ),
     );
     await blocking;
+    const clock_end = await clockMapping(h.page);
     let first = true;
     const evaluatorDelay = await drive(events, 800, () => {
       if (first) {
@@ -53,12 +55,18 @@ export async function driverFaultProof(provenance, product, out) {
       }
       return {};
     });
-    const pageDelay =
-      productDelay.rows[0].page_received_at -
-      productDelay.rows[0].evaluator_dispatch_at;
+    const mapped = toDriver(productDelay.rows[0].page_received_at, clock_start);
+    const pageDelay = mapped.at - productDelay.rows[0].evaluator_dispatch_at;
+    const uncertainty =
+      Math.max(clock_start.uncertainty, clock_end.uncertainty) +
+      Math.abs(clock_end.offset - clock_start.offset);
+    const page_delay_interval_ms = [
+      pageDelay - uncertainty,
+      pageDelay + uncertainty,
+    ];
     const status =
       productDelay.fidelity.status === "PASS" &&
-      pageDelay > 300 &&
+      page_delay_interval_ms[0] > 300 &&
       evaluatorDelay.fidelity.status === "INVALID"
         ? "PASS"
         : "FAIL";
@@ -70,6 +78,9 @@ export async function driverFaultProof(provenance, product, out) {
       product_main_thread: {
         ...productDelay,
         page_delay_ms: pageDelay,
+        page_delay_interval_ms,
+        clock_start,
+        clock_end,
         classification: classifyFault({
           kind: "main-thread-overload",
           product_induced: true,
