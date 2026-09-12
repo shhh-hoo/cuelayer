@@ -17,6 +17,7 @@ import { emptyReplay } from "../src/contract";
 import { captureLive } from "../src/projection";
 import { recorded } from "../src/source";
 import { waitDecision } from "./frontier-fixtures";
+import { expandProviderDecision } from "../src/live-wire";
 const replay = emptyReplay();
 replay.evidence = [
   {
@@ -72,6 +73,26 @@ function response(
   );
 }
 describe("official SDK transport → existing proposal port", () => {
+  it("expands a completed provider continuation into the existing captured proposal port", async () => {
+    const wire = {
+      scope: "test1",
+      groups: [],
+      reviewRequests: [],
+      attentionCandidate: null,
+      continuation: {
+        query: "existing quantity",
+        purpose: "READ",
+        after: null,
+      },
+    };
+    const interpret = realInterpreter(
+      () => undefined,
+      vi.fn(async () => response(JSON.stringify(wire))) as typeof fetch,
+    );
+    expect(
+      await interpret(task, new AbortController().signal, () => {}),
+    ).toEqual(expandProviderDecision(wire));
+  });
   it("fixes Current model profile, includes only bounded host context and issues stable IDs", async () => {
     const request = await liveRequest(task.capture!.request);
     expect(request).toMatchObject({

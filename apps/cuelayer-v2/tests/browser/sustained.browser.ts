@@ -119,7 +119,7 @@ test("600 virtual seconds: fixed artificial service latency, semantic versions a
       const request = JSON.parse(String(init?.body)),
         answer = interpretWorkload(request);
       const latency =
-        request.version === "v2-live-request-2"
+        request.version === "v2-live-request-3"
           ? [500, 2000, 6000][live++ % 3]
           : (stage++, 6000);
       await new Promise<void>((resolve, reject) => {
