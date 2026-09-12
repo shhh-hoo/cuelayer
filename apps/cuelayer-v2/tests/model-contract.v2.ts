@@ -178,7 +178,8 @@ it("production strict schema exposes only the new continuation and compact leave
       clientTimeoutMs: 8000,
       sdkRetries: 0,
       transportRetries: 2,
-      reasoning: "low",
+      reasoning: "none",
+      stageReasoning: "low",
     });
   } finally {
     s.close();

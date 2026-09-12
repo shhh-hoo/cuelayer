@@ -6,7 +6,8 @@ import { stageReviewSchema, type StageRequest } from "../src/stage";
 export const modelProfile = {
   provider: "OpenAI",
   model: "gpt-5.6-luna",
-  reasoning: "low" as const,
+  reasoning: "none" as const,
+  stageReasoning: "low" as const,
   structuredOutput: "json_schema (strict:true) + v2-live-decision-3 validation",
   maxOutputTokens: 8192,
   providerTimeoutMs: 6000,
@@ -55,7 +56,9 @@ export async function liveRequest(
     model,
     store: false,
     stream: true as const,
-    reasoning: { effort: modelProfile.reasoning },
+    reasoning: {
+      effort: stage ? modelProfile.stageReasoning : modelProfile.reasoning,
+    },
     max_output_tokens: modelProfile.maxOutputTokens,
     text: {
       format: {
