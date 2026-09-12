@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+const baseURL = process.env.CUELAYER_V2_BASE_URL ?? "http://127.0.0.1:5192";
 export default defineConfig({
   testDir: "./tests/browser",
   testMatch: "**/*.browser.ts",
@@ -11,14 +12,14 @@ export default defineConfig({
     ["json", { outputFile: "../../.cuelayer/v2/playwright-results.json" }],
   ],
   use: {
-    baseURL: "http://127.0.0.1:5192",
+    baseURL,
     viewport: { width: 1280, height: 800 },
     reducedMotion: "reduce",
     screenshot: "only-on-failure",
   },
   webServer: {
-    command: "npm run dev",
-    url: "http://127.0.0.1:5192",
+    command: `npm run dev -- --port ${new URL(baseURL).port}`,
+    url: baseURL,
     reuseExistingServer: true,
   },
 });

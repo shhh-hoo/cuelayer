@@ -2,11 +2,19 @@ import {
   reduceOperations,
   type Grounding,
   type Meaning,
-  type Operation,
-  type Proposal,
+  type LegacyOperation as Operation,
+  type LegacyProposal,
   type Task,
 } from "./contract";
+import { fixtureBasis, authoredRevisions } from "./fixture-author";
 import type { Interpreter, Session } from "./session";
+import {
+  projectMeaning,
+  type LiveDecision,
+  type WireOperation,
+} from "./live-wire";
+import { type StageReview } from "./stage";
+import { type TeachingState } from "./contract";
 export const story = [
   "A gas mixture contains several components. We are studying partial pressures.",
   "The Kc expression is ... I will clarify that later.",
@@ -43,8 +51,8 @@ const fraction = quantity(
   },
   ["Amounts measured in moles"],
 );
-export function fixtureProposal(task: Task): Proposal {
-  const proposal: Proposal = {
+function authoredLegacyDecision(task: Task): LegacyProposal {
+  const proposal: LegacyProposal = {
     version: "v2-proposal-1",
     taskId: task.id,
     complete: true,
@@ -277,4 +285,244 @@ export async function inject(session: Session, text: string, index: number) {
     { message: "AddTranscript", metadata },
     observed,
   );
+}
+
+// The finite story oracle below uses the same provider-facing contracts as real inference.
+// Its authored names are resolved through host slots; they are never runtime identity authority.
+
+export function fixtureProposal(task: Task): LiveDecision | StageReview {
+  const c = task.review ?? task.capture!;
+  const coreNames: Record<string, string> = {},
+    unitNames: Record<string, string> = {};
+  for (const core of Object.values(task.state.cores))
+    coreNames[core.id] =
+      (core.label ?? core.title) === "Gas mixtures"
+        ? "gases"
+        : (core.label ?? core.title) === "Chemical equilibrium"
+          ? "reactions"
+          : "functions";
+  for (const u of Object.values(task.state.units))
+    unitNames[u.id] =
+      u.meaning.kind === "quantity"
+        ? u.meaning.symbols.p_i
+          ? "pressure"
+          : u.meaning.symbols.n_i
+            ? "fraction"
+            : "sine"
+        : u.meaning.kind === "reaction"
+          ? "ammonia"
+          : u.meaning.kind === "relation"
+            ? "comparison"
+            : u.meaning.kind === "annotation"
+              ? "fraction-share"
+              : "mixture";
+  const unit = (id: string) => unitNames[id] ?? id,
+    core = (id: string) => coreNames[id] ?? id;
+  const state: TeachingState = {
+    ...structuredClone(task.state),
+    currentCoreId: task.state.currentCoreId
+      ? core(task.state.currentCoreId)
+      : null,
+    cores: Object.fromEntries(
+      Object.values(task.state.cores).map((c) => [
+        core(c.id),
+        {
+          ...c,
+          title: c.label ?? c.title,
+          id: core(c.id),
+          unitIds: c.unitIds.map(unit),
+        },
+      ]),
+    ),
+    units: Object.fromEntries(
+      Object.values(task.state.units).map((u) => [
+        unit(u.id),
+        {
+          ...u,
+          id: unit(u.id),
+          coreId: core(u.coreId),
+          requires: u.requires.map(unit),
+          meaning:
+            u.meaning.kind === "annotation"
+              ? { ...u.meaning, target: unit(u.meaning.target) }
+              : u.meaning.kind === "relation"
+                ? { ...u.meaning, targets: u.meaning.targets.map(unit) }
+                : u.meaning,
+        },
+      ]),
+    ),
+  };
+  const mapped: Task = {
+    ...task,
+    state,
+    obligations: task.obligations.map((o) => ({
+      ...o,
+      coreId: o.coreId ? core(o.coreId) : null,
+    })),
+  };
+  const names: Record<string, string> = {};
+  for (const [a, id] of Object.entries(c.cores))
+    if (coreNames[id]) names[coreNames[id]] = a;
+  for (const [a, id] of Object.entries(c.units))
+    if (unitNames[id]) names[unitNames[id]] = a;
+  let nc = 0,
+    nu = 0;
+  const ca = (id: string) =>
+    names[id] ?? (names[id] = task.capture!.request.newCores[nc++]);
+  const ua = (id: string) =>
+    names[id] ?? (names[id] = c.request.newUnits[nu++]);
+  const basis = (refs: Grounding[]) =>
+    refs.flatMap((r) => {
+      try {
+        return fixtureBasis(task, r.quote);
+      } catch {
+        return [];
+      }
+    });
+  const convert = (op: Operation): WireOperation[] => {
+    const b = basis(op.basis);
+    if (op.type === "core")
+      return [{ type: "core", id: ca(op.id), label: op.title, basis: b }];
+    if (op.type === "put") {
+      const previous = mapped.state.units[op.id];
+      if (previous)
+        return authoredRevisions(
+          ua(op.id),
+          previous.meaning,
+          op.meaning,
+          ua,
+          b,
+        );
+      return [
+        {
+          type: "put",
+          id: ua(op.id),
+          coreId: ca(op.coreId),
+          dependencies: op.requires.map((id) => ({
+            target: ua(id),
+            kind: "IDENTITY" as const,
+          })),
+          meaning: projectMeaning(op.meaning, ua),
+          basis: b,
+        },
+      ];
+    }
+    if (op.type === "invalidate") return [{ ...op, id: ua(op.id), basis: b }];
+    if (op.type === "mainline")
+      return [{ ...op, coreId: ca(op.coreId), basis: b }];
+    return [
+      {
+        type: "cue",
+        value: op.value
+          ? { text: op.value.text, targets: op.value.targets.map(ua) }
+          : null,
+        basis: b,
+      },
+    ];
+  };
+  if (task.lane === "Stage") {
+    const p = authoredLegacyDecision(mapped);
+    return {
+      scope: task.review!.namespace,
+      results: task.review!.items.map((i) => {
+        if (!p.resolve.includes(i.subjectId))
+          return { item: i.id, outcome: "STILL_OPEN" as const };
+        const operations = p.operations
+          .flatMap(convert)
+          .filter(
+            (
+              op,
+            ): op is Extract<
+              WireOperation,
+              { type: "put" | "revise" | "invalidate" | "revalidate" }
+            > =>
+              ["put", "revise", "invalidate", "revalidate"].includes(op.type),
+          );
+        return {
+          item: i.id,
+          outcome: "RESOLVED" as const,
+          operations,
+          resolution: {
+            targets: operations
+              .filter((op) => op.type === "put")
+              .map((op) => op.id),
+            basis: p.operations.flatMap((op) => basis(op.basis)),
+          },
+        };
+      }),
+    };
+  }
+  const response: LiveDecision = {
+    scope: task.capture!.namespace,
+    groups: [],
+    suffixStatus: "NONE",
+    contextRequest: null,
+    reviewRequests: [],
+    attentionCandidate: null,
+  };
+  for (const e of task.evidence.filter(
+    (e) =>
+      (e.sequence > task.capture!.range.start.sequence ||
+        (e.sequence === task.capture!.range.start.sequence &&
+          e.text.length > task.capture!.range.start.offset)) &&
+      e.sequence <= task.capture!.range.end.sequence,
+  )) {
+    const p = authoredLegacyDecision({ ...mapped, evidence: [e] });
+    const through = Object.keys(task.capture!.boundaries).find((a) => {
+      const b = task.capture!.boundaries[a];
+      return b.evidenceId === e.id && b.offset === e.text.length;
+    });
+    if (!through) {
+      response.suffixStatus = "WAIT_MORE_INPUT";
+      break;
+    }
+    const operations = p.operations.flatMap(convert),
+      u = p.unresolved[0];
+    const blocked = operations.find(
+      (op) =>
+        ["revise", "invalidate", "revalidate"].includes(op.type) &&
+        "id" in op &&
+        !task.capture!.request.writableUnits.includes(op.id) &&
+        !task.capture!.request.newUnits.includes(op.id),
+    );
+    if (blocked && "id" in blocked) {
+      response.suffixStatus = "WAIT_MORE_INPUT";
+      response.contextRequest = {
+        query: unitNames[c.units[blocked.id]],
+        purpose: "MODIFY",
+        after: null,
+      };
+      break;
+    }
+    // Adjacent understood filler is one source group, regardless of final fragmentation.
+    const previous = response.groups.at(-1);
+    if (!u && !operations.length && previous?.outcome === "NO_CHANGE") {
+      previous.throughBoundary = through;
+      continue;
+    }
+    response.groups.push(
+      u
+        ? {
+            throughBoundary: through,
+            outcome: "CARRY",
+            kind: "CONTEXT_REQUIRED",
+            core: u.coreId ? ca(u.coreId) : null,
+          }
+        : operations.length
+          ? {
+              throughBoundary: through,
+              outcome: "APPLY",
+              operations,
+              resolutions: [],
+            }
+          : { throughBoundary: through, outcome: "NO_CHANGE" },
+    );
+    mapped.state = reduceOperations(mapped.state, p.operations);
+    if (p.attention)
+      response.attentionCandidate = {
+        ...p.attention,
+        targets: p.attention.targets.map(ua),
+      };
+  }
+  return response;
 }

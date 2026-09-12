@@ -134,9 +134,12 @@ An internal host supplies the session/speech-run identities, canonical closed sp
 
 ```ts
 const live = await CoreLiveSession.open({
-  lessonDomain: "core", sessionId, speechRunId, store,
+  lessonDomain: "core",
+  sessionId,
+  speechRunId,
+  store,
   interpreter: createCoreLiveInterpreter(model, transport),
-  trace: draft => traceWriter.emit(draft),
+  trace: (draft) => traceWriter.emit(draft),
 });
 await live.commitClosedSpan(closedSpan, speechRunId);
 // The host reads live.state / live.health and subscribes to live.runtime.
@@ -238,8 +241,7 @@ V2 uses a separate `cuelayer-v2` Dexie database and never opens old session data
 
 Run the V2 typecheck, unit, build, browser and complexity commands in `EVALUATION.md`. Screenshot and JSON output lands under ignored `.cuelayer/v2/`. Do not publish generated session evidence or treat these synthetic examples as frozen model GOLD. tldraw's visible development license notice and its production-license requirement are not suppressed; deployment requires a separate decision. This runbook does not authorize deployment, merge, real audio or model evaluation.
 
-
-## Run the isolated V2 real-service slice
+## Run the isolated V2 real-service slice — historical event-1 baseline
 
 Inside `apps/cuelayer-v2/`, set server-only `SPEECHMATICS_API_KEY` and `OPENAI_API_KEY` using an untracked environment file or the shell, then run `npm run dev`. For a file outside the repository, `node --env-file=/absolute/path/to/private.env node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5192 --strictPort` loads it without placing credentials in client variables. Open `http://127.0.0.1:5192/?services=real` and select **Enable microphone**. The normal microphone → official Speechmatics → durable final → real interpreter → acceptance → Board/Cue path runs here. **Stop microphone** drains provider finals; **Retry pending work** retries retained nondurable finals in order. **Request final** is explicit and never automatic. A browser crash cannot recover a final that never persisted.
 
@@ -252,3 +254,36 @@ Paid runs require task authorization. `node scripts/evaluate-real.mjs --live` se
 For a generated-audio experiment, create ignored `.cuelayer/v2/real/generated-speech.txt` and `.wav` at the repository root. Use the pressure and mole-fraction statements and grounded partner prompt from `tests/real/teaching-stories.json`. A local macOS fixture can be made with `say -v Samantha -r 145 -f ../../.cuelayer/v2/real/generated-speech.txt -o ../../.cuelayer/v2/real/generated-speech.aiff`, followed by `ffmpeg -i ../../.cuelayer/v2/real/generated-speech.aiff -ar 48000 -ac 1 -c:a pcm_s16le ../../.cuelayer/v2/real/generated-speech.wav`. Review the source before calling `node scripts/evaluate-audio.mjs --generated-audio`. The harness validates duration with ffprobe, hashes the file, supplies it as Chromium's emulated microphone, and uses real Speechmatics and OpenAI. This is explicitly **not owner microphone dogfood**. It observes backlog for at most 35 seconds after capture stops; incomplete drain is a result, not success. Actual owner dogfood uses the browser's normal microphone button, a separate fresh session, and local export.
 
 The scripts store source identity, actual transcript, durable events, bounded traces, configuration, DOM and screenshots in ignored `.cuelayer/v2/real/`. Session details exports these locally; no trace upload is automatic. Do not commit raw outputs or promote authored stories into reviewed GOLD without human review. Never use another private session as provider evaluation input.
+
+### Incremental Semantic Frontier V2
+
+The current Draft PR builds on the preserved PR46 starting commit `727accfe79e03c85856a77db645139bae9523ed4`. New sessions use event/export 3 and separate Live/Stage request/response 2 strict protocols; historical event 1/2 sessions are read-only and export unchanged. No production runtime is switched by this experiment. The root Vercel configuration disables automatic deployment only for `fix/cuelayer-v2-incremental-semantic-frontier`, so updating the Draft does not publish a preview; GitHub test workflows remain enabled. See [Vercel branch configuration](https://vercel.com/docs/project-configuration/git-configuration). The model, reasoning, output limit, 6-second provider deadline, 8-second host deadline and transport retry profile are unchanged.
+
+Scheduling uses 250 ms quiet coalescing and 750 ms maximum eligible wait, with the source/context budgets in `Session.config` and `DEFAULT_BUDGET`. When Live source age exceeds four seconds, new Stage work yields once for at most one second under `v2-stage-pressure-policy-1`. Stop microphone drains provider finals and attempts a bounded semantic drain; failure leaves the microphone stopped and the session unsealed/recoverable. Sealed sessions need a fresh identity for new capture.
+
+`resume()` only removes user pause. `retryFailedLive()` atomically claims one persisted manual attempt for the current failed work; double-clicks, concurrent calls and refresh grant no extra attempt. A claimed attempt interrupted by a crash remains interrupted until another explicit retry. Failure records distinguish transport, semantic and stale outcomes. A failed old capture does not pause a materially newer capture already available when its slot ends. New evidence does not remove user pause.
+
+WAIT is successful inspection without accounting. Identical actual context is suppressed. A truncated WAIT preserves PROCESS and spends the existing preceding-context budget on one subsequent page (at most 800 characters); checked pages give no present citation authority. READ/MODIFY search pages hold at most eight candidates and retain stable cursor progress across unrelated index updates. Exhausted or over-budget required context blocks explicitly. Only material source/context/version/permission changes or capture-close authorize a new check. Time, Resume and irrelevant index changes do not.
+
+Only explicitly captured targets may be modified; read-only retrieved units and Core metadata do not grant edit/create authority. Host-owned reverse-dependency processing immediately withdraws derived content requiring review, including outside the model window. A fresh Cue invitation is independent of attention; target/mainline changes and refresh expire it.
+Run from `apps/cuelayer-v2/`:
+
+```sh
+npm test
+npm run typecheck
+npm run build
+CUELAYER_V2_BASE_URL=http://127.0.0.1:5193 npm run test:browser
+node --import tsx scripts/evaluate-frontier.mjs --protocol-compare --baseline=/absolute/path/to/unchanged-pr46-start
+```
+
+The protocol comparison verifies the supplied baseline files against commit `727accf`, replays identical authored semantic work on both versions, and measures full provider requests, projections, final SDK schemas and responses. It invokes no provider. The 600-second workload and its per-result timeline run in the unit suite; the browser suite independently checks fixed required DOM results through real IndexedDB. Outputs go to ignored `.cuelayer/v2/repair/`. The optional `tsx` loader comes from root development dependencies.
+
+Do not rerun the historical `--offline-baseline` or paid evaluator into an existing evidence directory. Preserve `.cuelayer/v2/frontier/` Gate 3 failures unchanged. Deterministic gates authorize requesting a new paid evaluation, not asserting real model/provider acceptance. Obtain fresh explicit authorization with the exact code, scenarios, repetitions, model settings and cost ceiling before OpenAI or Speechmatics calls.
+Only with explicit paid-service authorization, start OLD and NEW on separate loopback ports with the same private environment-file configuration and observation deadline. Keep the old checkout unchanged. The comparison command sends only the tracked authored scenarios to fresh sessions:
+
+```sh
+node scripts/evaluate-frontier.mjs --live --old-url=http://127.0.0.1:5192 --new-url=http://127.0.0.1:5193
+node scripts/analyze-run.mjs /absolute/path/to/.cuelayer/v2/frontier/paired-run/scenario-NEW.json
+```
+
+`--cases=fragmented-chemistry,administration` selects a bounded subset; `--tracks=OLD` or `--tracks=NEW` selects a track. Do not switch models silently. Use `node scripts/evaluate-audio.mjs --generated-audio --url=http://127.0.0.1:5193 --audio-dir=/absolute/path/to/ignored/generated-audio` for the separate audio track; do not claim a physical microphone trial from emulated audio. Provider errors, growing source lag and carried meaning remain failures/limitations even when all offline checks pass.

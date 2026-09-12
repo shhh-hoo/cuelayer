@@ -1,333 +1,202 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, it, expect, vi } from "vitest";
 import { Session, TransientFailure } from "../src/session";
 import { EventStore } from "../src/adapters/storage";
-import { SpeechEvidenceAdapter } from "../src/adapters/speech";
+import { deterministicInterpreter, inject, story, delay } from "../src/story";
+import { emptyReplay, fold } from "../src/contract";
 import {
-  deterministicInterpreter,
-  fixtureProposal,
-  inject,
-  story,
-  delay,
-} from "../src/story";
-import { emptyReplay, fold, type Event, type Task } from "../src/contract";
-import { validate } from "../src/acceptance";
+  admit,
+  openSession,
+  fullGroup,
+  waitDecision,
+  establish,
+  currentQuote,
+  fast,
+} from "./frontier-fixtures";
 const sessions: Session[] = [];
-const open = async (
-  interpreter = deterministicInterpreter({ live: 2, stage: 80 }),
-) => {
-  const session = await Session.open(
-    crypto.randomUUID(),
-    interpreter,
-    new EventStore(`test-${crypto.randomUUID()}`),
-  );
-  sessions.push(session);
-  return session;
-};
-const step = async (
-  s: Session,
-  i: number,
-  index = s.replay.evidence.length,
-) => {
-  await inject(s, story[i], index);
-  await s.drainLive();
-};
+async function open(...args: Parameters<typeof openSession>) {
+  const s = await openSession(...args);
+  sessions.push(s);
+  return s;
+}
 afterEach(() => {
   sessions.forEach((s) => s.close());
   sessions.length = 0;
   vi.restoreAllMocks();
 });
-
-describe("authoritative evidence frontier", () => {
-  it("partials and preflight cannot establish truth; EndOfUtterance does not finalize them", async () => {
-    const s = await open();
+it("volatile partial, preflight and EndOfUtterance cannot establish evidence", async () => {
+  const s = await open();
+  for (const message of ["AddPartialTranscript", "EndOfUtterance"] as const) {
     await s.speech.receive({
-      message: "AddPartialTranscript",
+      message,
       metadata: { transcript: story[0], start_time: 0, end_time: 1 },
     });
     s.speech.preflight();
-    expect(s.window.preflight).toMatchObject({ stability: "PREFLIGHT" });
-    await s.speech.receive({
-      message: "EndOfUtterance",
-      metadata: { transcript: story[0], start_time: 0, end_time: 1 },
-    });
-    expect(s.replay.evidence).toHaveLength(0);
-    expect(s.state.revision).toBe(0);
-  });
-  it("retransmission is idempotent; different interval repeats stay distinct; conflicts fail closed", async () => {
-    const s = await open();
-    await inject(s, story[0], 0);
-    await inject(s, story[0], 0);
-    await s.drainLive();
-    expect(s.replay.evidence).toHaveLength(1);
-    await inject(s, "Continue.", 1);
-    await inject(s, "Continue.", 2);
-    await s.drainLive();
-    expect(s.replay.evidence).toHaveLength(3);
-    await expect(inject(s, "Conflicting text", 0)).rejects.toThrow(
-      "evidence-identity-collision",
-    );
-    expect(s.window.consumedEvidenceIds).toHaveLength(3);
-  });
-  it("failed N blocks N+1 and sealing until N is durably retried", async () => {
-    const s = await open(),
-      original = s.store.append.bind(s.store);
-    let fail = true;
-    vi.spyOn(s.store, "append").mockImplementation(async (event, expected) => {
-      if (event.type === "evidence" && fail) throw new Error("disk-failed");
-      return original(event, expected);
-    });
-    await expect(inject(s, story[0], 0)).rejects.toThrow("disk-failed");
-    await expect(inject(s, story[2], 1)).rejects.toThrow("frontier-blocked");
-    expect(s.replay.evidence).toHaveLength(0);
-    await expect(s.finish()).rejects.toThrow("frontier-blocked");
-    fail = false;
-    await expect(inject(s, "Changed failed final", 0)).rejects.toThrow(
-      "evidence-identity-collision",
-    );
-    await inject(s, story[0], 0);
-    await inject(s, story[2], 1);
-    await s.drainLive();
-    expect(s.replay.evidence.map((e) => e.sequence)).toEqual([1, 2]);
-    expect(s.window.consumedEvidenceIds).toHaveLength(2);
-  });
-  it("persist before publish, recover lost acknowledgement, and no double acceptance", async () => {
-    const s = await open();
-    const original = s.store.append.bind(s.store);
-    let release!: () => void;
-    const hold = new Promise<void>((r) => {
-      release = r;
-    });
-    vi.spyOn(s.store, "append").mockImplementation(async (event, expected) => {
-      if (event.type === "accepted") {
-        await hold;
-        await original(event, expected);
-        throw new Error("ack-lost");
-      }
-      await original(event, expected);
-    });
-    await inject(s, story[0], 0);
-    await delay(50);
-    expect(s.state.revision).toBe(0);
-    expect(s.window.consumedEvidenceIds).toHaveLength(0);
-    release();
-    await s.drainLive();
-    expect(s.state.currentCoreId).toBe("gases");
-    const events = await s.store.read(s.id);
-    expect(events.filter((e) => e.type === "accepted")).toHaveLength(1);
-    expect(events.reduce(fold, emptyReplay())).toEqual(s.replay);
-  });
+  }
+  expect(s.replay.evidence).toHaveLength(0);
+  expect(s.state.revision).toBe(0);
 });
-describe("semantic coordination and acceptance", () => {
-  it("Live runs while evidence keeps arriving; independent max wait bounds dispatch", async () => {
-    const starts: number[] = [],
-      sizes: number[] = [];
-    const s = await open(async (task, signal, first) => {
-      if (task.lane === "Live") {
-        starts.push(performance.now());
-        sizes.push(task.evidence.length);
-      }
-      await delay(35, signal);
-      first();
-      return fixtureProposal(task);
-    });
-    const begin = performance.now();
-    let maxAge = 0;
-    for (let i = 0; i < 60; i++) {
-      await inject(s, i === 0 ? story[0] : "Continue.", i);
-      maxAge = Math.max(maxAge, s.window.oldestPendingAge);
-      await delay(8);
+it("same interval retransmits idempotently; changed content collides", async () => {
+  const s = await open(async (t) => fullGroup(t));
+  await inject(s, "Please continue.", 0);
+  await inject(s, "Please continue.", 0);
+  await s.drainLive();
+  expect(s.replay.evidence).toHaveLength(1);
+  await expect(inject(s, "Different source.", 0)).rejects.toThrow(
+    "evidence-identity-collision",
+  );
+});
+it("failed N blocks N+1 and sealing until exact evidence is retried", async () => {
+  const s = await open(async (t) => fullGroup(t)),
+    append = s.store.append.bind(s.store);
+  let fail = true;
+  vi.spyOn(s.store, "append").mockImplementation(async (e, n) => {
+    if (e.type === "evidence" && fail) throw new Error("disk-failed");
+    await append(e, n);
+  });
+  await expect(inject(s, story[0], 0)).rejects.toThrow("disk-failed");
+  await expect(inject(s, story[2], 1)).rejects.toThrow("frontier-blocked");
+  await expect(s.finish()).rejects.toThrow("frontier-blocked");
+  fail = false;
+  await expect(inject(s, "Changed", 0)).rejects.toThrow("identity-collision");
+  await inject(s, story[0], 0);
+  await inject(s, story[2], 1);
+  await s.drainLive();
+  expect(s.replay.evidence.map((e) => e.sequence)).toEqual([1, 2]);
+});
+it("acceptance persists before publication and observer failures cannot undo committed state", async () => {
+  const s = await open(async (t) => fullGroup(t));
+  let release!: () => void;
+  const hold = new Promise<void>((r) => (release = r)),
+    append = s.store.append.bind(s.store);
+  vi.spyOn(s.store, "append").mockImplementation(async (e, n) => {
+    if (e.type === "accepted") await hold;
+    await append(e, n);
+  });
+  s.subscribe(() => {
+    throw new Error("observer");
+  });
+  await admit(s, "Please continue.");
+  await vi.waitFor(() => expect(s.window.activeLive).not.toBeNull());
+  expect(s.window.consumedEvidenceIds).toHaveLength(0);
+  release();
+  await s.drainLive();
+  expect(s.window.unaccountedChars).toBe(0);
+  expect(s.replay).toEqual(
+    (await s.store.read(s.id)).reduce(fold, emptyReplay()),
+  );
+});
+it("transient retries retain task identity; semantic failures do not retry", async () => {
+  const ids: string[] = [];
+  const s = await open(async (t) => {
+    ids.push(t.id);
+    if (ids.length < 3) throw new TransientFailure("temporary");
+    return fullGroup(t);
+  });
+  await admit(s, "Please continue.");
+  await s.drainLive();
+  expect(ids).toHaveLength(3);
+  expect(new Set(ids).size).toBe(1);
+  const bad = vi.fn(async () => ({ complete: false })),
+    b = await open(bad);
+  await admit(b, "Please continue.");
+  await expect(b.drainLive()).rejects.toThrow("malformed");
+  b.resume();
+  await delay(30);
+  expect(bad).toHaveBeenCalledTimes(1);
+});
+it("competing writers cannot both commit the same durable prefix", async () => {
+  const store = new EventStore(`race-${crypto.randomUUID()}`),
+    id = crypto.randomUUID();
+  const a = await Session.open(id, async (t) => waitDecision(t), store, fast),
+    b = await Session.open(id, async (t) => waitDecision(t), store, fast);
+  sessions.push(a, b);
+  a.pause();
+  b.pause();
+  const results = await Promise.allSettled([admit(a, "A"), admit(b, "B")]);
+  expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+  expect(await store.read(id)).toHaveLength(1);
+});
+it("mutable or foreign captured task cannot authorize acceptance", async () => {
+  const s = await open();
+  s.pause();
+  await admit(s, "Please continue.");
+  const t = s.capture("Live");
+  await expect(
+    s.accept({ ...t, sessionId: "foreign" }, fullGroup(t)),
+  ).rejects.toThrow("task-binding");
+  await expect(s.accept({ ...t, createdAt: 0 }, fullGroup(t))).rejects.toThrow(
+    "task-binding",
+  );
+  expect(s.window.unaccountedChars).toBeGreaterThan(0);
+});
+it("a newer source arriving during prefix WAIT is eligible and not suppressed", async () => {
+  let release!: () => void,
+    calls = 0;
+  const held = new Promise<void>((r) => (release = r));
+  const s = await open(async (t) => {
+    if (++calls === 1) {
+      await held;
+      return waitDecision(t);
     }
-    expect(s.window.consumedEvidenceIds.length).toBeGreaterThan(10);
-    await s.drainLive();
-    expect(starts[0] - begin).toBeLessThan(150);
-    expect(maxAge).toBeLessThan(200);
-    expect(Math.max(...sizes)).toBeLessThanOrEqual(4);
-    expect(s.window.consumedEvidenceIds).toEqual(
-      s.replay.evidence.map((e) => e.id),
-    );
+    return fullGroup(t);
   });
-  it("incomplete and quantitative missing-operand proposals fail before consumption", async () => {
-    const s = await open();
-    s.pause();
-    await inject(s, story[0], 0);
-    const task = s.capture("Live", s.replay.evidence, []),
-      raw = fixtureProposal(task);
-    expect(() => validate(s.replay, task, { ...raw, complete: false })).toThrow(
-      "malformed",
-    );
-    raw.operations.push({
-      type: "put",
-      id: "bad",
-      coreId: "gases",
-      meaning: {
-        kind: "quantity",
-        expression: ["Equal", "x", ["Divide", 1]],
-        symbols: { x: { label: "x", unit: "m" } },
-        conditions: [],
-      },
-      basis: [
-        { evidenceId: task.evidence[0].id, quote: task.evidence[0].text },
-      ],
-      requires: [],
-    });
-    await expect(s.accept(task, raw)).rejects.toThrow("missing-operand");
-    expect(s.state.revision).toBe(0);
-  });
-  it("explicit no-change differs from unresolved and Stage never consumes again", async () => {
-    const s = await open();
-    for (const i of [0, 1, 2, 3, 5, 6]) await step(s, i);
-    await vi.waitFor(() =>
-      expect(s.state.units["fraction-share"]).toBeDefined(),
-    );
-    expect(Object.values(s.replay.unresolved).map((o) => o.phrase)).toEqual([
-      story[1],
-    ]);
-    expect(Object.values(s.replay.consumed).map((d) => d.status)).toContain(
-      "no-change",
-    );
-    expect(s.window.consumedEvidenceIds).toHaveLength(6);
-    const events = await s.store.read(s.id);
-    for (const e of events)
-      if (e.type === "accepted" && e.accepted.lane === "Stage")
-        expect(e.accepted.dispositions).toEqual([]);
-  });
-  it("relevant dependency change rejects stale Stage; unrelated mainline keeps historical refinement valid and discards attention", async () => {
-    const s = await open();
-    for (const i of [0, 2, 3, 5, 6]) await step(s, i);
-    s.pause();
-    await delay(100);
-    // Use a detached task with a different snapshot identity for explicit conflict checks.
-    const evidence = s.replay.evidence;
-    const stale = s.capture("Stage", evidence, ["gases"]);
-    stale.id += ":stale";
-    s.resume();
-    await step(s, 9);
-    s.pause();
-    await expect(s.accept(stale, fixtureProposal(stale))).rejects.toThrow(
-      "stale-dependency",
-    );
-    const late = s.capture("Stage", s.replay.evidence, ["gases"]);
-    late.id += ":late";
-    late.createdAt -= 1000;
-    s.resume();
-    await step(s, 7);
-    s.pause();
-    const p = fixtureProposal(late);
-    p.attention = { mode: "FOCUS", targets: ["pressure"] };
-    await s.accept(late, p);
-    expect(s.state.currentCoreId).toBe("reactions");
-    expect(
-      s.trace.spans.some(
-        (span) =>
-          span.name === "attention-discarded" &&
-          span.attributes.taskId === late.id,
-      ),
-    ).toBe(true);
-  });
-  it("reload restores accepted state, unresolved obligations and unconsumed evidence from log only", async () => {
-    const s = await open();
-    for (const i of [0, 1, 2]) await step(s, i);
-    s.pause();
-    await inject(s, "Continue.", 3);
-    const before = s.state,
-      obligations = s.replay.unresolved;
-    s.close();
-    const restored = await Session.open(
-      s.id,
-      deterministicInterpreter({ live: 2, stage: 2 }),
-      s.store,
-    );
-    sessions.push(restored);
-    expect(restored.state).toEqual(before);
-    expect(restored.replay.unresolved).toEqual(obligations);
-    expect(restored.attention).toBeNull();
-    await restored.drainLive();
-    expect(restored.window.consumedEvidenceIds).toHaveLength(4);
-  });
-  it("transient interpreter retry uses same task; invalid output does not retry or consume", async () => {
-    let calls = 0;
-    const ids: string[] = [];
-    const s = await open(async (task) => {
-      calls++;
-      ids.push(task.id);
-      if (calls < 3) throw new TransientFailure("temporary");
-      return fixtureProposal(task);
-    });
-    await step(s, 0);
-    expect(calls).toBe(3);
-    expect(new Set(ids).size).toBe(1);
-    const bad = await open(async () => ({ complete: false }));
-    await inject(bad, story[0], 0);
-    await vi.waitFor(() => expect(bad.error).toContain("malformed"));
-    expect(bad.window.consumedEvidenceIds).toHaveLength(0);
-  });
-  it("competing durable writers cannot both append the same prefix", async () => {
-    const store = new EventStore(`competing-${crypto.randomUUID()}`),
-      id = crypto.randomUUID();
-    const first = await Session.open(id, deterministicInterpreter(), store),
-      second = await Session.open(id, deterministicInterpreter(), store);
-    sessions.push(first, second);
-    first.pause();
-    second.pause();
-    const results = await Promise.allSettled([
-      inject(first, story[0], 0),
-      inject(second, story[2], 1),
-    ]);
-    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-    expect(await store.read(id)).toHaveLength(1);
-  });
+  await admit(s, "Please");
+  await vi.waitFor(() => expect(calls).toBe(1));
+  await admit(s, "continue.");
+  release();
+  await s.drainLive();
+  await s.drainLive();
+  expect(calls).toBe(2);
+  expect(s.window.unaccountedChars).toBe(0);
 });
-it("local correction keeps identity; invalidation must close required dependencies", async () => {
+it("representation unsupported keeps accepted meaning and creates no semantic obligation", async () => {
   const s = await open();
-  for (const i of [0, 2, 3, 9]) await step(s, i);
   s.pause();
-  expect(s.state.units.pressure.version).toBe(2);
-  expect(s.state.units.fraction.valid).toBe(true);
-  await inject(s, "Withdraw both relationships.", 10);
-  const task = s.capture(
-    "Live",
-    s.replay.evidence.filter((e) => !s.replay.consumed[e.id]),
-    ["gases"],
-  );
-  const raw = fixtureProposal(task),
-    basis = [{ evidenceId: task.evidence[0].id, quote: task.evidence[0].text }];
-  raw.operations = [{ type: "invalidate", id: "pressure", basis }];
-  raw.dispositions[0].status = "established";
-  await expect(s.accept(task, raw)).rejects.toThrow(
-    "invalid-semantic-dependency",
-  );
-  raw.operations.unshift({ type: "invalidate", id: "fraction", basis });
-  await s.accept(task, raw);
-  expect(s.state.units.pressure.valid).toBe(false);
-  expect(s.state.units.mixture.valid).toBe(true);
-});
-it("rejects dependencies that exist durably but were omitted from the host read scope", async () => {
-  const s = await open();
-  for (const i of [0, 2]) await step(s, i);
-  s.pause();
-  await inject(s, "This explanation depends on the earlier relationship.", 10);
-  const task = s.capture("Live", [s.replay.evidence.at(-1)!], []);
-  const raw = fixtureProposal(task);
-  const basis = [
-    { evidenceId: task.evidence[0].id, quote: task.evidence[0].text },
-  ];
-  raw.operations = [
-    { type: "core", id: "new", title: "Explanation", basis },
-    {
-      type: "put",
-      id: "explanation",
-      coreId: "new",
-      basis,
-      requires: ["pressure"],
-      meaning: {
-        kind: "statement",
-        text: "This explanation depends on the earlier relationship.",
-      },
+  await admit(s, "The function is y equals x plus one.");
+  const t = s.capture("Live");
+  const d = establish(t, currentQuote(s, t), {
+    kind: "quantity",
+    expression: ["Equal", "y", ["Add", "x", 1]],
+    symbols: {
+      y: { label: "dependent", unit: "dimensionless" },
+      x: { label: "independent", unit: "dimensionless" },
     },
-  ];
-  raw.dispositions[0].status = "established";
-  await expect(s.accept(task, raw)).rejects.toThrow(
-    "uncaptured-semantic-dependency",
-  );
-  expect(s.window.consumedEvidenceIds).toHaveLength(2);
+    conditions: [],
+    domain: [0, 5],
+    independent: "x",
+  });
+  await s.accept(t, d);
+  expect(s.state.revision).toBeGreaterThan(0);
+  expect(s.replay.unresolved).toEqual({});
+});
+it("authored synthetic story uses the new wire and preserves math, correction, relation and Cue history", async () => {
+  const s = await open(deterministicInterpreter({ live: 1, stage: 5 }));
+  for (const i of [0, 2, 3, 4, 7, 8, 9, 10]) {
+    await inject(s, story[i], s.replay.evidence.length);
+    await s.drainLive();
+  }
+  const units = Object.values(s.state.units);
+  expect(
+    units.some(
+      (u) =>
+        u.meaning.kind === "quantity" &&
+        u.meaning.symbols.p_i &&
+        u.version === 2,
+    ),
+  ).toBe(true);
+  expect(units.some((u) => u.meaning.kind === "relation")).toBe(true);
+  expect(s.state.cue?.origin).toBe("TEACHER");
+  expect(s.window.unaccountedChars).toBe(0);
+});
+
+it("ordered groups may extend a Core established by an earlier group in the same decision", async () => {
+  const s = await open(deterministicInterpreter({ live: 1, stage: 5 }));
+  s.pause();
+  for (const i of [0, 2, 3])
+    await inject(s, story[i], s.replay.evidence.length);
+  s.resume();
+  await s.drainLive();
+  expect(Object.keys(s.state.cores)).toHaveLength(1);
+  expect(Object.keys(s.state.units)).toHaveLength(3);
+  expect(s.window.unaccountedChars).toBe(0);
 });

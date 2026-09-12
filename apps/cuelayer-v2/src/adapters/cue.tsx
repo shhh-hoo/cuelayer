@@ -55,7 +55,12 @@ export function TeachingCue({
   return (
     <div className="cue-region">
       <div ref={reference} className="cue-anchor" />
-      <aside ref={floating} className="teaching-cue" data-testid="teaching-cue">
+      <aside
+        ref={floating}
+        className="teaching-cue"
+        data-testid="teaching-cue"
+        data-cue-version={cueVersion}
+      >
         <small>THINK ABOUT</small>
         <p>{text}</p>
       </aside>

@@ -1,7 +1,11 @@
 import { test, expect } from "./fixtures";
 import type { WebSocketRoute } from "@playwright/test";
-import type { Task, Proposal, Operation } from "../../src/contract";
-import { hostSlots } from "../../src/model-context";
+import type { LiveRequest } from "../../src/projection";
+import {
+  projectMeaning,
+  type LiveDecision,
+  type WireOperation,
+} from "../../src/live-wire";
 
 test.use({
   launchOptions: {
@@ -13,45 +17,57 @@ test.use({
 });
 const text =
   "Partial pressure is mole fraction times total pressure for an ideal gas mixture; pressures are in kPa and mole fraction is dimensionless.";
-async function proposed(task: Task): Promise<Proposal> {
-  const slots = await hostSlots(task),
-    basis = [{ evidenceId: task.evidence[0].id, quote: task.evidence[0].text }];
-  const operations: Operation[] = Object.keys(task.state.units).length
+async function proposed(task: LiveRequest): Promise<LiveDecision> {
+  const basis = [
+    {
+      source: task.source.source,
+      start: task.source.start,
+      end: task.source.end,
+    },
+  ];
+  const operations: WireOperation[] = task.units.length
     ? []
     : [
-        { type: "core", id: slots.newCoreIds[0], title: "Gas mixture", basis },
+        { type: "core", id: task.newCores[0], label: "Gas mixture", basis },
         {
           type: "put",
-          id: slots.newUnitIds[0],
-          coreId: slots.newCoreIds[0],
+          id: task.newUnits[0],
+          coreId: task.newCores[0],
           basis,
-          requires: [],
-          meaning: {
-            kind: "quantity",
-            expression: ["Equal", "p_i", ["Multiply", "x_i", "P_total"]],
-            symbols: {
-              p_i: { label: "partial pressure", unit: "kPa" },
-              x_i: { label: "mole fraction", unit: "1" },
-              P_total: { label: "total pressure", unit: "kPa" },
+          dependencies: [],
+          meaning: projectMeaning(
+            {
+              kind: "quantity",
+              expression: ["Equal", "p_i", ["Multiply", "x_i", "P_total"]],
+              symbols: {
+                p_i: { label: "partial pressure", unit: "kPa" },
+                x_i: { label: "mole fraction", unit: "1" },
+                P_total: { label: "total pressure", unit: "kPa" },
+              },
+              conditions: ["ideal gas mixture"],
             },
-            conditions: ["ideal gas mixture"],
-          },
+            (x) => x,
+          ),
         },
-        { type: "mainline", coreId: slots.newCoreIds[0], basis },
+        { type: "mainline", coreId: task.newCores[0], basis },
       ];
   return {
-    version: "v2-proposal-1",
-    taskId: task.id,
-    complete: true,
-    operations,
-    dispositions: task.evidence.map((e) => ({
-      evidenceId: e.id,
-      status: operations.length ? "established" : "no-change",
-    })),
-    unresolved: [],
-    resolve: [],
-    attention: operations.length
-      ? { targets: [slots.newUnitIds[0]], mode: "FOCUS" }
+    scope: task.scope,
+    groups: [
+      operations.length
+        ? {
+            throughBoundary: task.source.end,
+            outcome: "APPLY",
+            operations,
+            resolutions: [],
+          }
+        : { throughBoundary: task.source.end, outcome: "NO_CHANGE" },
+    ],
+    suffixStatus: "NONE",
+    contextRequest: null,
+    reviewRequests: [],
+    attentionCandidate: operations.length
+      ? { targets: [task.newUnits[0]], mode: "FOCUS" }
       : null,
   };
 }
@@ -73,7 +89,7 @@ test("real route: official microphone/ASR adapters, concurrent finals, complete 
   let socket: WebSocketRoute | undefined,
     audioChunks = 0,
     forceCalls = 0;
-  const tasks: Task[] = [];
+  const tasks: LiveRequest[] = [];
   await page.route("**/api/v2/speech-token", (r) =>
     r.fulfill({ json: { token: "offline-test" } }),
   );
@@ -95,7 +111,7 @@ test("real route: official microphone/ASR adapters, concurrent finals, complete 
     });
   });
   await page.route("**/api/v2/live", async (r) => {
-    const task = r.request().postDataJSON() as Task;
+    const task = r.request().postDataJSON() as LiveRequest;
     tasks.push(task);
     await new Promise((resolve) => setTimeout(resolve, 300));
     await r.fulfill({
@@ -136,7 +152,9 @@ test("real route: official microphone/ASR adapters, concurrent finals, complete 
     .toBe(3);
   await expect(page.locator("[data-unit] .katex").first()).toBeVisible();
   const snapshot = await page.evaluate(() => window.v2.snapshot());
-  expect(tasks.map((t) => t.evidence.length)).toEqual([1, 2]);
+  expect(tasks).toHaveLength(2);
+  expect(tasks[1].source.text).toContain("relationship");
+  expect(tasks[1]).not.toHaveProperty("dependencies");
   expect(
     snapshot.spans.some(
       (s) => s.name === "learner-visible-dom" && s.attributes.complete,
@@ -148,6 +166,20 @@ test("real route: official microphone/ASR adapters, concurrent finals, complete 
   await expect
     .poll(() => page.evaluate(() => window.v2.mic.status))
     .toBe("stopped");
+  // Reproduce a worklet callback queued before stop and delivered after provider close.
+  await page.evaluate(() => {
+    const recorder = (window.v2.mic as any).recorder;
+    recorder.dispatchTypedEvent(
+      "audio",
+      Object.assign(new Event("audio"), { data: new Float32Array(128) }),
+    );
+  });
+  expect(
+    await page.evaluate(() => ({
+      status: window.v2.mic.status,
+      error: window.v2.mic.error,
+    })),
+  ).toEqual({ status: "stopped", error: null });
   await page.reload();
   await page.waitForFunction(() => Boolean(window.v2));
   expect(await page.evaluate(() => window.v2.session.state)).toEqual(
@@ -166,13 +198,17 @@ test("real adapter's schema-valid fabricated grounding never reaches accepted st
 }) => {
   await page.route("**/api/v2/live", async (r) => {
     const p = await proposed(r.request().postDataJSON());
-    p.operations[0].basis[0].quote = "Fabricated unsupported evidence";
+    if (p.groups[0].outcome !== "APPLY")
+      throw new Error("fixture-expected-apply");
+    p.groups[0].operations[0].basis[0].end = "bUNISSUED";
     await r.fulfill({ contentType: "application/x-ndjson", body: stream(p) });
   });
   await page.goto(`/?services=real&session=${crypto.randomUUID()}`);
   await page.waitForFunction(() => Boolean(window.v2));
   await page.evaluate((text) => window.v2.inject(text), text);
-  await expect(page.getByRole("alert")).toContainText("ungrounded-quote");
+  await expect(page.getByRole("alert")).toContainText(
+    "unknown-or-cross-task-source-alias",
+  );
   expect(await page.evaluate(() => window.v2.session.state.revision)).toBe(0);
   expect(
     await page.evaluate(() => window.v2.session.window.consumedEvidenceIds),
@@ -184,47 +220,74 @@ test("Teaching Representation: new relationship is dominant, required earlier eq
   page,
 }) => {
   await page.route("**/api/v2/live", async (r) => {
-    const task: Task = r.request().postDataJSON(),
+    const task: LiveRequest = r.request().postDataJSON(),
       p = await proposed(task);
-    const prior = Object.values(task.state.units);
+    const prior = [...task.units].sort(
+      (a, b) =>
+        Number(
+          b.meaning.kind === "quantity" &&
+            b.meaning.symbols.some((s) => s.symbol === "p_i"),
+        ) -
+        Number(
+          a.meaning.kind === "quantity" &&
+            a.meaning.symbols.some((s) => s.symbol === "p_i"),
+        ),
+    );
     if (prior.length) {
       const basis = [
-        { evidenceId: task.evidence[0].id, quote: task.evidence[0].text },
+        {
+          source: task.source.source,
+          start: task.source.start,
+          end: task.source.end,
+        },
       ];
-      const id =
-        prior.length === 1
-          ? (await hostSlots(task)).newUnitIds[0]
-          : prior[1].id;
-      p.operations = [
+      const id = prior.length === 1 ? task.newUnits[0] : prior[1].id;
+      const operations: WireOperation[] = [
         {
           type: "put",
           id,
-          coreId: prior[0].coreId,
+          coreId: prior[0].core,
           basis,
-          requires: [prior[0].id],
-          meaning: {
-            kind: "quantity",
-            expression: ["Equal", "x_i", ["Divide", "n_i", "n_total"]],
-            symbols: {
-              x_i: { label: "mole fraction", unit: "1" },
-              n_i: {
-                label: "amount of this gas",
-                unit: prior.length === 1 ? "mol" : "mmol",
+          dependencies: [{ target: prior[0].id, kind: "IDENTITY" }],
+          meaning: projectMeaning(
+            {
+              kind: "quantity",
+              expression: ["Equal", "x_i", ["Divide", "n_i", "n_total"]],
+              symbols: {
+                x_i: { label: "mole fraction", unit: "1" },
+                n_i: {
+                  label: "amount of this gas",
+                  unit: prior.length === 1 ? "mol" : "mmol",
+                },
+                n_total: {
+                  label: "total amount of gas",
+                  unit: prior.length === 1 ? "mol" : "mmol",
+                },
               },
-              n_total: {
-                label: "total amount of gas",
-                unit: prior.length === 1 ? "mol" : "mmol",
-              },
+              conditions: [],
             },
-            conditions: [],
-          },
+            (x) => x,
+          ),
         },
       ];
-      p.dispositions = task.evidence.map((e) => ({
-        evidenceId: e.id,
-        status: "established",
-      }));
-      p.attention = { mode: "FOCUS", targets: [id] };
+      if (prior.length > 1) {
+        const put = operations[0];
+        if (put.type !== "put" || put.meaning.kind !== "quantity")
+          throw new Error("fixture-quantity");
+        operations[0] = {
+          type: "revise",
+          id,
+          change: { field: "symbols", value: put.meaning.symbols },
+          basis,
+        };
+      }
+      p.groups[0] = {
+        outcome: "APPLY",
+        throughBoundary: task.source.end,
+        operations,
+        resolutions: [],
+      };
+      p.attentionCandidate = { mode: "FOCUS", targets: [id] };
     }
     await r.fulfill({ contentType: "application/x-ndjson", body: stream(p) });
   });

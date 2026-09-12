@@ -10,39 +10,31 @@ import {
 } from "../src/adapters/microphone";
 import { Trace } from "../src/adapters/trace";
 import { liveRequest, modelProfile } from "../server/live";
-import { hostSlots } from "../src/model-context";
 import type { Task } from "../src/contract";
 import { validate } from "../src/acceptance";
 
-const task: Task = {
-  id: "host-task-1",
-  lane: "Live",
-  evidence: [],
-  dependencies: { mainline: 0, cue: 0 },
-  state: {
-    revision: 0,
-    cores: {},
-    units: {},
-    currentCoreId: null,
-    mainlineVersion: 0,
-    cue: null,
-    cueVersion: 0,
+import { emptyReplay } from "../src/contract";
+import { captureLive } from "../src/projection";
+import { recorded } from "../src/source";
+import { waitDecision } from "./frontier-fixtures";
+const replay = emptyReplay();
+replay.evidence = [
+  {
+    id: "e",
+    run: "r",
+    source: "s",
+    text: "Teaching",
+    start: 0,
+    end: 1,
+    receivedAt: 0,
+    audioObservedAt: null,
+    sequence: 1,
+    stability: "COMMITTED",
   },
-  obligations: [],
-  allowedCores: [],
-  createdAt: 0,
-  attentionEpoch: 0,
-};
-const proposal = {
-  version: "v2-proposal-1",
-  taskId: task.id,
-  complete: true,
-  operations: [],
-  dispositions: [],
-  unresolved: [],
-  resolve: [],
-  attention: null,
-};
+];
+replay.recorded = recorded(replay.evidence);
+const task = captureLive(replay, "test", "test1", 0);
+const proposal = waitDecision();
 function response(
   text: string,
   terminal = "response.completed",
@@ -81,31 +73,30 @@ function response(
 }
 describe("official SDK transport → existing proposal port", () => {
   it("fixes Current model profile, includes only bounded host context and issues stable IDs", async () => {
-    const request = await liveRequest(task);
+    const request = await liveRequest(task.capture!.request);
     expect(request).toMatchObject({
       model: "gpt-5.6-luna",
       reasoning: { effort: "low" },
       max_output_tokens: 8192,
       store: false,
-      text: { format: { type: "json_schema", strict: false } },
+      text: { format: { type: "json_schema", strict: true } },
     });
     expect(modelProfile.sdkRetries).toBe(0);
-    expect(JSON.parse(request.input[1].content).task.dependencies).toEqual(
-      task.dependencies,
+    expect(JSON.parse(request.input[1].content)).not.toHaveProperty(
+      "dependencies",
     );
-    expect(await hostSlots(task)).toEqual(
-      await hostSlots(structuredClone(task)),
-    );
+    expect(JSON.parse(request.input[1].content).source.role).toBe("PROCESS");
+    expect(task.capture?.cores).toEqual(structuredClone(task).capture?.cores);
     await expect(
       liveRequest({
-        ...task,
+        ...task.capture!.request,
         obligations: [
           {
             id: "large",
             phrase: "x".repeat(32000),
-            evidenceIds: [],
-            coreId: null,
-            createdAt: 0,
+            kind: "CONTEXT_REQUIRED",
+            source: "s0",
+            core: null,
           },
         ],
       }),
@@ -161,7 +152,7 @@ describe("official SDK transport → existing proposal port", () => {
         () => undefined,
         vi.fn(async () => response(JSON.stringify(raw))) as typeof fetch,
       )(task, new AbortController().signal, () => {}),
-    ).rejects.toThrow("model-unissued-core-id");
+    ).rejects.toThrow("model-schema-invalid");
   });
   it("streamed output cannot publish before complete response and grounding validation", async () => {
     const store = new EventStore(`v2-provider-${crypto.randomUUID()}`),
@@ -301,100 +292,6 @@ it("ignores empty provider finals without blocking later nonempty evidence", asy
   expect(failed).not.toHaveBeenCalled();
   expect(s.replay.evidence.map((e) => e.sequence)).toEqual([1]);
   expect(ingress.pending.size).toBe(0);
-  s.close();
-  await store.delete();
-});
-it("bounds unresolved context and permits grounded continuation without re-consuming old fragments", async () => {
-  const store = new EventStore(`v2-context-${crypto.randomUUID()}`);
-  const s = await Session.open(
-    crypto.randomUUID(),
-    async () => proposal,
-    store,
-  );
-  s.pause();
-  for (let i = 0; i < 18; i++) {
-    await s.commitEvidence({
-      id: `e${i}`,
-      run: "r",
-      source: String(i),
-      text: `fragment ${i}`,
-      start: i,
-      end: i + 1,
-      receivedAt: performance.now(),
-      audioObservedAt: null,
-      stability: "COMMITTED",
-    });
-    const t = s.capture("Live", [s.replay.evidence.at(-1)!], []);
-    await s.accept(t, {
-      ...proposal,
-      taskId: t.id,
-      dispositions: [{ evidenceId: `e${i}`, status: "unresolved" }],
-      unresolved: [
-        { evidenceId: `e${i}`, phrase: `fragment ${i}`, coreId: null },
-      ],
-    });
-  }
-  await s.commitEvidence({
-    id: "tail",
-    run: "r",
-    source: "tail",
-    text: "completes the relationship",
-    start: 18,
-    end: 19,
-    receivedAt: performance.now(),
-    audioObservedAt: null,
-    stability: "COMMITTED",
-  });
-  const t = s.capture("Live", [s.replay.evidence.at(-1)!], []);
-  expect(t.obligations).toHaveLength(16);
-  expect(t.contextEvidence?.map((e) => e.id)).toEqual(
-    Array.from({ length: 16 }, (_, i) => `e${i + 2}`),
-  );
-  expect(t.omittedObligations).toBe(2);
-  expect(Object.keys(s.window.unresolved)).toHaveLength(18);
-  const raw = {
-    ...proposal,
-    taskId: t.id,
-    operations: [
-      {
-        type: "core",
-        id: "core",
-        title: "Relationship",
-        basis: [
-          { evidenceId: "e17", quote: "fragment 17" },
-          { evidenceId: "tail", quote: "completes the relationship" },
-        ],
-      },
-    ],
-    dispositions: [{ evidenceId: "tail", status: "established" }],
-    resolve: ["obligation:e17"],
-  };
-  expect(() => validate(s.replay, { ...t, contextEvidence: [] }, raw)).toThrow(
-    "ungrounded-quote",
-  );
-  expect(() =>
-    validate(
-      s.replay,
-      {
-        ...t,
-        contextEvidence: [{ ...t.contextEvidence![0], text: "fabricated" }],
-      },
-      raw,
-    ),
-  ).toThrow("uncommitted-evidence");
-  expect(() =>
-    validate(s.replay, t, {
-      ...raw,
-      dispositions: [
-        { evidenceId: "e17", status: "no-change" },
-        ...raw.dispositions,
-      ],
-    }),
-  ).toThrow("incomplete-consumption");
-  await s.accept(t, raw);
-  expect(s.window.consumedEvidenceIds).toHaveLength(19);
-  expect(Object.keys(s.window.unresolved)).toHaveLength(17);
-  expect(s.replay.consumed.e17.status).toBe("unresolved");
   s.close();
   await store.delete();
 });

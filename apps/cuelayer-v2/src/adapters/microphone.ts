@@ -167,6 +167,7 @@ export class Microphone {
   private recorder: PCMRecorder | null = null;
   private context: AudioContext | null = null;
   private ingress: RealtimeIngress | null = null;
+  private acquiringAudio = false;
   status = "idle";
   error: string | null = null;
   constructor(
@@ -181,6 +182,7 @@ export class Microphone {
   }
   private fail = (reason: string) => {
     this.error = reason;
+    this.acquiringAudio = false;
     this.recorder?.stopRecording();
     this.status = "failed";
     this.session.trace.mark("speech-failure", { reason });
@@ -228,6 +230,8 @@ export class Microphone {
       await client.start(token, configuration);
       this.recorder = new PCMRecorder(workletUrl);
       this.recorder.addEventListener("audio", ({ data }) => {
+        // Worklet messages already queued at stop must not write to a closed provider.
+        if (!this.acquiringAudio) return;
         try {
           client.sendAudio(data as Float32Array<ArrayBuffer>); // Provider handoff ALWAYS precedes diagnostics.
           ingress.clock.observe(data.length, this.context!.sampleRate);
@@ -235,6 +239,7 @@ export class Microphone {
           this.fail("speech-audio-send");
         }
       });
+      this.acquiringAudio = true;
       await this.recorder.startRecording({ audioContext: this.context });
       this.status = "listening";
       this.session.trace.mark("microphone-started", { run: ingress.run });
@@ -252,7 +257,9 @@ export class Microphone {
       await this.context.close();
     }
   }
-  async stop() {
+  async stop(finalize = true) {
+    const wasListening = this.status === "listening";
+    this.acquiringAudio = false;
     this.recorder?.stopRecording();
     this.status = "draining";
     this.changed();
@@ -270,6 +277,18 @@ export class Microphone {
       this.fail(error instanceof Error ? error.message : "speech-stop-failed");
     } finally {
       if (this.context?.state !== "closed") await this.context?.close();
+      this.changed();
+    }
+    if (finalize && wasListening && this.status === "stopped") {
+      try {
+        await this.session.finish();
+      } catch (error) {
+        this.session.error =
+          error instanceof Error ? error.message : "final-drain-failed";
+        this.session.trace.mark("final-drain-failed", {
+          reason: this.session.error,
+        });
+      }
       this.changed();
     }
   }
