@@ -226,6 +226,7 @@ export function validateScenario(value) {
         "exact_claims",
         "expected_outcome",
         "relation",
+        "proposition_v2",
       ].some((k) => p.parameters[k])
     )
       throw Error("undefined-semantic-predicate");

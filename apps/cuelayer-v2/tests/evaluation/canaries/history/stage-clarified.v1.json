@@ -1,6 +1,6 @@
 {
   "scenario_id": "stage-clarified",
-  "version": "gate3b-stage-proposition-2",
+  "version": "gate3b-contract-1",
   "review_status": "AUTHORED",
   "source": {
     "kind": "authored",
@@ -71,22 +71,13 @@
       ],
       "predicate_id": "meaning.matches",
       "parameters": {
-        "proposition_v2": {
-          "legal_kinds": ["statement", "annotation"],
-          "required_sources": ["e1", "e2"],
-          "anchor_source": "e0",
-          "anchor_claim": "A mole fraction is a ratio of amounts.",
-          "claim_pattern": "^(?:a |the )?mole fraction determines (?:a |the |its )?component\\x27s share of total pressure\\.?$",
-          "reversed_pattern": "^(?:a |the )?(?:component\\x27s share of )?total pressure determines (?:a |the |its )?mole fraction\\.?$",
-          "relation_roles": {
-            "subject": "mole fraction",
-            "relation": "determines",
-            "object": "component's share of total pressure"
-          },
-          "require_identity_continuity": true,
-          "require_obligation_resolution": true,
-          "preserve_accounted": true
-        }
+        "selector": {
+          "kind": "annotation",
+          "source_any": ["e1", "e2"]
+        },
+        "exact_claims": [
+          "Mole fraction determines a component's share of total pressure."
+        ]
       },
       "evidence_refs": ["e0", "e1", "e2"],
       "severity": "hard",
@@ -184,9 +175,9 @@
   ],
   "adjudication_rules": [
     {
-      "rule_id": "stage-grounding-rubric-2",
+      "rule_id": "stage-grounding-rubric-1",
       "scope": ["stage-disposition", "stage-meaning"],
-      "rubric": "Only the frozen captured evidence and accepted units may support claims. Without clarification, retain the reference without inventing endpoints. With clarification, useful resolution must bind the mole fraction to the component pressure share, cite original and clarifying evidence, preserve existing identities, and leave A unchanged. Exact wording may differ if all roles and constraints are entailed; unrecognized wording requires a signed adjudication record under this rule. Unsupported assertions and false endpoints are hard semantic FAIL. Representation kind alone does not determine semantic correctness: statement and annotation are legal. The whole proposition must bind the declared subject/relation/object, retain the existing mole-fraction identity, cite original and clarifying evidence and resolve the captured obligation without moving A. Reversed endpoints, additional unsupported assertions, missing provenance, changed identity or an unresolved obligation fail. Other unrecognized complete paraphrases require signed adjudication; no keyword-only matches."
+      "rubric": "Only the frozen captured evidence and accepted units may support claims. Without clarification, retain the reference without inventing endpoints. With clarification, useful resolution must bind the mole fraction to the component pressure share, cite original and clarifying evidence, preserve existing identities, and leave A unchanged. Exact wording may differ if all roles and constraints are entailed; unrecognized wording requires a signed adjudication record under this rule. Unsupported assertions and false endpoints are hard semantic FAIL."
     }
   ],
   "preconditions": {

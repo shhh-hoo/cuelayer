@@ -1,3 +1,4 @@
+import { stagePropositionV2 } from "./stage-oracle-v2.mjs";
 import {
   expectations,
   validateScenario,
@@ -194,6 +195,7 @@ export function predicate(p, ctx) {
     case "meaning.matches": {
       if (!local.response_complete)
         return absent("model-response-not-observed");
+      if (q.proposition_v2) return stagePropositionV2(local, q.proposition_v2);
       if (local.semantic_projection_error)
         return review("semantic-decoding:" + local.semantic_projection_error);
       if (q.expected_outcome)

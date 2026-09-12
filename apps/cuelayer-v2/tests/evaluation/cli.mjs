@@ -53,10 +53,19 @@ export async function run() {
         await import("./execution-manifest.mjs");
       const result =
         command === "prepare-canary"
-          ? await prepareExecution(
-              required("baseline-manifest"),
-              required("out"),
-            )
+          ? option("previous-execution")
+            ? await (
+                await import("./repair-manifest.mjs")
+              ).prepareRepairExecution(
+                required("previous-execution"),
+                required("product"),
+                required("out"),
+                option("continue-from") ? required("continue-from") : null,
+              )
+            : await prepareExecution(
+                required("baseline-manifest"),
+                required("out"),
+              )
           : await verifyExecution(required("manifest"));
       console.log(
         JSON.stringify({

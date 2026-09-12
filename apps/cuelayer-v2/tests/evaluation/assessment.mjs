@@ -204,6 +204,9 @@ export function assessCanary(product, scenario, snapshot) {
   for (const p of expectations(scenario)) {
     observations[p.expectation_id] = {
       ...response,
+      ...(p.parameters.proposition_v2
+        ? { stage_prestate: prestate, stage_task: task }
+        : {}),
       projection,
       location: {
         causal_order: p.owner_layer === "C" ? 1 : p.owner_layer === "D" ? 2 : 3,

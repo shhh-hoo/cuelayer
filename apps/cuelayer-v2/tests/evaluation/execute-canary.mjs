@@ -624,6 +624,17 @@ async function execute(
     started_at: new Date().toISOString(),
   });
   const discipline = new ExecutionDiscipline(manifest.cohort, manifest.profile);
+  const continuation = manifest.continuation;
+  if (continuation) {
+    // This separately authorized administrative amendment changes only the budget.
+    // Keep prior paid evidence and never dispatch an already exercised canary.
+    discipline.budget.profile = { ...manifest.profile, max_cost_usd: Infinity, max_requests: Infinity };
+    discipline.budget.calls = structuredClone(continuation.prior_budget);
+    for (const row of continuation.retained_runs) {
+      const index = discipline.runs.findIndex((r) => r.run_id === row.run_id);
+      discipline.runs[index] = structuredClone(row);
+    }
+  }
   discipline.preflight("PASS");
   const results = [];
   let current = null;
@@ -632,6 +643,7 @@ async function execute(
     if (!apiKey) throw Error("openai-credential-missing");
     for (const { snapshot } of verified.snapshots) {
       if (discipline.stopped) break;
+      if (continuation?.retained_runs.some((r) => r.run_id === snapshot.snapshot_id)) continue;
       await checkIntegrity();
       validateAuthorization(manifest, authorization);
       current = snapshot.snapshot_id;
@@ -650,6 +662,13 @@ async function execute(
       );
       // Raw attempts, parser, assessment and actual host events have all been persisted.
       discipline.finish(current, result);
+      if (continuation?.pending_adjudication_policy &&
+          result.adjudication_status === "ADJUDICATION_REQUIRED" &&
+          !result.hard_fail && result.status !== "INVALID") {
+        // Explicitly authorized collection preserves pending status and evidence.
+        // It never resolves the adjudication or enables a subsequent Gate phase.
+        discipline.stopped = false;
+      }
       results.push(result);
       current = null;
     }
@@ -670,7 +689,8 @@ async function execute(
     ? "PASS"
     : discipline.runs.some((r) => r.status === "FAIL")
       ? "FAIL"
-      : results.some((r) => r.adjudication_status === "ADJUDICATION_REQUIRED")
+      : results.some((r) => r.adjudication_status === "ADJUDICATION_REQUIRED") ||
+          discipline.runs.some((r) => r.result_recorded && r.status === null)
         ? null
         : "INVALID";
   const report = {
@@ -680,6 +700,11 @@ async function execute(
     dependency_mode: mode,
     canaries: discipline.runs,
     actual_provider_attempts: discipline.budget.calls.length,
+    ...(continuation ? {
+      prior_provider_attempts: continuation.prior_budget.length,
+      new_provider_attempts: discipline.budget.calls.length - continuation.prior_budget.length,
+      continuation,
+    } : {}),
     real_provider_attempts:
       mode === "LIVE" ? discipline.budget.calls.length : 0,
     budget: discipline.budget.calls,

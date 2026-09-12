@@ -3,7 +3,8 @@
   "git": {
     "deploymentEnabled": {
       "fix/cuelayer-v2-incremental-semantic-frontier": false,
-      "chore/cuelayer-v2-evaluation-design": false
+      "chore/cuelayer-v2-evaluation-design": false,
+      "fix/cuelayer-v2-stage-oracle-v2": false
     }
   },
   "functions": {
