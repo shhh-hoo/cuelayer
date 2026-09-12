@@ -297,6 +297,7 @@ export function validateAuthorization(
     throw Error("authorization-expired-or-not-yet-valid");
   if (manifest.continuation && (
     authorization.allow_budget_cap_removal !== true ||
+    authorization.allow_remaining_evidence_collection !== true ||
     authorization.continuation_sha256 !== sha256(manifest.continuation)
   )) throw Error("continuation-authorization-required");
   return true;

@@ -106,9 +106,10 @@ async function source(parentPath, productRoot) {
 
 export async function continuationRecord(manifestPath) {
   const previous = await readJSON(manifestPath);
-  if (sha256(previous) !== "e802c0443c43da0e118beab63ab56d1c026662f5686af7765f0b4fefe28f332f")
+  if (!["e802c0443c43da0e118beab63ab56d1c026662f5686af7765f0b4fefe28f332f", "2bbafc31112cfdf82a939412065b4e5767d0a9bd79a3ba031ea7b182ea2ab38a"].includes(sha256(previous)))
     throw Error("unapproved-continuation-source");
   const directory = resolve(manifestPath, "..");
+  if (previous.continuation) await continuationRecord(previous.continuation.previous_manifest);
   const seal = await readJSON(resolve(directory, "live-evidence-seal.json"));
   for (const f of seal.files)
     if (sha256(await readFile(resolve(directory, f.path))) !== f.sha256)
@@ -119,10 +120,11 @@ export async function continuationRecord(manifestPath) {
   for (const row of result.canaries) {
     const calls = result.budget.filter((c) => c.run_id === row.run_id);
     if (calls.length) {
-      const detail = await readJSON(resolve(directory, row.run_id, "result.json"));
-      if (detail.hard_fail || detail.status === "INVALID" || detail.adjudication_status === "ADJUDICATION_REQUIRED")
+      const evidence = row.evidence ?? resolve(directory, row.run_id, "result.json");
+      const detail = await readJSON(evidence);
+      if (detail.hard_fail || detail.status === "INVALID")
         throw Error("continuation-hard-stop");
-      retained.push({ ...row, evidence: resolve(directory, row.run_id, "result.json") });
+      retained.push({ ...row, evidence });
     } else {
       if (row.started) {
         const detail = await readJSON(resolve(directory, row.run_id, "result.json"));
@@ -132,7 +134,7 @@ export async function continuationRecord(manifestPath) {
       remaining.push(row.run_id);
     }
   }
-  if (retained.length !== 1 || retained[0].run_id !== "quantitative" || remaining.join(",") !== CANARIES.slice(1).join(","))
+  if (retained.map((r) => r.run_id).join(",") !== CANARIES.slice(0, retained.length).join(",") || remaining.join(",") !== CANARIES.slice(retained.length).join(","))
     throw Error("continuation-cohort-drift");
   return {
     identity: "gate3b-budget-amendment-continuation-1",
@@ -144,7 +146,8 @@ export async function continuationRecord(manifestPath) {
     remaining_canaries: remaining,
     prior_budget: result.budget,
     budget_override: { max_cost_usd: null, max_requests: null },
-    reason: "User explicitly removed usage limits and instructed completion of the remaining frozen canaries; no replacement provider run.",
+    pending_adjudication_policy: "Collect the remaining same-cohort requests without resolving or passing pending items; no later Gate phase is eligible.",
+    reason: "User instructed completion of all tests without usage limits. Retain all already-dispatched results, including unresolved adjudication. This is evidence collection, not a claim of preregistered Gate progression.",
   };
 }
 

@@ -662,6 +662,13 @@ async function execute(
       );
       // Raw attempts, parser, assessment and actual host events have all been persisted.
       discipline.finish(current, result);
+      if (continuation?.pending_adjudication_policy &&
+          result.adjudication_status === "ADJUDICATION_REQUIRED" &&
+          !result.hard_fail && result.status !== "INVALID") {
+        // Explicitly authorized collection preserves pending status and evidence.
+        // It never resolves the adjudication or enables a subsequent Gate phase.
+        discipline.stopped = false;
+      }
       results.push(result);
       current = null;
     }
@@ -682,7 +689,8 @@ async function execute(
     ? "PASS"
     : discipline.runs.some((r) => r.status === "FAIL")
       ? "FAIL"
-      : results.some((r) => r.adjudication_status === "ADJUDICATION_REQUIRED")
+      : results.some((r) => r.adjudication_status === "ADJUDICATION_REQUIRED") ||
+          discipline.runs.some((r) => r.result_recorded && r.status === null)
         ? null
         : "INVALID";
   const report = {
