@@ -1,0 +1,323 @@
+{
+  "scenario_id": "administration",
+  "version": "gate3b-contract-1",
+  "review_status": "AUTHORED",
+  "source": {
+    "kind": "authored",
+    "identity": "frontier-authored-1"
+  },
+  "duration_ms": 1500,
+  "transcript_events": [
+    {
+      "event_id": "e0",
+      "at_ms": 0,
+      "text": "Please"
+    },
+    {
+      "event_id": "e1",
+      "at_ms": 300,
+      "text": "open your books"
+    },
+    {
+      "event_id": "e2",
+      "at_ms": 600,
+      "text": "to the next page."
+    },
+    {
+      "event_id": "e3",
+      "at_ms": 900,
+      "text": "We will begin"
+    },
+    {
+      "event_id": "e4",
+      "at_ms": 1200,
+      "text": "in a moment."
+    }
+  ],
+  "semantic_checkpoints": [
+    {
+      "expectation_id": "meaning",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-meaning",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "expected_outcome": "NO_CHANGE"
+      },
+      "evidence_refs": ["e0", "e1", "e2", "e3", "e4"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["e0", "e1", "e2", "e3", "e4"],
+          "invalidated_by": []
+        }
+      ]
+    }
+  ],
+  "forbidden_predicates": [
+    {
+      "expectation_id": "no-invented-knowledge",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "any_unit": true
+      },
+      "evidence_refs": ["e0", "e1", "e2", "e3", "e4"],
+      "severity": "hard"
+    }
+  ],
+  "allowed_equivalences": [
+    {
+      "equivalence_id": "scalar-units",
+      "kind": "scalar-unit",
+      "description": "Exact pressure conversion Pa/kPa/MPa; physical dimensions remain fixed.",
+      "values": ["Pa", "kPa", "MPa"]
+    },
+    {
+      "equivalence_id": "symbols",
+      "kind": "symbol-renaming",
+      "description": "Bind variables by roles, units and provenance; never require production UUIDs or one symbol spelling.",
+      "values": []
+    }
+  ],
+  "surface_expectations": [
+    {
+      "expectation_id": "surface",
+      "owner_layer": "H",
+      "required": false,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "meaning",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "required_text": [],
+        "minimum_visible_ms": 100,
+        "checkpoint_id": "meaning"
+      },
+      "evidence_refs": ["e0", "e1", "e2", "e3", "e4"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "accepted-surface-fidelity",
+      "owner_layer": "H",
+      "required": false,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "meaning",
+        "required_text": [],
+        "minimum_visible_ms": 100,
+        "accepted_fidelity": true
+      },
+      "evidence_refs": [],
+      "severity": "ordinary"
+    }
+  ],
+  "timing_expectations": [
+    {
+      "expectation_id": "semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "meaning",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "meaning",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["e0", "e1", "e2", "e3", "e4"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "display-time",
+      "owner_layer": "H",
+      "required": false,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "meaning",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["e0", "e1", "e2", "e3", "e4"],
+      "severity": "ordinary"
+    }
+  ],
+  "projection_expectations": [
+    {
+      "expectation_id": "projection",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {},
+      "evidence_refs": ["e0", "e1", "e2", "e3", "e4"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-meaning",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "meaning"
+      },
+      "evidence_refs": ["e0", "e1", "e2", "e3", "e4"],
+      "severity": "ordinary"
+    }
+  ],
+  "mechanism_expectations": [
+    {
+      "expectation_id": "validity",
+      "owner_layer": "A",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "experiment.valid",
+      "parameters": {},
+      "evidence_refs": [],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "admission",
+      "owner_layer": "B",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "validity",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "transcript.admitted",
+      "parameters": {},
+      "evidence_refs": ["e0", "e1", "e2", "e3", "e4"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "schema",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "model.schema",
+      "parameters": {},
+      "evidence_refs": ["e0", "e1", "e2", "e3", "e4"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "host",
+      "owner_layer": "E",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "schema",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "host.contract",
+      "parameters": {},
+      "evidence_refs": ["e0", "e1", "e2", "e3", "e4"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "progress",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "frontier.progress",
+      "parameters": {
+        "minimum_ratio": 0.9
+      },
+      "evidence_refs": ["e0", "e1", "e2", "e3", "e4"],
+      "severity": "ordinary"
+    }
+  ],
+  "adjudication_rules": [
+    {
+      "rule_id": "entailment-v1",
+      "scope": ["meaning", "no-invented-knowledge"],
+      "rubric": "Judge only the evidence available to this request and governed accepted knowledge. Check each claim for subject, predicate, direction, negation, quantity, unit and conditions. Entailed: pass. Contradictory or unsupported established assertion: hard semantic fail. A missing result is a separate coverage failure. Unrecognized but plausible wording remains ADJUDICATION_REQUIRED. Do not consult future input, rewrite this rubric, or treat every AI-origin Cue as forbidden. Quantity identity must match its physical role and vessel/component, not just the number. Unrecognized paraphrases, conditions, labels, or endpoint bindings require adjudication. Explicit unsupported established assertions fail; an uninvoked opportunity does not pass. Apply this rubric unchanged to each retained proposal and accepted version; record evidence citations and the adjudicator decision in a new file."
+    }
+  ],
+  "preconditions": {
+    "kind": "empty",
+    "event_fixture": null
+  },
+  "coverage_requirements": [],
+  "stage_requirement": {
+    "required": false,
+    "why_wider_context": "",
+    "trigger_event_ids": [],
+    "wider_context_event_ids": [],
+    "useful_resolution_predicates": []
+  }
+}

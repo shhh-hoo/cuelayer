@@ -328,3 +328,72 @@ Provider checks inspect the final SDK-generated Live/Stage schema: object root, 
 
 Results and failure evidence are local ignored `.cuelayer/v2/repair/` artifacts. Preserve old Gate 3 records unchanged. All deterministic gates passing means **eligible to request a new real paid evaluation**. It does not pass the original Gate 3. Before any provider call, obtain fresh explicit approval for the fixed code version, scenarios/repetitions, model configuration and cost ceiling.
 For paid OLD→NEW comparison, hold model/reasoning/output, Speechmatics configuration and observation deadline fixed. Collect source-character arrival/accounting rates, R/A gap and age during input, CARRY amount/age/resolution, calls per lane, request bytes and actual usage, complete valid decision latency, semantic changes and useful DOM matches. Preserve before-close samples separately from final drain. Growing backlog during continuous input cannot be hidden by post-stop draining or by converting everything to CARRY. Review accepted content for conditions, negation, relations, correction identity and false claims. Report the 2.5 s median / 4 s p95 learner-visible numbers as targets unless valid measured samples satisfy them. Failed or blocked real-service evaluation leaves the implementation Draft and unproven for realtime use.
+
+### Gate 3b — Real-Model Text Pipeline Gate
+
+Identity: `gate3b-real-model-text-pipeline-1`. Architecture reference: [Testing Architecture & Acceptance Design](https://docs.google.com/document/d/1ImwVax-a5sz8qHvzvu-v8iDSmukaUYJwLLJ4apTyJoI/edit). **Gate 3a remains FAILED at `727accf`.** The repaired product is frozen at `1a796e8c713b6f00ef9beb72004b456833a82ff5`. The evaluator has an independent checkout, SHA and Draft PR, with automatic deployment disabled. It must not modify the product checkout, PR #46, prompt/schema, scheduler, deadlines or retries. Unpaid preparation, assessment and replay remain credential-free. The six-snapshot paid canary entry requires a separate execution manifest and explicit authorization bound to its hashes; qualification alone never enables a provider call.
+
+| Phase | Gate | Preregistered work |
+| --- | --- | --- |
+| 0 | 3b-0 Evaluator Preflight | Unpaid assets, manifest, provenance, driver, scorer counterexamples, budget and replay |
+| 1 | 3b-1 Model Contract Canary | Six production-generated frozen requests, once each; C/D/E and applicable G |
+| 2 | 3b-2 Semantic Loop + 3b-3 Text-to-Surface | Original eight scenarios × three independent browser sessions, collecting semantics and DOM in the same execution |
+| 3 | 3b-4 Sustained Semantic Load | Natural Semantic Load v1, 600 seconds, full text pipeline |
+| 4 | Adjudication / Report | Apply frozen rules to retained evidence; no model calls |
+
+Every required phase predicate must PASS, with no pending adjudication, before the next paid phase. A hard semantic FAIL stops subsequent paid calls, including retries; all unstarted planned runs remain NOT_RUN. INVALID and pending adjudication also block progression. No replacement runs, best-of selection, prompt repairs, oracle edits or hidden skips within a cohort. Any code/prompt/schema/input change requires a new SHA, manifest and cohort. Canary success is not surface or sustained product acceptance.
+
+#### Unified assets and dependency semantics
+
+`apps/cuelayer-v2/tests/evaluation/contract.mjs` defines the executable Scenario Contract and predicate registry. `scenarios/` holds exact transcripts, semantic checkpoints, forbidden predicates, allowed equivalences, surface/timing/projection expectations, adjudication rules, preconditions and coverage requirements. `canaries/` adds two explicit isolated Stage contracts. Every expectation has `expectation_id`, `owner_layer`, `required`, `activation_rule`, concrete `prerequisites`, `predicate_id/parameters`, `evidence_refs`, and severity. Semantic checkpoints freeze all sufficient evidence sets and invalidation conditions.
+
+T1 request assessment, T2 semantic loops and T3 surfaces use the same oracle and predicate IDs. The first four canaries use the original scenario inputs and semantic oracles. Stage canaries declare their accepted precondition logs explicitly. Those mechanically admissible preconditions are not claimed to have passed a preceding Live semantic evaluation and are never injected into T2/T3 to manufacture Stage coverage.
+
+Dependencies form a DAG, not an unconditional A→H pass chain. A `pass` prerequisite means the dependent claim needs the prior predicate satisfied; `observable` means it needs evidence to exist even if judgement failed. Upstream failure that removes observability yields NOT_EXERCISED plus `blocked_by`, while independently observable predicates still run. Blocked checkpoints stay in coverage/debt denominators. NOT_RUN means the scheduled run never started. Exactly five terminal statuses exist: PASS, FAIL, INVALID, NOT_EXERCISED, NOT_RUN. `ADJUDICATION_REQUIRED` is a separate pending field and cannot imply PASS.
+
+`first_violated_boundary` includes the predicate, causal event and observed causal order, alongside every independent violation. Missing causal evidence stays pending attribution; layer letters are not a root-cause ordering. Quantity selectors use expression structure, physical dimensions, role and source binding; random IDs are not gold. Duplicate current matches fail. Unrecognized paraphrases, conditions, role labels or endpoint bindings require the frozen rubric, not keyword matching.
+
+#### A–H scorecard
+
+| Owner | Responsibility |
+| --- | --- |
+| A Experiment Validity | Checkout/module/lock identity, driver, clock, evidence integrity and declared dependency mode |
+| B Transcript Admission | Exact text, identity, ordering, reception and durable admission |
+| C Context Projection | Contiguous PROCESS, preceding/accepted/CARRY context, read/modify/create scope, omissions and future boundaries |
+| D Model Semantic Decision | Frozen semantic oracle and hard false predicates; schema compliance is only one component |
+| E Acceptance & Semantic State | Actual prestate/proposal evaluated by frozen executable validate/fold acceptance and state rules |
+| F Frontier / Realtime Progress | R/A progress, due semantic completion, CARRY burden/age/resolution and scheduler progress |
+| G Stage & Recovery | Declared required Stage behavior and WAIT/CARRY/stale/retry recovery |
+| H Learner Surface | Accepted content/version fidelity, required Cue/knowledge, readability, safe-area visibility, lifecycle and timing |
+
+D=FAIL/E=PASS is correct when a semantically wrong proposal was mechanically admissible and correctly applied. D=PASS/E=FAIL is correct when the host wrongly rejects a correct proposal; dependent expected display becomes NOT_EXERCISED. E=PASS/H=FAIL diagnoses display/lifecycle failure. A proven scheduler stall is F=FAIL; absent request/response predicates are NOT_EXERCISED. H's accepted-state fidelity remains independently observable after a D failure; H does not inherit semantic failure mechanically.
+
+Stage is a required hard gate only where the contract states why wider context is necessary, triggering preconditions, necessary context, a useful legal resolution and deadline. Other scenarios need not invoke Stage. The two isolated canaries explicitly exercise insufficient-context STILL_OPEN and clarified, grounded resolution without advancing A or changing Live authority.
+
+Machine false predicates freeze numeric values/dimensions, forbidden established assertions and unsupported completion/referents. They inspect retained applicable proposals; a later correction cannot erase the first hard failure. Ambiguous entailment uses the unchanged scenario rubric. Human adjudication must identify the rule, original evidence and adjudicator in a new artifact, preserve the machine result and leave unresolved items pending. Throughput never averages away established false knowledge.
+
+The old 300×80-character workload remains **Deterministic Runtime Stress** for scheduler, queue, persistence, versioning and DOM capacity. **Natural Semantic Load v1** is separate: 1,408 English words, 37 variable-length finals, 600 seconds, 20 semantic checkpoints plus negative/surface/timing expectations. It covers fragmentation, conditions, complete assertions, correction, topic shifts and returns, administration, unfinished thought, reference, comparison, Cue invitations and wider-context ambiguity. It uses no Fact:/Correct:/END. labels, fixed-width padding or duplicated volume filler. Natural scenarios do not force Stage calls merely to fill coverage.
+
+#### Time boundaries and realtime accounting
+
+Record `scheduled_at → evaluator_dispatch_at → page_received_at → admitted_at → capture/response/accepted → visible DOM`. The absolute driver runs independently of admission/model completion. Worker wake-up and actual transport dispatch are separate: evaluator congestion before dispatch counts as evaluator lateness. A full 600-second empty-receiver baseline requires dispatch lateness p95 ≤100 ms and maximum ≤500 ms. Page/admission delay remains product evidence, not an automatic INVALID.
+
+Each checkpoint retains `ready_at_driver` and `ready_at_product`. Select the frozen valid sufficient set that completes earliest at driver dispatch; ties use declared order. Product readiness uses that same set's final admission. Retries, recapture, another set's faster admission or model outcomes cannot move the driver anchor. Capture readiness is diagnostic only. Cross-clock calibration records offsets and uncertainty; a hard threshold overlapped by uncertainty requires adjudication.
+
+The same request/acceptance/version/DOM chain yields driver-ready→accepted, accepted→visible, and driver-ready→visible. B_live=8 s, B_stage=20 s and B_display=1 s are evaluation budgets, not runtime settings. Product provider=6 s, host=8 s, transport retries=2, SDK retries=0, coalescing=250 ms and wait=750 ms remain fixed. The 2.5 s median / 4 s p95 end-to-end figures are reported targets unless a frozen hard predicate explicitly references them.
+
+After 30-second warmup, report each complete 60-second input window's ΔA/ΔR≥0.9 separately from due semantic completion and CARRY debt. H independently reports required surface completion: accounted ≠ understood ≠ displayed. All-NO_CHANGE/CARRY cannot pass through accounting alone. Tail checkpoints not yet due at input stop remain separate from overdue debt. A 35-second drain and one finalization are reported separately and cannot repair input-period scores.
+
+#### Provenance, isolation and immutable evidence
+
+`prepare` requires separate real checkout paths, a clean frozen product SHA and a clean evaluator SHA (the explicit development option is never paid-eligible). Node resolution/load records verify Git blob bytes for Session, projection, request builder, schema, acceptance/state and transitive product code. The browser runs the frozen product entry, real IndexedDB and display. Its actual loaded graph, optimizer source inputs, transforms and cache metadata are recorded. Caches start empty per run. Evaluator copies are forbidden even when byte-identical. Missing origin, wrong alias, path escape, blob mismatch, stale browser build or dependency drift prevents preflight passage. SDK/dependency identities and both lockfiles are retained.
+
+Canaries follow scenario prefix + accepted precondition events → production capture/projection → production request builder. Requests are never hand-improved. Authored local responses are mechanical probes, not model gold. The cross-fragment NO_CHANGE probe is deliberately semantically negative: C/E pass while D must fail. T2/T3 retains the actual request, raw response, task, aliases, request-time and acceptance-time state, accepted events, trace and DOM for offline assessment without another model call.
+
+Replay labels are explicit: response→parser/acceptance, durable events/timing→scheduler/recovery, and accepted events→production display. Display isolation seeds exact raw persisted events and runs the real display entry; it does not fix JSON, rewrite IDs or add meaning. It proves reload behavior. Original ephemeral attention/Cue context is retained in trace but is not fabricated on reload, so this mode does not claim original invitation timing. Event replay checks durable ordering/timing and Session recovery; it does not silently rebind historical response aliases to new tasks. Missing presentation/execution context limits the diagnostic claim.
+
+Preflight strips credential environment entries without reading their values, never loads `.env`, and blocks non-local Node fetch/socket and browser model/microphone egress. Only versioned public tldraw renderer assets are allowed externally and hashed. Dependency mode is STUB for local browser model probes, RECORDED for replay, LIVE for future paid work. DOM fidelity checks accepted expressions, labels, units, conditions and versions, with geometry and renderer-layer evidence; retained screenshots support uncertain visual adjudication. DOM visibility is not hardware scanout.
+
+The exclusive manifest is never rewritten. It records both checkout SHAs/paths and clean assertions; evaluator files and canonical script; local/production forwarders; prompts, schemas, input/oracle/canary hashes; SDK/dependencies; full model/scheduler/deadline/budget/phase profile; run ID and start time. Results are separate exclusive artifacts. Future provider collection must retain actual returned model, per-request input/output/cached-input usage and cache state. Latency reports label cache status. Synchronous worst-case reservations cover every Stage/retry attempt under US$10/400 requests. Missing usage retains its reservation; published-rate estimates and conservative cost bounds are distinct.
+
+Independent external account quota/outage or browser-environment failure may be INVALID. Product request explosion causing 429, or product DOM/memory/main-thread overload causing a crash, is FAIL. Unknown attribution stays pending. Controlled driver and page-blocking counterexamples verify this distinction. Passing 3b-0 permits a separate authorization request bound to the final manifest; it does not authorize OpenAI, Speechmatics or microphone use.

@@ -1,0 +1,2107 @@
+{
+  "scenario_id": "sustained",
+  "version": "gate3b-contract-1",
+  "review_status": "AUTHORED",
+  "source": {
+    "kind": "authored",
+    "identity": "frontier-authored-1"
+  },
+  "duration_ms": 39600,
+  "transcript_events": [
+    {
+      "event_id": "e0",
+      "at_ms": 0,
+      "text": "A narrator tells the story."
+    },
+    {
+      "event_id": "e1",
+      "at_ms": 1100,
+      "text": "The narrator need not be the author."
+    },
+    {
+      "event_id": "e2",
+      "at_ms": 2200,
+      "text": "First-person narration uses a character's own voice."
+    },
+    {
+      "event_id": "e3",
+      "at_ms": 3300,
+      "text": "Third-person narration describes characters from outside their own voices."
+    },
+    {
+      "event_id": "e4",
+      "at_ms": 4400,
+      "text": "A metaphor describes one thing in terms of another."
+    },
+    {
+      "event_id": "e5",
+      "at_ms": 5500,
+      "text": "A simile makes an explicit comparison."
+    },
+    {
+      "event_id": "e6",
+      "at_ms": 6600,
+      "text": "Please turn the page."
+    },
+    {
+      "event_id": "e7",
+      "at_ms": 7700,
+      "text": "An argument presents a claim supported by reasons."
+    },
+    {
+      "event_id": "e8",
+      "at_ms": 8800,
+      "text": "Evidence supports the reasons given for a claim."
+    },
+    {
+      "event_id": "e9",
+      "at_ms": 9900,
+      "text": "A counterargument challenges an argument."
+    },
+    {
+      "event_id": "e10",
+      "at_ms": 11000,
+      "text": "A conclusion follows from the stated reasons."
+    },
+    {
+      "event_id": "e11",
+      "at_ms": 12100,
+      "text": "A claim is not established merely by repetition."
+    },
+    {
+      "event_id": "e12",
+      "at_ms": 13200,
+      "text": "A narrator tells the story."
+    },
+    {
+      "event_id": "e13",
+      "at_ms": 14300,
+      "text": "The narrator need not be the author."
+    },
+    {
+      "event_id": "e14",
+      "at_ms": 15400,
+      "text": "First-person narration uses a character's own voice."
+    },
+    {
+      "event_id": "e15",
+      "at_ms": 16500,
+      "text": "Third-person narration describes characters from outside their own voices."
+    },
+    {
+      "event_id": "e16",
+      "at_ms": 17600,
+      "text": "A metaphor describes one thing in terms of another."
+    },
+    {
+      "event_id": "e17",
+      "at_ms": 18700,
+      "text": "A simile makes an explicit comparison."
+    },
+    {
+      "event_id": "e18",
+      "at_ms": 19800,
+      "text": "Please turn the page."
+    },
+    {
+      "event_id": "e19",
+      "at_ms": 20900,
+      "text": "An argument presents a claim supported by reasons."
+    },
+    {
+      "event_id": "e20",
+      "at_ms": 22000,
+      "text": "Evidence supports the reasons given for a claim."
+    },
+    {
+      "event_id": "e21",
+      "at_ms": 23100,
+      "text": "A counterargument challenges an argument."
+    },
+    {
+      "event_id": "e22",
+      "at_ms": 24200,
+      "text": "A conclusion follows from the stated reasons."
+    },
+    {
+      "event_id": "e23",
+      "at_ms": 25300,
+      "text": "A claim is not established merely by repetition."
+    },
+    {
+      "event_id": "e24",
+      "at_ms": 26400,
+      "text": "A narrator tells the story."
+    },
+    {
+      "event_id": "e25",
+      "at_ms": 27500,
+      "text": "The narrator need not be the author."
+    },
+    {
+      "event_id": "e26",
+      "at_ms": 28600,
+      "text": "First-person narration uses a character's own voice."
+    },
+    {
+      "event_id": "e27",
+      "at_ms": 29700,
+      "text": "Third-person narration describes characters from outside their own voices."
+    },
+    {
+      "event_id": "e28",
+      "at_ms": 30800,
+      "text": "A metaphor describes one thing in terms of another."
+    },
+    {
+      "event_id": "e29",
+      "at_ms": 31900,
+      "text": "A simile makes an explicit comparison."
+    },
+    {
+      "event_id": "e30",
+      "at_ms": 33000,
+      "text": "Please turn the page."
+    },
+    {
+      "event_id": "e31",
+      "at_ms": 34100,
+      "text": "An argument presents a claim supported by reasons."
+    },
+    {
+      "event_id": "e32",
+      "at_ms": 35200,
+      "text": "Evidence supports the reasons given for a claim."
+    },
+    {
+      "event_id": "e33",
+      "at_ms": 36300,
+      "text": "A counterargument challenges an argument."
+    },
+    {
+      "event_id": "e34",
+      "at_ms": 37400,
+      "text": "A conclusion follows from the stated reasons."
+    },
+    {
+      "event_id": "e35",
+      "at_ms": 38500,
+      "text": "A claim is not established merely by repetition."
+    }
+  ],
+  "semantic_checkpoints": [
+    {
+      "expectation_id": "meaning",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-meaning",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["e11", "e23", "e35"]
+        },
+        "exact_claims": [
+          "A claim is not established merely by repetition.",
+          "Repeating a claim does not establish it."
+        ],
+        "false_claims": ["Repetition establishes a claim."]
+      },
+      "evidence_refs": [
+        "e0",
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8",
+        "e9",
+        "e10",
+        "e11",
+        "e12",
+        "e13",
+        "e14",
+        "e15",
+        "e16",
+        "e17",
+        "e18",
+        "e19",
+        "e20",
+        "e21",
+        "e22",
+        "e23",
+        "e24",
+        "e25",
+        "e26",
+        "e27",
+        "e28",
+        "e29",
+        "e30",
+        "e31",
+        "e32",
+        "e33",
+        "e34",
+        "e35"
+      ],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": [
+            "e0",
+            "e1",
+            "e2",
+            "e3",
+            "e4",
+            "e5",
+            "e6",
+            "e7",
+            "e8",
+            "e9",
+            "e10",
+            "e11",
+            "e12",
+            "e13",
+            "e14",
+            "e15",
+            "e16",
+            "e17",
+            "e18",
+            "e19",
+            "e20",
+            "e21",
+            "e22",
+            "e23",
+            "e24",
+            "e25",
+            "e26",
+            "e27",
+            "e28",
+            "e29",
+            "e30",
+            "e31",
+            "e32",
+            "e33",
+            "e34",
+            "e35"
+          ],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "teaching-0",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-teaching-0",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["e0", "e12", "e24"]
+        },
+        "exact_claims": ["A narrator tells the story."]
+      },
+      "evidence_refs": ["e0", "e12", "e24"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "round-1",
+          "event_ids": ["e0"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-2",
+          "event_ids": ["e12"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-3",
+          "event_ids": ["e24"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "teaching-1",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-teaching-1",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["e1", "e13", "e25"]
+        },
+        "exact_claims": ["The narrator need not be the author."]
+      },
+      "evidence_refs": ["e1", "e13", "e25"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "round-1",
+          "event_ids": ["e1"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-2",
+          "event_ids": ["e13"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-3",
+          "event_ids": ["e25"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "teaching-2",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-teaching-2",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["e2", "e14", "e26"]
+        },
+        "exact_claims": ["First-person narration uses a character's own voice."]
+      },
+      "evidence_refs": ["e2", "e14", "e26"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "round-1",
+          "event_ids": ["e2"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-2",
+          "event_ids": ["e14"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-3",
+          "event_ids": ["e26"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "teaching-3",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-teaching-3",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["e3", "e15", "e27"]
+        },
+        "exact_claims": [
+          "Third-person narration describes characters from outside their own voices."
+        ]
+      },
+      "evidence_refs": ["e3", "e15", "e27"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "round-1",
+          "event_ids": ["e3"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-2",
+          "event_ids": ["e15"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-3",
+          "event_ids": ["e27"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "teaching-4",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-teaching-4",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["e4", "e16", "e28"]
+        },
+        "exact_claims": ["A metaphor describes one thing in terms of another."]
+      },
+      "evidence_refs": ["e4", "e16", "e28"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "round-1",
+          "event_ids": ["e4"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-2",
+          "event_ids": ["e16"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-3",
+          "event_ids": ["e28"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "teaching-5",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-teaching-5",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["e5", "e17", "e29"]
+        },
+        "exact_claims": ["A simile makes an explicit comparison."]
+      },
+      "evidence_refs": ["e5", "e17", "e29"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "round-1",
+          "event_ids": ["e5"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-2",
+          "event_ids": ["e17"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-3",
+          "event_ids": ["e29"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "teaching-7",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-teaching-7",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["e7", "e19", "e31"]
+        },
+        "exact_claims": ["An argument presents a claim supported by reasons."]
+      },
+      "evidence_refs": ["e7", "e19", "e31"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "round-1",
+          "event_ids": ["e7"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-2",
+          "event_ids": ["e19"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-3",
+          "event_ids": ["e31"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "teaching-8",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-teaching-8",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["e8", "e20", "e32"]
+        },
+        "exact_claims": ["Evidence supports the reasons given for a claim."]
+      },
+      "evidence_refs": ["e8", "e20", "e32"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "round-1",
+          "event_ids": ["e8"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-2",
+          "event_ids": ["e20"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-3",
+          "event_ids": ["e32"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "teaching-9",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-teaching-9",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["e9", "e21", "e33"]
+        },
+        "exact_claims": ["A counterargument challenges an argument."]
+      },
+      "evidence_refs": ["e9", "e21", "e33"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "round-1",
+          "event_ids": ["e9"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-2",
+          "event_ids": ["e21"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-3",
+          "event_ids": ["e33"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "teaching-10",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-teaching-10",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["e10", "e22", "e34"]
+        },
+        "exact_claims": ["A conclusion follows from the stated reasons."]
+      },
+      "evidence_refs": ["e10", "e22", "e34"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "round-1",
+          "event_ids": ["e10"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-2",
+          "event_ids": ["e22"],
+          "invalidated_by": []
+        },
+        {
+          "set_id": "round-3",
+          "event_ids": ["e34"],
+          "invalidated_by": []
+        }
+      ]
+    }
+  ],
+  "forbidden_predicates": [],
+  "allowed_equivalences": [
+    {
+      "equivalence_id": "scalar-units",
+      "kind": "scalar-unit",
+      "description": "Exact pressure conversion Pa/kPa/MPa; physical dimensions remain fixed.",
+      "values": ["Pa", "kPa", "MPa"]
+    },
+    {
+      "equivalence_id": "symbols",
+      "kind": "symbol-renaming",
+      "description": "Bind variables by roles, units and provenance; never require production UUIDs or one symbol spelling.",
+      "values": []
+    }
+  ],
+  "surface_expectations": [
+    {
+      "expectation_id": "surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "meaning",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "required_text": [],
+        "minimum_visible_ms": 100,
+        "checkpoint_id": "meaning"
+      },
+      "evidence_refs": [
+        "e0",
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8",
+        "e9",
+        "e10",
+        "e11",
+        "e12",
+        "e13",
+        "e14",
+        "e15",
+        "e16",
+        "e17",
+        "e18",
+        "e19",
+        "e20",
+        "e21",
+        "e22",
+        "e23",
+        "e24",
+        "e25",
+        "e26",
+        "e27",
+        "e28",
+        "e29",
+        "e30",
+        "e31",
+        "e32",
+        "e33",
+        "e34",
+        "e35"
+      ],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-0-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-0",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "teaching-0",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["e0", "e12", "e24"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-1-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-1",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "teaching-1",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["e1", "e13", "e25"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-2-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-2",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "teaching-2",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["e2", "e14", "e26"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-3-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-3",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "teaching-3",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["e3", "e15", "e27"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-4-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-4",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "teaching-4",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["e4", "e16", "e28"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-5-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-5",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "teaching-5",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["e5", "e17", "e29"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-7-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-7",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "teaching-7",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["e7", "e19", "e31"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-8-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-8",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "teaching-8",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["e8", "e20", "e32"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-9-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-9",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "teaching-9",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["e9", "e21", "e33"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-10-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-10",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "teaching-10",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["e10", "e22", "e34"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "accepted-surface-fidelity",
+      "owner_layer": "H",
+      "required": false,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "meaning",
+        "required_text": [],
+        "minimum_visible_ms": 100,
+        "accepted_fidelity": true
+      },
+      "evidence_refs": [],
+      "severity": "ordinary"
+    }
+  ],
+  "timing_expectations": [
+    {
+      "expectation_id": "semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "meaning",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "meaning",
+        "budget_ms": 8000
+      },
+      "evidence_refs": [
+        "e0",
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8",
+        "e9",
+        "e10",
+        "e11",
+        "e12",
+        "e13",
+        "e14",
+        "e15",
+        "e16",
+        "e17",
+        "e18",
+        "e19",
+        "e20",
+        "e21",
+        "e22",
+        "e23",
+        "e24",
+        "e25",
+        "e26",
+        "e27",
+        "e28",
+        "e29",
+        "e30",
+        "e31",
+        "e32",
+        "e33",
+        "e34",
+        "e35"
+      ],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "meaning",
+        "budget_ms": 1000
+      },
+      "evidence_refs": [
+        "e0",
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8",
+        "e9",
+        "e10",
+        "e11",
+        "e12",
+        "e13",
+        "e14",
+        "e15",
+        "e16",
+        "e17",
+        "e18",
+        "e19",
+        "e20",
+        "e21",
+        "e22",
+        "e23",
+        "e24",
+        "e25",
+        "e26",
+        "e27",
+        "e28",
+        "e29",
+        "e30",
+        "e31",
+        "e32",
+        "e33",
+        "e34",
+        "e35"
+      ],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-0-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-0",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "teaching-0",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["e0", "e12", "e24"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-0-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-0-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "teaching-0",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["e0", "e12", "e24"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-1-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-1",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "teaching-1",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["e1", "e13", "e25"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-1-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-1-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "teaching-1",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["e1", "e13", "e25"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-2-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-2",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "teaching-2",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["e2", "e14", "e26"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-2-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-2-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "teaching-2",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["e2", "e14", "e26"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-3-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-3",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "teaching-3",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["e3", "e15", "e27"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-3-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-3-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "teaching-3",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["e3", "e15", "e27"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-4-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-4",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "teaching-4",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["e4", "e16", "e28"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-4-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-4-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "teaching-4",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["e4", "e16", "e28"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-5-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-5",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "teaching-5",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["e5", "e17", "e29"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-5-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-5-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "teaching-5",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["e5", "e17", "e29"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-7-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-7",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "teaching-7",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["e7", "e19", "e31"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-7-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-7-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "teaching-7",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["e7", "e19", "e31"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-8-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-8",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "teaching-8",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["e8", "e20", "e32"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-8-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-8-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "teaching-8",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["e8", "e20", "e32"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-9-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-9",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "teaching-9",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["e9", "e21", "e33"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-9-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-9-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "teaching-9",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["e9", "e21", "e33"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-10-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-10",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "teaching-10",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["e10", "e22", "e34"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "teaching-10-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "teaching-10-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "teaching-10",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["e10", "e22", "e34"],
+      "severity": "ordinary"
+    }
+  ],
+  "projection_expectations": [
+    {
+      "expectation_id": "projection",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {},
+      "evidence_refs": [
+        "e0",
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8",
+        "e9",
+        "e10",
+        "e11",
+        "e12",
+        "e13",
+        "e14",
+        "e15",
+        "e16",
+        "e17",
+        "e18",
+        "e19",
+        "e20",
+        "e21",
+        "e22",
+        "e23",
+        "e24",
+        "e25",
+        "e26",
+        "e27",
+        "e28",
+        "e29",
+        "e30",
+        "e31",
+        "e32",
+        "e33",
+        "e34",
+        "e35"
+      ],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-meaning",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "meaning"
+      },
+      "evidence_refs": [
+        "e0",
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8",
+        "e9",
+        "e10",
+        "e11",
+        "e12",
+        "e13",
+        "e14",
+        "e15",
+        "e16",
+        "e17",
+        "e18",
+        "e19",
+        "e20",
+        "e21",
+        "e22",
+        "e23",
+        "e24",
+        "e25",
+        "e26",
+        "e27",
+        "e28",
+        "e29",
+        "e30",
+        "e31",
+        "e32",
+        "e33",
+        "e34",
+        "e35"
+      ],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-teaching-0",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "teaching-0"
+      },
+      "evidence_refs": ["e0", "e12", "e24"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-teaching-1",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "teaching-1"
+      },
+      "evidence_refs": ["e1", "e13", "e25"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-teaching-2",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "teaching-2"
+      },
+      "evidence_refs": ["e2", "e14", "e26"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-teaching-3",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "teaching-3"
+      },
+      "evidence_refs": ["e3", "e15", "e27"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-teaching-4",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "teaching-4"
+      },
+      "evidence_refs": ["e4", "e16", "e28"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-teaching-5",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "teaching-5"
+      },
+      "evidence_refs": ["e5", "e17", "e29"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-teaching-7",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "teaching-7"
+      },
+      "evidence_refs": ["e7", "e19", "e31"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-teaching-8",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "teaching-8"
+      },
+      "evidence_refs": ["e8", "e20", "e32"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-teaching-9",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "teaching-9"
+      },
+      "evidence_refs": ["e9", "e21", "e33"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-teaching-10",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "teaching-10"
+      },
+      "evidence_refs": ["e10", "e22", "e34"],
+      "severity": "ordinary"
+    }
+  ],
+  "mechanism_expectations": [
+    {
+      "expectation_id": "validity",
+      "owner_layer": "A",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "experiment.valid",
+      "parameters": {},
+      "evidence_refs": [],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "admission",
+      "owner_layer": "B",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "validity",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "transcript.admitted",
+      "parameters": {},
+      "evidence_refs": [
+        "e0",
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8",
+        "e9",
+        "e10",
+        "e11",
+        "e12",
+        "e13",
+        "e14",
+        "e15",
+        "e16",
+        "e17",
+        "e18",
+        "e19",
+        "e20",
+        "e21",
+        "e22",
+        "e23",
+        "e24",
+        "e25",
+        "e26",
+        "e27",
+        "e28",
+        "e29",
+        "e30",
+        "e31",
+        "e32",
+        "e33",
+        "e34",
+        "e35"
+      ],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "schema",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "model.schema",
+      "parameters": {},
+      "evidence_refs": [
+        "e0",
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8",
+        "e9",
+        "e10",
+        "e11",
+        "e12",
+        "e13",
+        "e14",
+        "e15",
+        "e16",
+        "e17",
+        "e18",
+        "e19",
+        "e20",
+        "e21",
+        "e22",
+        "e23",
+        "e24",
+        "e25",
+        "e26",
+        "e27",
+        "e28",
+        "e29",
+        "e30",
+        "e31",
+        "e32",
+        "e33",
+        "e34",
+        "e35"
+      ],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "host",
+      "owner_layer": "E",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "schema",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "host.contract",
+      "parameters": {},
+      "evidence_refs": [
+        "e0",
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8",
+        "e9",
+        "e10",
+        "e11",
+        "e12",
+        "e13",
+        "e14",
+        "e15",
+        "e16",
+        "e17",
+        "e18",
+        "e19",
+        "e20",
+        "e21",
+        "e22",
+        "e23",
+        "e24",
+        "e25",
+        "e26",
+        "e27",
+        "e28",
+        "e29",
+        "e30",
+        "e31",
+        "e32",
+        "e33",
+        "e34",
+        "e35"
+      ],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "progress",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "frontier.progress",
+      "parameters": {
+        "minimum_ratio": 0.9
+      },
+      "evidence_refs": [
+        "e0",
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8",
+        "e9",
+        "e10",
+        "e11",
+        "e12",
+        "e13",
+        "e14",
+        "e15",
+        "e16",
+        "e17",
+        "e18",
+        "e19",
+        "e20",
+        "e21",
+        "e22",
+        "e23",
+        "e24",
+        "e25",
+        "e26",
+        "e27",
+        "e28",
+        "e29",
+        "e30",
+        "e31",
+        "e32",
+        "e33",
+        "e34",
+        "e35"
+      ],
+      "severity": "ordinary"
+    }
+  ],
+  "adjudication_rules": [
+    {
+      "rule_id": "entailment-v1",
+      "scope": [
+        "meaning",
+        "teaching-0",
+        "teaching-1",
+        "teaching-2",
+        "teaching-3",
+        "teaching-4",
+        "teaching-5",
+        "teaching-7",
+        "teaching-8",
+        "teaching-9",
+        "teaching-10"
+      ],
+      "rubric": "Judge only the evidence available to this request and governed accepted knowledge. Check each claim for subject, predicate, direction, negation, quantity, unit and conditions. Entailed: pass. Contradictory or unsupported established assertion: hard semantic fail. A missing result is a separate coverage failure. Unrecognized but plausible wording remains ADJUDICATION_REQUIRED. Do not consult future input, rewrite this rubric, or treat every AI-origin Cue as forbidden. Quantity identity must match its physical role and vessel/component, not just the number. Unrecognized paraphrases, conditions, labels, or endpoint bindings require adjudication. Explicit unsupported established assertions fail; an uninvoked opportunity does not pass. Apply this rubric unchanged to each retained proposal and accepted version; record evidence citations and the adjudicator decision in a new file."
+    }
+  ],
+  "preconditions": {
+    "kind": "empty",
+    "event_fixture": null
+  },
+  "coverage_requirements": [],
+  "stage_requirement": {
+    "required": false,
+    "why_wider_context": "",
+    "trigger_event_ids": [],
+    "wider_context_event_ids": [],
+    "useful_resolution_predicates": []
+  }
+}
