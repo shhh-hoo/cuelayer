@@ -179,7 +179,7 @@ it("production strict schema exposes only the new continuation and compact leave
       sdkRetries: 0,
       transportRetries: 2,
       reasoning: "none",
-      stageReasoning: "low",
+      stageReasoning: "none",
     });
   } finally {
     s.close();

@@ -95,7 +95,7 @@ it("rejects a declared referent that is absent from the resolved semantic graph"
 it("persists the model-selected identity link and resolution without consuming Live source", async () => {
   const { s, t } = await referenceTask();
   expect((await liveRequest(t.review!.request)).reasoning).toEqual({
-    effort: "low",
+    effort: "none",
   });
   const before = structuredClone(s.replay.accounted);
   const anchor = structuredClone(Object.values(s.state.units)[0]);

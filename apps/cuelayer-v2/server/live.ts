@@ -7,7 +7,7 @@ export const modelProfile = {
   provider: "OpenAI",
   model: "gpt-5.6-luna",
   reasoning: "none" as const,
-  stageReasoning: "low" as const,
+  stageReasoning: "none" as const,
   structuredOutput: "json_schema (strict:true) + v2-live-decision-3 validation",
   maxOutputTokens: 8192,
   providerTimeoutMs: 6000,
