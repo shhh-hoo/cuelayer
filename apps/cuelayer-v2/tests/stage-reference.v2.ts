@@ -172,3 +172,34 @@ it("listing the old referent beside a disconnected new target cannot bypass its 
   );
   await expect(s.accept(t, reply)).rejects.toThrow("unbound-stage-referent");
 });
+
+it("maps authored clarification referents back to captured unit aliases", async () => {
+  const { fixtureProposal, story } = await import("../src/story");
+  const s = await openSession();
+  sessions.push(s);
+  s.pause();
+  for (const i of [0, 2, 3, 5, 6]) {
+    await admit(s, story[i]);
+    const live = s.capture("Live");
+    await s.accept(live, fixtureProposal(live));
+  }
+  const stage = s.capture("Stage");
+  const reply = fixtureProposal(stage);
+  expect("results" in reply).toBe(true);
+  if (!("results" in reply)) return;
+  const result = reply.results[0];
+  expect(result.outcome).toBe("RESOLVED");
+  if (result.outcome !== "RESOLVED") return;
+  const referent = stage.review!.request.units.find(
+    (unit) =>
+      unit.meaning.kind === "quantity" &&
+      unit.meaning.symbols.some((symbol) => symbol.symbol === "n_i"),
+  )!;
+  expect(result.resolution!.referents).toEqual([referent.id]);
+  await s.accept(stage, reply);
+  const accepted = (await s.store.read(s.id)).at(-1)!;
+  if (accepted.type === "accepted")
+    expect(accepted.accepted.resolutions![0].referents).toEqual([
+      stage.review!.units[referent.id],
+    ]);
+});

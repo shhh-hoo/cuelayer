@@ -446,7 +446,7 @@ export function fixtureProposal(task: Task): LiveDecision | StageReview {
             referents: p.operations
               .filter((op) => op.type === "put")
               .flatMap((op) => op.requires)
-              .filter((id) => Boolean(task.state.units[id]))
+              .filter((id) => Boolean(mapped.state.units[id]))
               .map(ua),
             targets: operations
               .filter((op) => op.type === "put")
