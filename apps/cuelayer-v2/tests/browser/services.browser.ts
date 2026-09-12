@@ -137,7 +137,9 @@ test("teacher text is admitted while inference is pending, then reaches the lear
     )
     .toBe(2);
   const state = await page.evaluate(() => window.v2.session.state);
-  await page.screenshot({ path: "../../.cuelayer/v2/teacher-text-desktop.png" });
+  await page.screenshot({
+    path: "../../.cuelayer/v2/teacher-text-desktop.png",
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(input).toBeInViewport();
   await expect(submit).toBeInViewport();
@@ -146,11 +148,13 @@ test("teacher text is admitted while inference is pending, then reaches the lear
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+  await expect(page.locator("[data-unit] .katex").first()).toBeInViewport();
   await page.screenshot({ path: "../../.cuelayer/v2/teacher-text-narrow.png" });
   await page.reload();
   await page.waitForFunction(() => Boolean(window.v2));
   expect(await page.evaluate(() => window.v2.session.state)).toEqual(state);
   await expect(page.locator("[data-unit] .katex").first()).toBeVisible();
+  await expect(page.locator("[data-unit] .katex").first()).toBeInViewport();
   expect(speechCalls).toBe(0);
 });
 
