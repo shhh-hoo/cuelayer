@@ -29,6 +29,60 @@ button:disabled {
   grid-template-rows: 72px 1fr 42px;
   overflow: hidden;
 }
+.app.with-text-entry {
+  grid-template-rows: 72px minmax(360px, 1fr) auto 42px;
+  overflow: auto;
+}
+.text-entry {
+  grid-column: 1 / -1;
+  padding: 12px 26px 10px;
+  border-top: 1px solid #dce4dd;
+  background: #fafbf6;
+}
+.text-entry label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.text-entry-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.text-entry textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  max-height: 160px;
+  border: 1px solid #b8cecb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  color: inherit;
+  background: #fffefa;
+}
+.text-entry textarea:focus-visible {
+  outline: 2px solid #1e6158;
+  outline-offset: 2px;
+}
+.text-entry button {
+  flex-shrink: 0;
+  font-size: 12px;
+  background: #1e6158;
+  color: white;
+}
+.text-entry p {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #536e6b;
+}
+.text-entry p[role="alert"] {
+  color: #8b3928;
+}
 header {
   display: flex;
   align-items: center;
@@ -348,6 +402,18 @@ details button {
   }
   .app {
     grid-template-rows: 64px 1fr 38px;
+  }
+  .app.with-text-entry {
+    grid-template-rows: 64px minmax(360px, 1fr) auto 38px;
+  }
+  .text-entry {
+    padding: 10px 14px;
+  }
+  .text-entry-controls {
+    gap: 8px;
+  }
+  .text-entry button {
+    padding: 9px 12px;
   }
   .brand {
     font-size: 20px;
