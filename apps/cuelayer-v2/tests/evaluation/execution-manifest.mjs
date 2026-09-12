@@ -1,3 +1,9 @@
+import {
+  REPAIR_IDENTITY,
+  REPAIR_PRODUCT_SHA,
+  REPAIR_PROFILE,
+  verifyRepairExecution,
+} from "./repair-manifest.mjs";
 import { readFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -193,6 +199,8 @@ export async function prepareExecution(baselinePath, out) {
 }
 
 export async function verifyExecution(path) {
+  if ((await readJSON(path)).identity === REPAIR_IDENTITY)
+    return verifyRepairExecution(path);
   const manifest = await readJSON(path),
     bytes = await readFile(path),
     seal = await readJSON(resolve(path, "../execution-manifest-seal.json"));
@@ -291,10 +299,13 @@ export function validateAuthorization(
 }
 
 export function assertExecutionPolicy(manifest) {
+  const repair = manifest.identity === REPAIR_IDENTITY;
+  const expectedProfile = repair ? REPAIR_PROFILE : profile;
+  const expectedProduct = repair ? REPAIR_PRODUCT_SHA : PRODUCT_SHA;
   if (
-    manifest.product_sha !== PRODUCT_SHA ||
-    !equal(manifest.profile, profile) ||
-    manifest.profile_sha256 !== sha256(profile) ||
+    manifest.product_sha !== expectedProduct ||
+    !equal(manifest.profile, expectedProfile) ||
+    manifest.profile_sha256 !== sha256(expectedProfile) ||
     manifest.provider_url !== PROVIDER_URL ||
     !equal(manifest.actual_model_allowlist, [profile.model_requested]) ||
     !equal(

@@ -16,11 +16,16 @@ const blobHash = (bytes) =>
     .update(bytes)
     .digest("hex");
 export class Provenance {
-  constructor(product, evaluator, { allowDirtyEvaluator = false } = {}) {
+  constructor(
+    product,
+    evaluator,
+    { allowDirtyEvaluator = false, productSha = PRODUCT_SHA } = {},
+  ) {
+    this.productSha = productSha;
     this.product = realpathSync(product);
     this.evaluator = realpathSync(evaluator);
     if (this.product === this.evaluator) throw Error("dual-checkout-required");
-    if (git(this.product, "rev-parse", "HEAD") !== PRODUCT_SHA)
+    if (git(this.product, "rev-parse", "HEAD") !== this.productSha)
       throw Error("product-sha-mismatch");
     if (git(this.product, "status", "--porcelain", "--untracked-files=normal"))
       throw Error("product-worktree-dirty");
@@ -33,7 +38,7 @@ export class Provenance {
     if (!allowDirtyEvaluator && !this.evaluatorClean)
       throw Error("evaluator-worktree-dirty");
     this.tree = new Map(
-      git(this.product, "ls-tree", "-r", PRODUCT_SHA)
+      git(this.product, "ls-tree", "-r", this.productSha)
         .split("\n")
         .map((line) => {
           const [meta, path] = line.split("\t");
@@ -310,7 +315,7 @@ export class Provenance {
   }
   snapshot() {
     return {
-      product_sha: PRODUCT_SHA,
+      product_sha: this.productSha,
       product_checkout: this.product,
       evaluator_checkout: this.evaluator,
       evaluator_sha: git(this.evaluator, "rev-parse", "HEAD"),
