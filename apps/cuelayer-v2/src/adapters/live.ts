@@ -2,7 +2,7 @@ import { bytes } from "../projection";
 import { stageReviewSchema } from "../stage";
 import { Stream } from "openai/core/streaming";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses";
-import { liveDecisionSchema } from "../live-wire";
+import { liveDecisionSchema, expandProviderDecision } from "../live-wire";
 import { TransientFailure, type Interpreter } from "../session";
 import type { Trace } from "./trace";
 
@@ -115,6 +115,19 @@ export function realInterpreter(
         raw = JSON.parse(text);
       } catch {
         throw new Error("model-malformed-json");
+      }
+      // Expand transport syntax only; no semantic values or grounding are added.
+      if (
+        task.lane === "Live" &&
+        raw &&
+        typeof raw === "object" &&
+        "continuation" in raw
+      ) {
+        try {
+          raw = expandProviderDecision(raw);
+        } catch {
+          throw new Error("model-schema-invalid");
+        }
       }
       // Complete JSON is still only a proposal. Session.accept is the truth boundary.
       const parsed = (

@@ -287,3 +287,9 @@ node scripts/analyze-run.mjs /absolute/path/to/.cuelayer/v2/frontier/paired-run/
 ```
 
 `--cases=fragmented-chemistry,administration` selects a bounded subset; `--tracks=OLD` or `--tracks=NEW` selects a track. Do not switch models silently. Use `node scripts/evaluate-audio.mjs --generated-audio --url=http://127.0.0.1:5193 --audio-dir=/absolute/path/to/ignored/generated-audio` for the separate audio track; do not claim a physical microphone trial from emulated audio. Provider errors, growing source lag and carried meaning remain failures/limitations even when all offline checks pass.
+
+### V2 model response contract v3
+
+Requests use `v2-live-request-3` / `v2-stage-request-3`. Quantity wire nodes encode symbol/number leaves directly; operator objects still reference preceding indexes and compile to the unchanged accepted MathJSON expression. Symbols, physical units, conditions, domains, grounding and dependency identities are still required and validated. Accepted event/replay versions do not change.
+
+Live provider output selects one `continuation`: NONE, WAIT_MORE_INPUT, OUTPUT_CAPACITY, or a READ/MODIFY lookup object. A lookup expands only to WAIT_MORE_INPUT; the unchanged host verifies a remaining source suffix and an authentic search.nextAfter cursor. The canonical proposal port also rejects lookup plus NONE/OUTPUT_CAPACITY. New Core/unit slots authorize new content; createWithin/writableUnits constrain existing state. Provider 6s, host 8s, reasoning, token cap and retries remain unchanged.

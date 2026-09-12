@@ -44,7 +44,7 @@ import {
   affectedReviews,
 } from "./acceptance";
 
-export const STAGE_WIRE_VERSION = "v2-stage-review-2";
+export const STAGE_WIRE_VERSION = "v2-stage-review-3";
 export type ReviewConcern = {
   id: string;
   version: number;
@@ -109,7 +109,7 @@ export const stageReviewSchema = z
   .strict();
 export type StageReview = z.infer<typeof stageReviewSchema>;
 export type StageRequest = {
-  version: "v2-stage-request-2";
+  version: "v2-stage-request-3";
   scope: string;
   items: {
     id: string;
@@ -300,7 +300,7 @@ export function captureStage(
     if (replay.reviewInspections[key]) continue;
     const id = `r0`;
     const request: StageRequest = {
-      version: "v2-stage-request-2",
+      version: "v2-stage-request-3",
       scope: nonce,
       items: [
         {

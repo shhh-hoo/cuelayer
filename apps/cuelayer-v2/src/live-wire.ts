@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Meaning, Expression } from "./contract";
-export const LIVE_WIRE_VERSION = "v2-live-decision-2";
+export const LIVE_WIRE_VERSION = "v2-live-decision-3";
 export const carryKindSchema = z.enum([
   "INCOMPLETE_PROPOSITION",
   "UNRESOLVED_REFERENCE",
@@ -18,11 +18,9 @@ export const wireDependencySchema = z
   .strict();
 export const expressionNodesSchema = z
   .array(
-    z.discriminatedUnion("operator", [
-      z.object({ operator: z.literal("Symbol"), symbol: alias }).strict(),
-      z
-        .object({ operator: z.literal("Number"), number: z.number().finite() })
-        .strict(),
+    z.union([
+      alias,
+      z.number().finite(),
       z
         .object({
           operator: z.enum(["Equal", "Multiply", "Divide", "Add", "Sin"]),
@@ -183,7 +181,7 @@ export const liveGroupSchema = z.discriminatedUnion("outcome", [
     .strict(),
 ]);
 // The provider schema root is always an object; alternatives are nested strict branches.
-export const liveDecisionSchema = z
+const liveDecisionShape = z
   .object({
     scope: alias,
     groups: z.array(liveGroupSchema).max(24),
@@ -203,6 +201,30 @@ export const liveDecisionSchema = z
     attentionCandidate: wireAttentionSchema.nullable(),
   })
   .strict();
+export const liveDecisionSchema = liveDecisionShape.refine(
+  (p) => !p.contextRequest || p.suffixStatus === "WAIT_MORE_INPUT",
+  "context-request-requires-wait",
+);
+// A lookup is itself the WAIT continuation, so the provider cannot pair it
+// with NONE/OUTPUT_CAPACITY. Dynamic range and cursor checks remain in host.
+export const liveProviderDecisionSchema = liveDecisionShape
+  .omit({ suffixStatus: true, contextRequest: true })
+  .extend({
+    continuation: z.union([
+      z.enum(["NONE", "WAIT_MORE_INPUT", "OUTPUT_CAPACITY"]),
+      contextRequestSchema,
+    ]),
+  })
+  .strict();
+export function expandProviderDecision(raw: unknown): LiveDecision {
+  const { continuation, ...decision } = liveProviderDecisionSchema.parse(raw);
+  return {
+    ...decision,
+    suffixStatus:
+      typeof continuation === "string" ? continuation : "WAIT_MORE_INPUT",
+    contextRequest: typeof continuation === "string" ? null : continuation,
+  };
+}
 export type LiveDecision = z.infer<typeof liveDecisionSchema>;
 export type WireOperation = z.infer<typeof wireOperationSchema>;
 export type WireMeaning = z.infer<typeof wireMeaningSchema>;
@@ -214,9 +236,8 @@ export function compileExpression(
     sizes: { size: number; depth: number }[] = [];
   for (const n of nodes) {
     let value: Expression;
-    const operands = "operands" in n ? n.operands : [];
-    if (n.operator === "Symbol") value = n.symbol;
-    else if (n.operator === "Number") value = n.number;
+    const operands = typeof n === "object" ? n.operands : [];
+    if (typeof n === "string" || typeof n === "number") value = n;
     else {
       if (operands.length !== (n.operator === "Sin" ? 1 : 2))
         throw new Error("missing-operand");
@@ -243,9 +264,8 @@ export function projectExpression(expression: Expression) {
   const visit = (e: Expression): number => {
     const operands = Array.isArray(e) ? e.slice(1).map(visit) : [];
     const at = nodes.length;
-    if (typeof e === "string") nodes.push({ operator: "Symbol", symbol: e });
-    else if (typeof e === "number")
-      nodes.push({ operator: "Number", number: e });
+    if (typeof e === "string") nodes.push(e);
+    else if (typeof e === "number") nodes.push(e);
     else nodes.push({ operator: e[0] as "Equal", operands });
     return at;
   };

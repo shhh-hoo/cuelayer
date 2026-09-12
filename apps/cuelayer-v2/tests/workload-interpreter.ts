@@ -31,7 +31,7 @@ function known(units: LiveRequest["units"]) {
 export function interpretWorkload(
   request: LiveRequest | StageRequest,
 ): LiveDecision | StageReview {
-  if (request.version === "v2-stage-request-2") {
+  if (request.version === "v2-stage-request-3") {
     const samples = known(request.units);
     return {
       scope: request.scope,
@@ -136,8 +136,8 @@ export function interpretWorkload(
           change: {
             field: "expression",
             value: [
-              { operator: "Symbol", symbol: m[3] },
-              { operator: "Number", number: value },
+              m[3],
+              value,
               { operator: "Equal", operands: [0, 1] },
             ],
           },
@@ -160,8 +160,8 @@ export function interpretWorkload(
           meaning: {
             kind: "quantity",
             nodes: [
-              { operator: "Symbol", symbol: m[3] },
-              { operator: "Number", number: value },
+              m[3],
+              value,
               { operator: "Equal", operands: [0, 1] },
             ],
             symbols: [
