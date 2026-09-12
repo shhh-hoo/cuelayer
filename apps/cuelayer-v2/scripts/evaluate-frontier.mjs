@@ -12,6 +12,9 @@ if (
     "assess",
     "replay-display",
     "replay-events",
+    "prepare-canary",
+    "verify-canary",
+    "execute-canary",
   ].includes(process.argv[2])
 ) {
   await (await import("../tests/evaluation/cli.mjs")).run();
@@ -19,7 +22,7 @@ if (
 }
 if (process.argv.includes("--live"))
   throw new Error(
-    "Legacy paid execution is disabled on the Gate 3b evaluator branch. A final manifest needs separate paid authorization.",
+    "Legacy mixed evaluation is disabled. Use execute-canary with a frozen manifest and explicit bound authorization.",
   );
 const opt = (name, fallback) =>
   process.argv

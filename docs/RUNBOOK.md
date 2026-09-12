@@ -311,3 +311,27 @@ Preflight takes at least 600 seconds. It runs the full empty-receiver driver bas
 `preflight-result.json` is 3b-0 only. Inspect its individual checks and dependency labels; preserve Gate 3a FAILED. Every future paid run remains NOT_RUN. The old `--live` frontier entry is disabled on the evaluator branch. Do not infer paid authorization from preflight PASS, a prior estimate or an old experiment approval. Request a new authorization tied to the final manifest before adding/enabling provider execution. Future limits are US$10 and 400 requests including canary, Stage and retries.
 
 The raw `joint.json`, request/response/task/prestate data, event log, clock probes, browser graph, DOM samples and screenshot support offline diagnosis. `assess` does not call a provider. Display isolation preserves event/semantic IDs and only claims the lifecycle context actually replayed; it does not restore expired attention or manufacture a Cue. Generated manifests, traces, test results and screenshots belong in ignored `.cuelayer/` or an explicit external evidence archive, never tracked source.
+
+### Authorized canary entry
+
+The evaluator now contains a paid capability; authorization controls access to it. `prepare-canary` and `verify-canary` remain unpaid, credential-free commands protected by the existing egress guard. They reference the accepted `f6c48097470437fbbce86767fb3e7cbcbb847148` preflight manifest, verify its immutable snapshots and protected evaluator files, and bind a new execution manifest to the current clean evaluator SHA and output directory. They do not regenerate the six snapshots or rerun 3b-0.
+
+```sh
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs self-test --execution-only
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs prepare-canary --baseline-manifest=/path/to/accepted-3b0/manifest.json --out=/path/to/new-execution-directory
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs verify-canary --manifest=/path/to/new-execution-directory/execution-manifest.json
+```
+
+After separate explicit user authorization for that new evaluator/manifest, the operator supplies an authorization JSON file with `identity: "gate3b-execution-authorization-1"`, a nonempty `authorization_id`, `allow_real_provider: true`, exact `manifest_sha256` (object hash returned by prepare), `product_sha`, `evaluator_sha`, `profile_sha256`, `model`, ordered `canaries`, and valid ISO `issued_at` / `expires_at`. No evaluator command creates authorization. Only then may the configured `OPENAI_API_KEY` be read and this command run:
+
+```sh
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs execute-canary --manifest=/path/to/new-execution-directory/execution-manifest.json --authorization=/path/to/explicit-authorization.json
+```
+
+The paid entry accepts only those two options. It rejects model, endpoint, cohort, profile, identity or expiry drift; it cannot dispatch later phases. An exclusive execution-start record prevents concurrent owners or replacement runs, and the manifest binds its output directory. The legacy mixed `--live` command remains disabled. Never infer permission from a prepared manifest or qualification record.
+
+Only the original six payloads may reach the production OpenAI SDK. The request body is byte-checked at the network boundary; every SDK attempt reserves the frozen budget and persists its reservation before dispatch. The transport endpoint is fixed to the official Responses endpoint, with redirects/fallback endpoints prohibited. The existing SDK retry count remains zero; the frozen Session queue provides its original transport retries and host deadline, while the production provider timeout remains unchanged.
+
+For isolated T1 execution, the harness pauses a frozen Session before folding the exact accepted-event prefix and restoring its one captured task. This prevents automatic recovery from issuing unrelated Live/Stage work. The original queue, stream parser, writer and acceptance methods execute that task; the actual acceptance prestate includes the writer's intervening attempt events. No request aliases, accepted gold or product implementation are rewritten.
+
+Per-attempt raw provider bytes, response headers/identity, usage/cache, latency, parser results, actual accepted events/state and the unchanged semantic assessment are written before the next attempt or canary. Missing usage retains the full cost reservation. Hard semantic failure, INVALID or required adjudication stops progression. A frozen adjudication package is saved without converting pending results to PASS. Unpaid execution tests use an injected transport through the same SDK/parser/Session path, mark evidence STUB, and have zero real-provider attempts.

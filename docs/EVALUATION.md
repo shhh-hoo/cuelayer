@@ -331,7 +331,7 @@ For paid OLD→NEW comparison, hold model/reasoning/output, Speechmatics configu
 
 ### Gate 3b — Real-Model Text Pipeline Gate
 
-Identity: `gate3b-real-model-text-pipeline-1`. Architecture reference: [Testing Architecture & Acceptance Design](https://docs.google.com/document/d/1ImwVax-a5sz8qHvzvu-v8iDSmukaUYJwLLJ4apTyJoI/edit). **Gate 3a remains FAILED at `727accf`.** The repaired product is frozen at `1a796e8c713b6f00ef9beb72004b456833a82ff5`. The evaluator has an independent checkout, SHA and Draft PR, with automatic deployment disabled. It must not modify the product checkout, PR #46, prompt/schema, scheduler, deadlines or retries. This change enables unpaid preparation, assessment and replay only. Paid execution remains disabled.
+Identity: `gate3b-real-model-text-pipeline-1`. Architecture reference: [Testing Architecture & Acceptance Design](https://docs.google.com/document/d/1ImwVax-a5sz8qHvzvu-v8iDSmukaUYJwLLJ4apTyJoI/edit). **Gate 3a remains FAILED at `727accf`.** The repaired product is frozen at `1a796e8c713b6f00ef9beb72004b456833a82ff5`. The evaluator has an independent checkout, SHA and Draft PR, with automatic deployment disabled. It must not modify the product checkout, PR #46, prompt/schema, scheduler, deadlines or retries. Unpaid preparation, assessment and replay remain credential-free. The six-snapshot paid canary entry requires a separate execution manifest and explicit authorization bound to its hashes; qualification alone never enables a provider call.
 
 | Phase | Gate | Preregistered work |
 | --- | --- | --- |

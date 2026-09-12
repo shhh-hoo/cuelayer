@@ -26,9 +26,47 @@ const required = (name) => {
   return resolve(value);
 };
 export async function run() {
+  const command = process.argv[2];
+  if (command === "execute-canary") {
+    const options = process.argv.slice(3);
+    if (
+      options.some((x) => !/^--(manifest|authorization)=.+/.test(x)) ||
+      options.length !== 2 ||
+      new Set(options.map((x) => x.split("=")[0])).size !== 2
+    )
+      throw Error(
+        "unapproved-execution-option: only --manifest and --authorization are accepted",
+      );
+    const { executeAuthorized } = await import("./execute-canary.mjs");
+    const result = await executeAuthorized(
+      required("manifest"),
+      required("authorization"),
+    );
+    console.log(JSON.stringify(result));
+    if (result.status !== "PASS") process.exitCode = 1;
+    return;
+  }
   const restore = prohibitProviderEgress();
   try {
-    const command = process.argv[2];
+    if (["prepare-canary", "verify-canary"].includes(command)) {
+      const { prepareExecution, verifyExecution } =
+        await import("./execution-manifest.mjs");
+      const result =
+        command === "prepare-canary"
+          ? await prepareExecution(
+              required("baseline-manifest"),
+              required("out"),
+            )
+          : await verifyExecution(required("manifest"));
+      console.log(
+        JSON.stringify({
+          manifest_sha256: result.manifest_sha256,
+          status: "PASS",
+          provider_invocations: 0,
+        }),
+      );
+      return;
+    }
     if (command === "prepare") {
       const out = required("out"),
         result = await prepare({
@@ -50,9 +88,13 @@ export async function run() {
         process.execPath,
         [
           "--test",
-          resolve(
-            evaluatorRoot,
-            "apps/cuelayer-v2/tests/evaluation/self-test.mjs",
+          ...[
+            ...(process.argv.includes("--execution-only")
+              ? []
+              : ["self-test.mjs"]),
+            "execution-self-test.mjs",
+          ].map((name) =>
+            resolve(evaluatorRoot, "apps/cuelayer-v2/tests/evaluation", name),
           ),
         ],
         { cwd: evaluatorRoot, maxBuffer: 8e6 },
