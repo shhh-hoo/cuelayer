@@ -3,6 +3,24 @@ import { chromium } from "@playwright/test";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
+if (
+  [
+    "prepare",
+    "verify",
+    "preflight",
+    "self-test",
+    "assess",
+    "replay-display",
+    "replay-events",
+  ].includes(process.argv[2])
+) {
+  await (await import("../tests/evaluation/cli.mjs")).run();
+  process.exit(process.exitCode ?? 0);
+}
+if (process.argv.includes("--live"))
+  throw new Error(
+    "Legacy paid execution is disabled on the Gate 3b evaluator branch. A final manifest needs separate paid authorization.",
+  );
 const opt = (name, fallback) =>
   process.argv
     .find((a) => a.startsWith(`--${name}=`))

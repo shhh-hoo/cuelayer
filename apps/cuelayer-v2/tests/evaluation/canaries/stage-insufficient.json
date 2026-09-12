@@ -1,0 +1,177 @@
+{
+  "scenario_id": "stage-insufficient",
+  "version": "gate3b-contract-1",
+  "review_status": "AUTHORED",
+  "source": {
+    "kind": "authored",
+    "identity": "stage-canary-preconditions-1"
+  },
+  "duration_ms": 3000,
+  "transcript_events": [
+    {
+      "event_id": "e0",
+      "at_ms": 0,
+      "text": "A mole fraction is a ratio of amounts."
+    },
+    {
+      "event_id": "e1",
+      "at_ms": 1000,
+      "text": "That fraction determines its share."
+    }
+  ],
+  "semantic_checkpoints": [
+    {
+      "expectation_id": "stage-disposition",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "stage_required",
+      "prerequisites": [
+        {
+          "id": "stage-context",
+          "condition": "pass"
+        },
+        {
+          "id": "stage-schema",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "expected_outcome": "STILL_OPEN"
+      },
+      "evidence_refs": ["e0", "e1"],
+      "severity": "hard",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "frozen-stage-context",
+          "event_ids": ["e0", "e1"],
+          "invalidated_by": []
+        }
+      ]
+    }
+  ],
+  "forbidden_predicates": [
+    {
+      "expectation_id": "no-invented-resolution",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "stage_required",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "source_any": ["e1"]
+        },
+        "any_unit": true
+      },
+      "evidence_refs": ["e0", "e1"],
+      "severity": "hard"
+    }
+  ],
+  "allowed_equivalences": [
+    {
+      "equivalence_id": "scalar-units",
+      "kind": "scalar-unit",
+      "description": "Exact pressure conversion Pa/kPa/MPa; physical dimensions remain fixed.",
+      "values": ["Pa", "kPa", "MPa"]
+    },
+    {
+      "equivalence_id": "symbols",
+      "kind": "symbol-renaming",
+      "description": "Bind variables by roles, units and provenance; never require production UUIDs or one symbol spelling.",
+      "values": []
+    }
+  ],
+  "surface_expectations": [],
+  "timing_expectations": [],
+  "projection_expectations": [
+    {
+      "expectation_id": "stage-context",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "stage_required",
+      "prerequisites": [],
+      "predicate_id": "request.adequate",
+      "parameters": {},
+      "evidence_refs": ["e0", "e1"],
+      "severity": "ordinary"
+    }
+  ],
+  "mechanism_expectations": [
+    {
+      "expectation_id": "stage-schema",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "stage_required",
+      "prerequisites": [
+        {
+          "id": "stage-context",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "model.schema",
+      "parameters": {},
+      "evidence_refs": ["e0", "e1"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "stage-host",
+      "owner_layer": "E",
+      "required": true,
+      "activation_rule": "stage_required",
+      "prerequisites": [],
+      "predicate_id": "host.contract",
+      "parameters": {},
+      "evidence_refs": ["e0", "e1"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "stage-remains-open",
+      "owner_layer": "G",
+      "required": true,
+      "activation_rule": "stage_required",
+      "prerequisites": [
+        {
+          "id": "stage-disposition",
+          "condition": "pass"
+        },
+        {
+          "id": "stage-host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "recovery.resolved",
+      "parameters": {
+        "budget_ms": 20000,
+        "expected_resolution": "STILL_OPEN",
+        "preserve_accounted": true
+      },
+      "evidence_refs": ["e0", "e1"],
+      "severity": "hard"
+    }
+  ],
+  "adjudication_rules": [
+    {
+      "rule_id": "stage-grounding-rubric-1",
+      "scope": ["stage-disposition", "no-invented-resolution"],
+      "rubric": "Only the frozen captured evidence and accepted units may support claims. Without clarification, retain the reference without inventing endpoints. With clarification, useful resolution must bind the mole fraction to the component pressure share, cite original and clarifying evidence, preserve existing identities, and leave A unchanged. Exact wording may differ if all roles and constraints are entailed; unrecognized wording requires a signed adjudication record under this rule. Unsupported assertions and false endpoints are hard semantic FAIL."
+    }
+  ],
+  "preconditions": {
+    "kind": "accepted-events",
+    "event_fixture": "stage-insufficient.json#generation.precondition_events"
+  },
+  "coverage_requirements": [
+    {
+      "kind": "stage_context_insufficient",
+      "event_ids": ["e0", "e1"]
+    }
+  ],
+  "stage_requirement": {
+    "required": true,
+    "why_wider_context": "Isolated Stage contract canary: all Live source in the frozen precondition log is accounted, with an unresolved reference retained. Stage must inspect the original obligation and established-Core context; there is no new PROCESS range. This fixture does not assert the preceding Live choices passed their semantic oracle. It is never injected into T2/T3.",
+    "trigger_event_ids": ["e1"],
+    "wider_context_event_ids": ["e0", "e1"],
+    "useful_resolution_predicates": ["stage-remains-open"]
+  }
+}

@@ -1,0 +1,3078 @@
+{
+  "scenario_id": "natural-semantic-load",
+  "version": "gate3b-contract-1",
+  "review_status": "AUTHORED",
+  "source": {
+    "kind": "authored",
+    "identity": "natural-semantic-load-1"
+  },
+  "duration_ms": 600000,
+  "transcript_events": [
+    {
+      "event_id": "n0",
+      "at_ms": 0,
+      "text": "Today we will connect gas pressure to the way we describe a mixture. We will use a sealed vessel as our example. Keep your attention on what is measured, what is calculated, and which conditions make each relationship useful."
+    },
+    {
+      "event_id": "n1",
+      "at_ms": 16065,
+      "text": "The pressure gauge on our first vessel reads two hundred kilopascals. I will call that the total pressure. A kilopascal is one thousand pascals, so the same reading can be written as two hundred thousand pascals without changing the physical pressure."
+    },
+    {
+      "event_id": "n2",
+      "at_ms": 32955,
+      "text": "Before we discuss the mixture, remember that pressure is force per unit area. If the force is spread over a larger area while the force stays the same, the pressure is smaller. The area in that comparison must be measured in square metres."
+    },
+    {
+      "event_id": "n3",
+      "at_ms": 50668,
+      "text": "For an ideal gas mixture, the partial pressure of one component equals its mole fraction"
+    },
+    {
+      "event_id": "n4",
+      "at_ms": 51868,
+      "text": "times the total pressure. The condition about an ideal mixture belongs to that statement. We have not established the same unrestricted rule for every real mixture under every possible condition."
+    },
+    {
+      "event_id": "n5",
+      "at_ms": 69205,
+      "text": "Both total pressure and partial pressure may be expressed in pascals. The mole fraction has no physical unit because it is an amount divided by the total amount, using the same amount unit in numerator and denominator."
+    },
+    {
+      "event_id": "n6",
+      "at_ms": 84446,
+      "text": "Imagine that oxygen accounts for one quarter of the amount in our vessel. Its mole fraction is zero point two five. With a total pressure of two hundred kilopascals, the oxygen partial pressure is fifty kilopascals for this ideal mixture."
+    },
+    {
+      "event_id": "n7",
+      "at_ms": 100923,
+      "text": "The remaining component has mole fraction zero point seven five. Its partial pressure is one hundred and fifty kilopascals. Notice that the two partial pressures add to the stated total pressure, and the two mole fractions add to one."
+    },
+    {
+      "event_id": "n8",
+      "at_ms": 116989,
+      "text": "Please open your notebook to a fresh page. Leave some space under the example because we will return to it later. You do not need to copy every sentence I say; record the relationship, its condition, and the units."
+    },
+    {
+      "event_id": "n9",
+      "at_ms": 133054,
+      "text": "Now compare the two components with your partner. Which component has the larger partial pressure, and what piece of evidence supports your answer? Use the stated fractions and pressures. Keep the ideal mixture condition attached to your explanation."
+    },
+    {
+      "event_id": "n10",
+      "at_ms": 148707,
+      "text": "The useful comparison is between the components inside the same vessel. Comparing a partial pressure from one vessel with a total pressure from another would require information about both vessels. Similar labels alone do not establish comparable conditions."
+    },
+    {
+      "event_id": "n11",
+      "at_ms": 164361,
+      "text": "I need to correct the gauge reading I gave for the first vessel. The total pressure should be two hundred and fifty kilopascals, not two hundred. The composition remains the same, and we are still treating the mixture as ideal."
+    },
+    {
+      "event_id": "n12",
+      "at_ms": 180838,
+      "text": "With that corrected total pressure, one quarter of two hundred and fifty is sixty two point five. The oxygen partial pressure is therefore sixty two point five kilopascals. The earlier fifty kilopascal result belonged to the earlier gauge reading."
+    },
+    {
+      "event_id": "n13",
+      "at_ms": 196903,
+      "text": "The other partial pressure is now one hundred and eighty seven point five kilopascals. Those two updated values sum to two hundred and fifty. We should keep the earlier calculation in the history while making clear which set of values is current."
+    },
+    {
+      "event_id": "n14",
+      "at_ms": 214205,
+      "text": "If we were to warm the vessel while keeping"
+    },
+    {
+      "event_id": "n15",
+      "at_ms": 215705,
+      "text": "Let me leave that thought unfinished for now. We have not specified all the conditions needed for that change. Instead, I want to examine how an area measurement can affect a pressure calculation."
+    },
+    {
+      "event_id": "n16",
+      "at_ms": 231506,
+      "text": "Consider a rectangular face. Its area equals its length multiplied by its width. If length and width are measured in metres, the area is measured in square metres. The unit changes because we multiply two lengths together."
+    },
+    {
+      "event_id": "n17",
+      "at_ms": 246747,
+      "text": "A rectangle with length three metres and width two metres has area six square metres. Swapping the names of the two sides leaves the area unchanged, but substituting a perimeter calculation would describe a different property."
+    },
+    {
+      "event_id": "n18",
+      "at_ms": 261577,
+      "text": "For a fixed perpendicular force, doubling the area halves the pressure. In that sentence, fixed force is a necessary condition. If the force also changes, the area change alone is not enough to determine the new pressure."
+    },
+    {
+      "event_id": "n19",
+      "at_ms": 276818,
+      "text": "Write a short comparison between area and pressure. Area grows with either side length when the other side stays fixed. Pressure decreases with area when force stays fixed. These are different relationships with different quantities held constant."
+    },
+    {
+      "event_id": "n20",
+      "at_ms": 292060,
+      "text": "Let us return to the gas mixture in the first vessel. The corrected total pressure is still two hundred and fifty kilopascals. Changing the topic to rectangles did not create a new vessel or restore the earlier gauge reading."
+    },
+    {
+      "event_id": "n21",
+      "at_ms": 308125,
+      "text": "We also have a second vessel. Its total pressure is one hundred kilopascals, and its oxygen mole fraction is one half. Under the ideal mixture assumption, its oxygen partial pressure is fifty kilopascals."
+    },
+    {
+      "event_id": "n22",
+      "at_ms": 321719,
+      "text": "The first vessel therefore has the larger oxygen partial pressure in these examples. A larger mole fraction alone does not guarantee a larger partial pressure when the total pressures differ. We must use both quantities in the comparison."
+    },
+    {
+      "event_id": "n23",
+      "at_ms": 337372,
+      "text": "That sample has the larger value. I realize that I have not said whether I mean total pressure or oxygen partial pressure, and I have not named the sample in this sentence. Keep that reference open rather than assigning an object from its position on the page."
+    },
+    {
+      "event_id": "n24",
+      "at_ms": 356733,
+      "text": "While that reference is open, note a separate point: a mole fraction cannot be negative. In this lesson we are describing components with nonnegative amounts, and the total amount must be positive for the fraction to be defined."
+    },
+    {
+      "event_id": "n25",
+      "at_ms": 372386,
+      "text": "By that sample in my earlier sentence, I meant the first vessel, and by the value I meant its oxygen partial pressure. This clarification refers back to the two vessel comparison. It does not introduce a third vessel or another independent pressure reading."
+    },
+    {
+      "event_id": "n26",
+      "at_ms": 390099,
+      "text": "Our earlier discussion also used the word larger before the rectangle example. That comparison should be reviewed against the mixture quantities we have already established. The local word larger does not by itself identify the comparison endpoints or the quantity being compared."
+    },
+    {
+      "event_id": "n27",
+      "at_ms": 407401,
+      "text": "To settle that earlier comparison, I mean the corrected oxygen partial pressure in the first vessel compared with the oxygen partial pressure in the second vessel. Both values are expressed in kilopascals. The comparison concerns those two accepted quantities."
+    },
+    {
+      "event_id": "n28",
+      "at_ms": 423466,
+      "text": "Pause for a moment and check your notes. Cross out a copied unit only if it is wrong; do not erase the fact that the gauge reading was corrected. A correction changes the current assertion while leaving a traceable explanation of what changed."
+    },
+    {
+      "event_id": "n29",
+      "at_ms": 441179,
+      "text": "Please decide whether the following claim is supported: the vessel with the larger oxygen mole fraction must have the larger oxygen partial pressure. Explain your decision using our two examples. Do not assume that the total pressures are equal."
+    },
+    {
+      "event_id": "n30",
+      "at_ms": 457244,
+      "text": "The claim is not supported as a general statement. Our second vessel has the larger oxygen mole fraction, yet its oxygen partial pressure is lower than the corrected value in the first vessel. The different total pressures matter."
+    },
+    {
+      "event_id": "n31",
+      "at_ms": 472898,
+      "text": "We have kept several different kinds of information apart: observed gauge readings, calculated partial pressures, mathematical relationships, and unresolved references. An unfinished sentence is not a completed scientific law, and an administrative instruction is not another measured quantity."
+    },
+    {
+      "event_id": "n32",
+      "at_ms": 488551,
+      "text": "As we finish, retain the ideal mixture condition, the corrected values for the first vessel, and the distinction between total and partial pressure. If a reference remains genuinely unspecified, leave it marked as unresolved instead of inventing a final answer to make the notes look complete."
+    },
+    {
+      "event_id": "n33",
+      "at_ms": 507500,
+      "text": "One final check concerns our notation. A symbol is a name for a quantity, not an additional measurement. You may choose a different letter in your notes if you define it clearly and keep the same physical role, value and unit throughout the calculation."
+    },
+    {
+      "event_id": "n34",
+      "at_ms": 525625,
+      "text": "When you revisit these examples tomorrow, begin with the current gauge reading and identify the component before multiplying. State the ideal mixture assumption. If you cannot identify the component from the available description, ask for clarification instead of borrowing a value from a nearby example."
+    },
+    {
+      "event_id": "n35",
+      "at_ms": 544162,
+      "text": "Our method of checking an explanation is to compare its claims with the information actually supplied. A familiar equation can still be misapplied when its condition is missing. A correct number with the wrong unit also fails to describe the stated physical quantity."
+    },
+    {
+      "event_id": "n36",
+      "at_ms": 561875,
+      "text": "Keep your partner question separate from the answer you later develop. A request to compare quantities invites work; it does not by itself establish a new relationship between them. When you report a comparison, name both quantities and say which direction the comparison takes."
+    }
+  ],
+  "semantic_checkpoints": [
+    {
+      "expectation_id": "initial-total",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-initial-total",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n1"]
+        },
+        "scalar": {
+          "value": 200,
+          "unit": "kPa",
+          "role_labels": [
+            "total pressure",
+            "first vessel total pressure",
+            "second vessel total pressure"
+          ]
+        }
+      },
+      "evidence_refs": ["n1"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n1"],
+          "invalidated_by": ["n11"]
+        }
+      ]
+    },
+    {
+      "expectation_id": "first-oxygen",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-first-oxygen",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n6"]
+        },
+        "scalar": {
+          "value": 50,
+          "unit": "kPa",
+          "role_labels": [
+            "oxygen partial pressure",
+            "first vessel oxygen partial pressure",
+            "second vessel oxygen partial pressure"
+          ]
+        }
+      },
+      "evidence_refs": ["n1", "n3", "n4", "n5", "n6"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n1", "n3", "n4", "n5", "n6"],
+          "invalidated_by": ["n11"]
+        }
+      ]
+    },
+    {
+      "expectation_id": "corrected-total",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-corrected-total",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n11"]
+        },
+        "scalar": {
+          "value": 250,
+          "unit": "kPa",
+          "role_labels": [
+            "total pressure",
+            "first vessel total pressure",
+            "second vessel total pressure"
+          ]
+        }
+      },
+      "evidence_refs": ["n11"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n11"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "corrected-oxygen",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-corrected-oxygen",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n12"]
+        },
+        "scalar": {
+          "value": 62.5,
+          "unit": "kPa",
+          "role_labels": [
+            "oxygen partial pressure",
+            "first vessel oxygen partial pressure",
+            "second vessel oxygen partial pressure"
+          ]
+        }
+      },
+      "evidence_refs": ["n11", "n12"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n11", "n12"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "second-oxygen",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-second-oxygen",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n21"]
+        },
+        "scalar": {
+          "value": 50,
+          "unit": "kPa",
+          "role_labels": [
+            "oxygen partial pressure",
+            "first vessel oxygen partial pressure",
+            "second vessel oxygen partial pressure"
+          ]
+        }
+      },
+      "evidence_refs": ["n21"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n21"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "fraction-condition",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-fraction-condition",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["n24"]
+        },
+        "exact_claims": [
+          "A mole fraction cannot be negative when component amounts are nonnegative and the total amount is positive."
+        ]
+      },
+      "evidence_refs": ["n24"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n24"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "comparison",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-comparison",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["n27"]
+        },
+        "exact_claims": [
+          "The corrected oxygen partial pressure in the first vessel exceeds the oxygen partial pressure in the second vessel."
+        ]
+      },
+      "evidence_refs": ["n21", "n22", "n25", "n27"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n21", "n22", "n25", "n27"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "remaining-initial",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-remaining-initial",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n7"]
+        },
+        "scalar": {
+          "value": 150,
+          "unit": "kPa",
+          "role_labels": [
+            "remaining component partial pressure",
+            "first vessel remaining component partial pressure",
+            "second vessel remaining component partial pressure"
+          ]
+        }
+      },
+      "evidence_refs": ["n7"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n7"],
+          "invalidated_by": ["n11"]
+        }
+      ]
+    },
+    {
+      "expectation_id": "remaining-corrected",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-remaining-corrected",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n13"]
+        },
+        "scalar": {
+          "value": 187.5,
+          "unit": "kPa",
+          "role_labels": [
+            "remaining component partial pressure",
+            "first vessel remaining component partial pressure",
+            "second vessel remaining component partial pressure"
+          ]
+        }
+      },
+      "evidence_refs": ["n13"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n13"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "ideal-relationship",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-ideal-relationship",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n3", "n4"]
+        },
+        "product_equation": {
+          "units": ["Pa", "dimensionless", "Pa"]
+        },
+        "conditions": ["For an ideal gas mixture"]
+      },
+      "evidence_refs": ["n3", "n4", "n5"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n3", "n4", "n5"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "rectangle-relationship",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-rectangle-relationship",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n16"]
+        },
+        "product_equation": {
+          "units": ["m²", "m", "m"]
+        }
+      },
+      "evidence_refs": ["n16"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n16"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "rectangle-value",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-rectangle-value",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n17"]
+        },
+        "scalar": {
+          "value": 6,
+          "unit": "m²",
+          "role_labels": ["area", "rectangle area"]
+        }
+      },
+      "evidence_refs": ["n17"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n17"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "fixed-force-condition",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-fixed-force-condition",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["n18"]
+        },
+        "exact_claims": [
+          "For a fixed perpendicular force, doubling the area halves the pressure."
+        ]
+      },
+      "evidence_refs": ["n18"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n18"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "topic-return",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-topic-return",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n11", "n20"]
+        },
+        "scalar": {
+          "value": 250,
+          "unit": "kPa",
+          "role_labels": ["total pressure", "first vessel total pressure"]
+        }
+      },
+      "evidence_refs": ["n20"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n20"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "open-reference",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-open-reference",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "expected_outcome": "CARRY",
+        "allowed_carry_kinds": ["UNRESOLVED_REFERENCE", "CONTEXT_REQUIRED"]
+      },
+      "evidence_refs": ["n23"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n23"],
+          "invalidated_by": ["n25"]
+        }
+      ]
+    },
+    {
+      "expectation_id": "unfinished-thought",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-unfinished-thought",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "expected_outcome": "CARRY"
+      },
+      "evidence_refs": ["n14", "n15"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n14", "n15"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "qualified-comparison",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-qualified-comparison",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "meaning.matches",
+      "parameters": {
+        "selector": {
+          "source_any": ["n30"]
+        },
+        "exact_claims": [
+          "A larger oxygen mole fraction does not guarantee a larger oxygen partial pressure when total pressures differ."
+        ],
+        "false_claims": [
+          "A larger oxygen mole fraction always gives a larger oxygen partial pressure."
+        ]
+      },
+      "evidence_refs": ["n30"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n30"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "cue-n9",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-cue-n9",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "cue.matches",
+      "parameters": {
+        "exact_claims": [
+          "Now compare the two components with your partner. Which component has the larger partial pressure, and what piece of evidence supports your answer? Use the stated fractions and pressures. Keep the ideal mixture condition attached to your explanation."
+        ]
+      },
+      "evidence_refs": ["n9"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n9"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "cue-n19",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-cue-n19",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "cue.matches",
+      "parameters": {
+        "exact_claims": [
+          "Write a short comparison between area and pressure. Area grows with either side length when the other side stays fixed. Pressure decreases with area when force stays fixed. These are different relationships with different quantities held constant."
+        ]
+      },
+      "evidence_refs": ["n19"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n19"],
+          "invalidated_by": []
+        }
+      ]
+    },
+    {
+      "expectation_id": "cue-n29",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection-cue-n29",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "cue.matches",
+      "parameters": {
+        "exact_claims": [
+          "Please decide whether the following claim is supported: the vessel with the larger oxygen mole fraction must have the larger oxygen partial pressure. Explain your decision using our two examples. Do not assume that the total pressures are equal."
+        ]
+      },
+      "evidence_refs": ["n29"],
+      "severity": "ordinary",
+      "sufficient_evidence_sets": [
+        {
+          "set_id": "original",
+          "event_ids": ["n29"],
+          "invalidated_by": []
+        }
+      ]
+    }
+  ],
+  "forbidden_predicates": [
+    {
+      "expectation_id": "administration-n8",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "source_any": ["n8"],
+          "kind": "quantity"
+        },
+        "any_unit": true
+      },
+      "evidence_refs": ["n8"],
+      "severity": "hard"
+    },
+    {
+      "expectation_id": "administration-n28",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "source_any": ["n28"],
+          "kind": "quantity"
+        },
+        "any_unit": true
+      },
+      "evidence_refs": ["n28"],
+      "severity": "hard"
+    },
+    {
+      "expectation_id": "unfinished-false-law",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "source_any": ["n14", "n15"]
+        },
+        "false_claims": [
+          "Warming the vessel doubles its pressure.",
+          "Pressure always increases when the vessel is warmed."
+        ]
+      },
+      "evidence_refs": ["n14", "n15"],
+      "severity": "hard"
+    },
+    {
+      "expectation_id": "comparison-false-generalization",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "source_any": ["n22", "n29", "n30"]
+        },
+        "false_claims": [
+          "A larger mole fraction always means a larger partial pressure.",
+          "The vessel with the larger oxygen mole fraction must have the larger oxygen partial pressure."
+        ]
+      },
+      "evidence_refs": ["n22", "n29", "n30"],
+      "severity": "hard"
+    },
+    {
+      "expectation_id": "false-initial-total",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n1"]
+        },
+        "scalar": {
+          "value": 200,
+          "unit": "kPa",
+          "role_labels": [
+            "total pressure",
+            "first vessel total pressure",
+            "second vessel total pressure"
+          ]
+        },
+        "checkpoint_id": "initial-total"
+      },
+      "evidence_refs": ["n1"],
+      "severity": "hard"
+    },
+    {
+      "expectation_id": "false-first-oxygen",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n6"]
+        },
+        "scalar": {
+          "value": 50,
+          "unit": "kPa",
+          "role_labels": [
+            "oxygen partial pressure",
+            "first vessel oxygen partial pressure",
+            "second vessel oxygen partial pressure"
+          ]
+        },
+        "checkpoint_id": "first-oxygen"
+      },
+      "evidence_refs": ["n1", "n3", "n4", "n5", "n6"],
+      "severity": "hard"
+    },
+    {
+      "expectation_id": "false-corrected-total",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n11"]
+        },
+        "scalar": {
+          "value": 250,
+          "unit": "kPa",
+          "role_labels": [
+            "total pressure",
+            "first vessel total pressure",
+            "second vessel total pressure"
+          ]
+        },
+        "checkpoint_id": "corrected-total"
+      },
+      "evidence_refs": ["n11"],
+      "severity": "hard"
+    },
+    {
+      "expectation_id": "false-corrected-oxygen",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n12"]
+        },
+        "scalar": {
+          "value": 62.5,
+          "unit": "kPa",
+          "role_labels": [
+            "oxygen partial pressure",
+            "first vessel oxygen partial pressure",
+            "second vessel oxygen partial pressure"
+          ]
+        },
+        "checkpoint_id": "corrected-oxygen"
+      },
+      "evidence_refs": ["n11", "n12"],
+      "severity": "hard"
+    },
+    {
+      "expectation_id": "false-second-oxygen",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n21"]
+        },
+        "scalar": {
+          "value": 50,
+          "unit": "kPa",
+          "role_labels": [
+            "oxygen partial pressure",
+            "first vessel oxygen partial pressure",
+            "second vessel oxygen partial pressure"
+          ]
+        },
+        "checkpoint_id": "second-oxygen"
+      },
+      "evidence_refs": ["n21"],
+      "severity": "hard"
+    },
+    {
+      "expectation_id": "false-remaining-initial",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n7"]
+        },
+        "scalar": {
+          "value": 150,
+          "unit": "kPa",
+          "role_labels": [
+            "remaining component partial pressure",
+            "first vessel remaining component partial pressure",
+            "second vessel remaining component partial pressure"
+          ]
+        },
+        "checkpoint_id": "remaining-initial"
+      },
+      "evidence_refs": ["n7"],
+      "severity": "hard"
+    },
+    {
+      "expectation_id": "false-remaining-corrected",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n13"]
+        },
+        "scalar": {
+          "value": 187.5,
+          "unit": "kPa",
+          "role_labels": [
+            "remaining component partial pressure",
+            "first vessel remaining component partial pressure",
+            "second vessel remaining component partial pressure"
+          ]
+        },
+        "checkpoint_id": "remaining-corrected"
+      },
+      "evidence_refs": ["n13"],
+      "severity": "hard"
+    },
+    {
+      "expectation_id": "false-rectangle-value",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n17"]
+        },
+        "scalar": {
+          "value": 6,
+          "unit": "m²",
+          "role_labels": ["area", "rectangle area"]
+        },
+        "checkpoint_id": "rectangle-value"
+      },
+      "evidence_refs": ["n17"],
+      "severity": "hard"
+    },
+    {
+      "expectation_id": "false-topic-return",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "meaning.forbidden",
+      "parameters": {
+        "selector": {
+          "kind": "quantity",
+          "source_any": ["n11", "n20"]
+        },
+        "scalar": {
+          "value": 250,
+          "unit": "kPa",
+          "role_labels": ["total pressure", "first vessel total pressure"]
+        },
+        "checkpoint_id": "topic-return"
+      },
+      "evidence_refs": ["n20"],
+      "severity": "hard"
+    }
+  ],
+  "allowed_equivalences": [
+    {
+      "equivalence_id": "scalar-units",
+      "kind": "scalar-unit",
+      "description": "Exact pressure conversion Pa/kPa/MPa; physical dimensions remain fixed.",
+      "values": ["Pa", "kPa", "MPa"]
+    },
+    {
+      "equivalence_id": "symbols",
+      "kind": "symbol-renaming",
+      "description": "Bind variables by roles, units and provenance; never require production UUIDs or one symbol spelling.",
+      "values": []
+    }
+  ],
+  "surface_expectations": [
+    {
+      "expectation_id": "initial-total-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "initial-total",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "required_text": ["kPa"],
+        "minimum_visible_ms": 100,
+        "checkpoint_id": "initial-total"
+      },
+      "evidence_refs": ["n1"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "first-oxygen-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "first-oxygen",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "required_text": ["kPa"],
+        "minimum_visible_ms": 100,
+        "checkpoint_id": "first-oxygen"
+      },
+      "evidence_refs": ["n1", "n3", "n4", "n5", "n6"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "corrected-total-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "corrected-total",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "required_text": ["kPa"],
+        "minimum_visible_ms": 100,
+        "checkpoint_id": "corrected-total"
+      },
+      "evidence_refs": ["n11"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "corrected-oxygen-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "corrected-oxygen",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "required_text": ["kPa"],
+        "minimum_visible_ms": 100,
+        "checkpoint_id": "corrected-oxygen"
+      },
+      "evidence_refs": ["n11", "n12"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "second-oxygen-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "second-oxygen",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "required_text": ["kPa"],
+        "minimum_visible_ms": 100,
+        "checkpoint_id": "second-oxygen"
+      },
+      "evidence_refs": ["n21"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "remaining-initial-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "remaining-initial",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "remaining-initial",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["n7"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "remaining-corrected-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "remaining-corrected",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "remaining-corrected",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["n13"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "ideal-relationship-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "ideal-relationship",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "ideal-relationship",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["n3", "n4", "n5"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "rectangle-relationship-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "rectangle-relationship",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "rectangle-relationship",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["n16"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "rectangle-value-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "rectangle-value",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "rectangle-value",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["n17"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "fixed-force-condition-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "fixed-force-condition",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "fixed-force-condition",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["n18"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "topic-return-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "topic-return",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "topic-return",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["n20"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "qualified-comparison-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "qualified-comparison",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "qualified-comparison",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["n30"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "cue-n9-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "cue-n9",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "cue-n9",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["n9"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "cue-n19-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "cue-n19",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "cue-n19",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["n19"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "cue-n29-surface",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "cue-n29",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "cue-n29",
+        "required_text": [],
+        "minimum_visible_ms": 100
+      },
+      "evidence_refs": ["n29"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "accepted-surface-fidelity",
+      "owner_layer": "H",
+      "required": false,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "surface.matches",
+      "parameters": {
+        "checkpoint_id": "initial-total",
+        "required_text": [],
+        "minimum_visible_ms": 100,
+        "accepted_fidelity": true
+      },
+      "evidence_refs": [],
+      "severity": "ordinary"
+    }
+  ],
+  "timing_expectations": [
+    {
+      "expectation_id": "initial-total-due",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "initial-total",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "initial-total",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n1"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "initial-total-display",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "initial-total-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "initial-total",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n1"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "first-oxygen-due",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "first-oxygen",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "first-oxygen",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n1", "n3", "n4", "n5", "n6"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "first-oxygen-display",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "first-oxygen-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "first-oxygen",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n1", "n3", "n4", "n5", "n6"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "corrected-total-due",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "corrected-total",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "corrected-total",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n11"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "corrected-total-display",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "corrected-total-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "corrected-total",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n11"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "corrected-oxygen-due",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "corrected-oxygen",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "corrected-oxygen",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n11", "n12"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "corrected-oxygen-display",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "corrected-oxygen-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "corrected-oxygen",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n11", "n12"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "second-oxygen-due",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "second-oxygen",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "second-oxygen",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n21"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "second-oxygen-display",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "second-oxygen-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "second-oxygen",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n21"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "fraction-condition-due",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "fraction-condition",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "fraction-condition",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n24"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "comparison-due",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "comparison",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "comparison",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n21", "n22", "n25", "n27"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "remaining-initial-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "remaining-initial",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "remaining-initial",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n7"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "remaining-initial-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "remaining-initial-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "remaining-initial",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n7"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "remaining-corrected-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "remaining-corrected",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "remaining-corrected",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n13"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "remaining-corrected-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "remaining-corrected-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "remaining-corrected",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n13"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "ideal-relationship-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "ideal-relationship",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "ideal-relationship",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n3", "n4", "n5"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "ideal-relationship-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "ideal-relationship-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "ideal-relationship",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n3", "n4", "n5"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "rectangle-relationship-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "rectangle-relationship",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "rectangle-relationship",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n16"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "rectangle-relationship-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "rectangle-relationship-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "rectangle-relationship",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n16"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "rectangle-value-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "rectangle-value",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "rectangle-value",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n17"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "rectangle-value-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "rectangle-value-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "rectangle-value",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n17"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "fixed-force-condition-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "fixed-force-condition",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "fixed-force-condition",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n18"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "fixed-force-condition-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "fixed-force-condition-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "fixed-force-condition",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n18"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "topic-return-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "topic-return",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "topic-return",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n20"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "topic-return-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "topic-return-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "topic-return",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n20"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "open-reference-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "open-reference",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "open-reference",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n23"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "unfinished-thought-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "unfinished-thought",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "unfinished-thought",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n14", "n15"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "qualified-comparison-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "qualified-comparison",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "qualified-comparison",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n30"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "qualified-comparison-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "qualified-comparison-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "qualified-comparison",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n30"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "cue-n9-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "cue-n9",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "cue-n9",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n9"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "cue-n9-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "cue-n9-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "cue-n9",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n9"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "cue-n19-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "cue-n19",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "cue-n19",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n19"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "cue-n19-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "cue-n19-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "cue-n19",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n19"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "cue-n29-semantic-time",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "cue-n29",
+          "condition": "pass"
+        },
+        {
+          "id": "host",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.semantic",
+      "parameters": {
+        "checkpoint_id": "cue-n29",
+        "budget_ms": 8000
+      },
+      "evidence_refs": ["n29"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "cue-n29-display-time",
+      "owner_layer": "H",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "cue-n29-surface",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "latency.display",
+      "parameters": {
+        "checkpoint_id": "cue-n29",
+        "budget_ms": 1000
+      },
+      "evidence_refs": ["n29"],
+      "severity": "ordinary"
+    }
+  ],
+  "projection_expectations": [
+    {
+      "expectation_id": "projection",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {},
+      "evidence_refs": [
+        "n0",
+        "n1",
+        "n2",
+        "n3",
+        "n4",
+        "n5",
+        "n6",
+        "n7",
+        "n8",
+        "n9",
+        "n10",
+        "n11",
+        "n12",
+        "n13",
+        "n14",
+        "n15",
+        "n16",
+        "n17",
+        "n18",
+        "n19",
+        "n20",
+        "n21",
+        "n22",
+        "n23",
+        "n24",
+        "n25",
+        "n26",
+        "n27",
+        "n28",
+        "n29",
+        "n30",
+        "n31",
+        "n32",
+        "n33",
+        "n34",
+        "n35",
+        "n36"
+      ],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-initial-total",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "initial-total"
+      },
+      "evidence_refs": ["n1"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-first-oxygen",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "first-oxygen"
+      },
+      "evidence_refs": ["n1", "n3", "n4", "n5", "n6"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-corrected-total",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "corrected-total"
+      },
+      "evidence_refs": ["n11"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-corrected-oxygen",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "corrected-oxygen"
+      },
+      "evidence_refs": ["n11", "n12"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-second-oxygen",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "second-oxygen"
+      },
+      "evidence_refs": ["n21"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-fraction-condition",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "fraction-condition"
+      },
+      "evidence_refs": ["n24"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-comparison",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "comparison"
+      },
+      "evidence_refs": ["n21", "n22", "n25", "n27"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-remaining-initial",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "remaining-initial"
+      },
+      "evidence_refs": ["n7"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-remaining-corrected",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "remaining-corrected"
+      },
+      "evidence_refs": ["n13"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-ideal-relationship",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "ideal-relationship"
+      },
+      "evidence_refs": ["n3", "n4", "n5"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-rectangle-relationship",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "rectangle-relationship"
+      },
+      "evidence_refs": ["n16"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-rectangle-value",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "rectangle-value"
+      },
+      "evidence_refs": ["n17"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-fixed-force-condition",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "fixed-force-condition"
+      },
+      "evidence_refs": ["n18"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-topic-return",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "topic-return"
+      },
+      "evidence_refs": ["n20"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-open-reference",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "open-reference"
+      },
+      "evidence_refs": ["n23"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-unfinished-thought",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "unfinished-thought"
+      },
+      "evidence_refs": ["n14", "n15"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-qualified-comparison",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "qualified-comparison"
+      },
+      "evidence_refs": ["n30"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-cue-n9",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "cue-n9"
+      },
+      "evidence_refs": ["n9"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-cue-n19",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "cue-n19"
+      },
+      "evidence_refs": ["n19"],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "projection-cue-n29",
+      "owner_layer": "C",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "request.adequate",
+      "parameters": {
+        "checkpoint_id": "cue-n29"
+      },
+      "evidence_refs": ["n29"],
+      "severity": "ordinary"
+    }
+  ],
+  "mechanism_expectations": [
+    {
+      "expectation_id": "validity",
+      "owner_layer": "A",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [],
+      "predicate_id": "experiment.valid",
+      "parameters": {},
+      "evidence_refs": [],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "admission",
+      "owner_layer": "B",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "validity",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "transcript.admitted",
+      "parameters": {},
+      "evidence_refs": [
+        "n0",
+        "n1",
+        "n2",
+        "n3",
+        "n4",
+        "n5",
+        "n6",
+        "n7",
+        "n8",
+        "n9",
+        "n10",
+        "n11",
+        "n12",
+        "n13",
+        "n14",
+        "n15",
+        "n16",
+        "n17",
+        "n18",
+        "n19",
+        "n20",
+        "n21",
+        "n22",
+        "n23",
+        "n24",
+        "n25",
+        "n26",
+        "n27",
+        "n28",
+        "n29",
+        "n30",
+        "n31",
+        "n32",
+        "n33",
+        "n34",
+        "n35",
+        "n36"
+      ],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "schema",
+      "owner_layer": "D",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "projection",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "model.schema",
+      "parameters": {},
+      "evidence_refs": [
+        "n0",
+        "n1",
+        "n2",
+        "n3",
+        "n4",
+        "n5",
+        "n6",
+        "n7",
+        "n8",
+        "n9",
+        "n10",
+        "n11",
+        "n12",
+        "n13",
+        "n14",
+        "n15",
+        "n16",
+        "n17",
+        "n18",
+        "n19",
+        "n20",
+        "n21",
+        "n22",
+        "n23",
+        "n24",
+        "n25",
+        "n26",
+        "n27",
+        "n28",
+        "n29",
+        "n30",
+        "n31",
+        "n32",
+        "n33",
+        "n34",
+        "n35",
+        "n36"
+      ],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "host",
+      "owner_layer": "E",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "schema",
+          "condition": "observable"
+        }
+      ],
+      "predicate_id": "host.contract",
+      "parameters": {},
+      "evidence_refs": [
+        "n0",
+        "n1",
+        "n2",
+        "n3",
+        "n4",
+        "n5",
+        "n6",
+        "n7",
+        "n8",
+        "n9",
+        "n10",
+        "n11",
+        "n12",
+        "n13",
+        "n14",
+        "n15",
+        "n16",
+        "n17",
+        "n18",
+        "n19",
+        "n20",
+        "n21",
+        "n22",
+        "n23",
+        "n24",
+        "n25",
+        "n26",
+        "n27",
+        "n28",
+        "n29",
+        "n30",
+        "n31",
+        "n32",
+        "n33",
+        "n34",
+        "n35",
+        "n36"
+      ],
+      "severity": "ordinary"
+    },
+    {
+      "expectation_id": "progress",
+      "owner_layer": "F",
+      "required": true,
+      "activation_rule": "always",
+      "prerequisites": [
+        {
+          "id": "admission",
+          "condition": "pass"
+        }
+      ],
+      "predicate_id": "frontier.progress",
+      "parameters": {
+        "minimum_ratio": 0.9
+      },
+      "evidence_refs": [
+        "n0",
+        "n1",
+        "n2",
+        "n3",
+        "n4",
+        "n5",
+        "n6",
+        "n7",
+        "n8",
+        "n9",
+        "n10",
+        "n11",
+        "n12",
+        "n13",
+        "n14",
+        "n15",
+        "n16",
+        "n17",
+        "n18",
+        "n19",
+        "n20",
+        "n21",
+        "n22",
+        "n23",
+        "n24",
+        "n25",
+        "n26",
+        "n27",
+        "n28",
+        "n29",
+        "n30",
+        "n31",
+        "n32",
+        "n33",
+        "n34",
+        "n35",
+        "n36"
+      ],
+      "severity": "ordinary"
+    }
+  ],
+  "adjudication_rules": [
+    {
+      "rule_id": "entailment-v1",
+      "scope": [
+        "initial-total",
+        "first-oxygen",
+        "corrected-total",
+        "corrected-oxygen",
+        "second-oxygen",
+        "fraction-condition",
+        "comparison",
+        "remaining-initial",
+        "remaining-corrected",
+        "ideal-relationship",
+        "rectangle-relationship",
+        "rectangle-value",
+        "fixed-force-condition",
+        "topic-return",
+        "open-reference",
+        "unfinished-thought",
+        "qualified-comparison",
+        "cue-n9",
+        "cue-n19",
+        "cue-n29",
+        "administration-n8",
+        "administration-n28",
+        "unfinished-false-law",
+        "comparison-false-generalization",
+        "false-initial-total",
+        "false-first-oxygen",
+        "false-corrected-total",
+        "false-corrected-oxygen",
+        "false-second-oxygen",
+        "false-remaining-initial",
+        "false-remaining-corrected",
+        "false-rectangle-value",
+        "false-topic-return"
+      ],
+      "rubric": "Judge only the evidence available to this request and governed accepted knowledge. Check each claim for subject, predicate, direction, negation, quantity, unit and conditions. Entailed: pass. Contradictory or unsupported established assertion: hard semantic fail. A missing result is a separate coverage failure. Unrecognized but plausible wording remains ADJUDICATION_REQUIRED. Do not consult future input, rewrite this rubric, or treat every AI-origin Cue as forbidden. Quantity identity must match its physical role and vessel/component, not just the number. Unrecognized paraphrases, conditions, labels, or endpoint bindings require adjudication. Explicit unsupported established assertions fail; an uninvoked opportunity does not pass. Apply this rubric unchanged to each retained proposal and accepted version; record evidence citations and the adjudicator decision in a new file."
+    }
+  ],
+  "preconditions": {
+    "kind": "empty",
+    "event_fixture": null
+  },
+  "coverage_requirements": [
+    {
+      "kind": "fragmentation",
+      "event_ids": ["n3", "n4", "n14", "n15"]
+    },
+    {
+      "kind": "complete_statement",
+      "event_ids": ["n1", "n5", "n6"]
+    },
+    {
+      "kind": "cross_fragment_condition",
+      "event_ids": ["n3", "n4"]
+    },
+    {
+      "kind": "correction",
+      "event_ids": ["n11", "n12", "n13"]
+    },
+    {
+      "kind": "topic_shift",
+      "event_ids": ["n15", "n16"]
+    },
+    {
+      "kind": "return",
+      "event_ids": ["n20"]
+    },
+    {
+      "kind": "administration",
+      "event_ids": ["n8", "n28"]
+    },
+    {
+      "kind": "unfinished",
+      "event_ids": ["n14", "n15"]
+    },
+    {
+      "kind": "reference",
+      "event_ids": ["n23", "n25"]
+    },
+    {
+      "kind": "comparison",
+      "event_ids": ["n21", "n22"]
+    },
+    {
+      "kind": "cue",
+      "event_ids": ["n9", "n19", "n29"]
+    },
+    {
+      "kind": "stage_ambiguity",
+      "event_ids": ["n26", "n27"]
+    }
+  ],
+  "stage_requirement": {
+    "required": false,
+    "why_wider_context": "The earlier comparison requires the accepted quantities for both vessels and the explicit later clarification. A legitimate Live solution remains allowed; no Stage task is injected.",
+    "trigger_event_ids": [],
+    "wider_context_event_ids": [],
+    "useful_resolution_predicates": []
+  }
+}
