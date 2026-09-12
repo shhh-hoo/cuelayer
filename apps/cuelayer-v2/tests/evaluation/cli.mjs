@@ -191,6 +191,8 @@ export async function run() {
         timed: true,
       });
       await exclusive(resolve(root, "event-replay.json"), recovery);
+      // Deliberate evaluator stalls must not contaminate the empty-receiver baseline.
+      await baselineTask;
       const faults = await driverFaultProof(
         provenance,
         product,

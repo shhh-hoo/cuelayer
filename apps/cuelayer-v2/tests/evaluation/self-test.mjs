@@ -23,6 +23,7 @@ import { evaluatorRoot } from "./manifest.mjs";
 import { generateCanaries } from "./canary.mjs";
 import { assessResponse } from "./assessment.mjs";
 import { assessProjection } from "./projection.mjs";
+import { replayEvents } from "./replay.mjs";
 import { fidelity, drive } from "./driver.mjs";
 import { prohibitProviderEgress } from "./browser.mjs";
 import { execFile } from "node:child_process";
@@ -567,6 +568,15 @@ test("actual frozen Node graph and six production-generated canary snapshots pas
       .snapshot()
       .modules.some((m) => m.path.endsWith("/server/live.ts")),
   );
+});
+test("recorded event recovery restores state and naturally dispatches a frozen scheduler request without a model response", async () => {
+  const snapshot = canaries.find((s) => s.snapshot_id === "quantitative");
+  const result = await replayEvents(product, snapshot.fixture_events);
+  assert.equal(result.status, "PASS");
+  assert.equal(result.scheduler.status, "PASS");
+  assert.equal(result.scheduler.capture.task.lane, "Live");
+  assert.equal(result.scheduler.semantic_state_unchanged, true);
+  assert.equal(result.provider_invocations, 0);
 });
 test("provenance rejects evaluator same-name and identical-byte copies, wrong alias, hash mismatch and stale browser source metadata", async () => {
   const copy = resolve(evaluatorRoot, "apps/cuelayer-v2/src/session.ts");
