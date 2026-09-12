@@ -443,6 +443,11 @@ export function fixtureProposal(task: Task): LiveDecision | StageReview {
           outcome: "RESOLVED" as const,
           operations,
           resolution: {
+            referents: p.operations
+              .filter((op) => op.type === "put")
+              .flatMap((op) => op.requires)
+              .filter((id) => Boolean(task.state.units[id]))
+              .map(ua),
             targets: operations
               .filter((op) => op.type === "put")
               .map((op) => op.id),

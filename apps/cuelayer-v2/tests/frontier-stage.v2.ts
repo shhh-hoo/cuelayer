@@ -258,6 +258,7 @@ it("Stage resolution updates existing Core and removes CARRY without advancing A
   ];
   result.results[0].resolution = {
     targets: [req.newUnits[0]],
+    referents: [req.units[0].id],
     basis: result.results[0].operations.flatMap((op) => op.basis),
   };
   const before = s.replay.accounted;
