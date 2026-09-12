@@ -1,3 +1,4 @@
+import { isCurrent } from "./contract";
 import type { ProjectionIntent, TeachingState, Unit } from "./contract";
 export type Candidate = {
   id: string;
@@ -17,21 +18,28 @@ export function neighborhood(
   state: TeachingState,
   intent: ProjectionIntent | null,
 ): string[] {
+  if (intent && intent.expiresAt <= performance.now()) intent = null;
   const roots =
     intent?.targets.filter(
       (id) =>
-        state.units[id]?.valid &&
-        state.units[id].coreId === state.currentCoreId,
+        isCurrent(state, id) && state.units[id].coreId === state.currentCoreId,
     ) ?? [];
   const ids = roots.length
     ? roots
-    : [...(state.cores[state.currentCoreId ?? ""]?.unitIds ?? [])]
+    : [
+        ...(state.cores[state.currentCoreId ?? ""]?.unitIds ??
+          Object.keys(state.units)),
+      ]
         .reverse()
-        .filter((id) => state.units[id]?.valid)
+        .sort(
+          (a, b) =>
+            (state.units[b].changedAt ?? 0) - (state.units[a].changedAt ?? 0),
+        )
+        .filter((id) => isCurrent(state, id))
         .slice(0, 1);
   const closure = new Set<string>();
   const visit = (id: string) => {
-    if (closure.has(id) || !state.units[id]?.valid) return;
+    if (closure.has(id) || !isCurrent(state, id)) return;
     closure.add(id);
     state.units[id].requires.forEach(visit);
   };
@@ -61,6 +69,7 @@ export function decide(
   state: TeachingState,
   intent: ProjectionIntent | null,
 ): Frame {
+  if (intent && intent.expiresAt <= performance.now()) intent = null;
   const ids = neighborhood(state, intent),
     available = ids.flatMap((id) => candidates(state.units[id]));
   const selected = ids.map((id) =>

@@ -1,3 +1,4 @@
+import { isCurrent } from "../contract";
 import {
   Component,
   createContext,
@@ -71,7 +72,7 @@ class Boundary extends Component<
 function Artifact({ shape }: { shape: KnowledgeShape }) {
   const { state, fail, selected, mode } = useContext(RenderContext),
     unit = state.units[shape.props.unitId];
-  if (!unit?.valid) return null;
+  if (!unit || !isCurrent(state, unit.id)) return null;
   const m = unit.meaning;
   return (
     <HTMLContainer style={{ width: shape.props.w, height: shape.props.h }}>
@@ -268,7 +269,9 @@ export function Board({
         return [c.unitId, pos] as const;
       }),
     );
-    const valid = Object.values(state.units).filter((u) => u.valid);
+    const valid = Object.values(state.units).filter((u) =>
+      isCurrent(state, u.id),
+    );
     const ids = new Set(valid.map((u) => createShapeId(u.id)));
     editor.run(
       () => {

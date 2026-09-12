@@ -1,3 +1,4 @@
+import { semanticIndex, indexSemanticTransition } from "./semantic-index";
 import { z } from "zod";
 import {
   ORIGIN,
@@ -40,7 +41,7 @@ const ref = z
       .optional(),
   })
   .strict();
-const meaning = z.discriminatedUnion("kind", [
+export const meaningSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("statement"), text: z.string().min(1) }).strict(),
   z
     .object({
@@ -78,6 +79,7 @@ const meaning = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
+const meaning = meaningSchema;
 export type Meaning = z.infer<typeof meaning>;
 export const evidenceSchema = z
   .object({
@@ -110,10 +112,19 @@ export type Unit = {
   meaning: Meaning;
   basis: Grounding[];
   requires: string[];
+  links?: BoundDependency[];
+  declaredDependencies?: Dependency[];
+  changedAt?: number;
+  fieldBasis?: Record<string, Grounding[]>;
+  reviewRequired?: boolean;
 };
+export type Dependency = { target: string; kind: "IDENTITY" | "VALUE" };
+export type BoundDependency = Dependency & { version: number };
 export type Core = {
   id: string;
-  title: string;
+  title?: string; // Historical event-1/2 only. New Core semantics use a topic label.
+  label?: string;
+  labelBasis?: Grounding[];
   version: number;
   membership: number;
   unitIds: string[];
@@ -200,13 +211,33 @@ export const operationSchema = z.discriminatedUnion("type", [
     })
     .strict(),
 ]);
-export type Operation = z.infer<typeof operationSchema>;
+export type LegacyOperation = z.infer<typeof operationSchema>;
+export type Operation =
+  | LegacyOperation
+  | { type: "core"; id: string; label: string; basis: Grounding[] }
+  | { type: "setCoreLabel"; id: string; label: string; basis: Grounding[] }
+  | {
+      type: "put";
+      id: string;
+      coreId: string;
+      meaning: Meaning;
+      requires: string[];
+      dependencies: Dependency[];
+      basis: Grounding[];
+    }
+  | {
+      type: "revise";
+      id: string;
+      change: { field: string; value: unknown };
+      basis: Grounding[];
+    }
+  | { type: "revalidate"; id: string; basis: Grounding[] };
 /** Historical/synthetic fixture shape only. New provider contracts live in live-wire.ts and stage.ts. */
 export type LegacyProposal = {
   version: "v2-proposal-1";
   taskId: string;
   complete: true;
-  operations: Operation[];
+  operations: LegacyOperation[];
   dispositions: Disposition[];
   unresolved: { evidenceId: string; phrase: string; coreId: string | null }[];
   resolve: string[];
@@ -223,6 +254,7 @@ export type Task = {
   createdAt: number;
   attentionEpoch: number;
   allowedCores: string[];
+  writeScope?: WriteScope;
   sessionId?: string;
   generation?: number;
   inspectionKey?: string;
@@ -234,9 +266,12 @@ export type Accepted = {
   lane: Task["lane"];
   dependencies: Dependencies;
   operations: Operation[];
+  operationBatches?: number[];
   dispositions: Disposition[];
   unresolved: Obligation[];
   resolved: string[];
+  resolutions?: Resolution[];
+  context?: InspectionContext;
   reviewed: string[];
   reviewRequests?: ReviewConcern[];
   reviewVersion?: "v2-stage-processing-1";
@@ -257,7 +292,7 @@ export type Accepted = {
   };
 };
 export type Event = {
-  schema: "cuelayer-v2-event-1" | "cuelayer-v2-event-2";
+  schema: "cuelayer-v2-event-1" | "cuelayer-v2-event-2" | "cuelayer-v2-event-3";
   sessionId: string;
   id: string;
   sequence: number;
@@ -267,12 +302,46 @@ export type Event = {
   | { type: "accepted"; accepted: Accepted }
   | {
       type: "inspected";
+      taskId?: string;
+      context?: InspectionContext;
       inspectionKey: string;
       outcome: "WAIT_MORE_INPUT" | "OUTPUT_CAPACITY";
     }
+  | { type: "live-attempt"; inspectionKey: string; attempt: LiveAttempt }
   | { type: "capture-closed"; generation: number }
   | { type: "ended" }
 );
+export type LiveAttempt = {
+  id: string;
+  outcome: "STARTED" | "FAILED" | "SUCCEEDED";
+  reason: string | null;
+  manual: boolean;
+  category?: "transport" | "semantic" | "stale" | "interrupted" | null;
+};
+export type ContextRequest = {
+  query: string;
+  purpose: "READ" | "MODIFY";
+  after: string | null;
+};
+export type InspectionContext = {
+  anchor: SourceRange;
+  following?: SourceRange;
+  query?: ContextRequest;
+  results?: string[];
+  pageAfter?: string | null;
+};
+export type WriteScope = {
+  units: string[];
+  createIn: string[];
+  labels: string[];
+  mainline: boolean;
+  cue: boolean;
+};
+export type Resolution = {
+  obligation: string;
+  targets: string[];
+  basis: Grounding[];
+};
 export type Replay = {
   state: TeachingState;
   evidence: Evidence[];
@@ -287,7 +356,9 @@ export type Replay = {
   generation: number;
   captureClosed: boolean;
   inspections: Record<string, string>;
-  eventVersion: 1 | 2 | null;
+  attempts: Record<string, LiveAttempt>;
+  inspectionContexts: Record<string, InspectionContext>;
+  eventVersion: 1 | 2 | 3 | null;
   reviewConcerns: Record<string, ReviewConcern>;
   reviewInspections: Record<string, string>;
 };
@@ -314,6 +385,8 @@ export const emptyReplay = (): Replay => ({
   generation: 0,
   captureClosed: false,
   inspections: {},
+  attempts: {},
+  inspectionContexts: {},
   eventVersion: null,
   reviewConcerns: {},
   reviewInspections: {},
@@ -330,7 +403,7 @@ export function version(state: TeachingState, key: string): number {
 }
 export function reduceOperations(
   state: TeachingState,
-  ops: Operation[],
+  ops: LegacyOperation[],
 ): TeachingState {
   const next = structuredClone(state);
   let changed = false;
@@ -383,14 +456,42 @@ export function reduceOperations(
   if (changed) next.revision++;
   return next;
 }
+// Preserve the validated group/item boundaries in one atomic accepted event.
+// Invalidation and revalidation may each change a dependency version.
+function reduceAcceptedOperations(state: TeachingState, accepted: Accepted) {
+  const batches = accepted.operationBatches ?? [accepted.operations.length];
+  if (
+    batches.some((n) => !Number.isInteger(n) || n < 0) ||
+    batches.reduce((a, b) => a + b, 0) !== accepted.operations.length
+  )
+    throw new Error("invalid-operation-batches");
+  let offset = 0;
+  for (const count of batches) {
+    state = reduceSemanticOperations(
+      state,
+      accepted.operations.slice(offset, offset + count),
+    );
+    offset += count;
+  }
+  return state;
+}
 export function fold(replay: Replay, event: Event): Replay {
   if (
-    !["cuelayer-v2-event-1", "cuelayer-v2-event-2"].includes(event.schema) ||
+    ![
+      "cuelayer-v2-event-1",
+      "cuelayer-v2-event-2",
+      "cuelayer-v2-event-3",
+    ].includes(event.schema) ||
     event.sequence !== replay.sequence + 1 ||
     replay.ended
   )
     throw new Error("invalid-event-prefix");
-  const ev = event.schema === "cuelayer-v2-event-1" ? 1 : 2;
+  const ev =
+    event.schema === "cuelayer-v2-event-1"
+      ? 1
+      : event.schema === "cuelayer-v2-event-2"
+        ? 2
+        : 3;
   if (replay.eventVersion !== null && replay.eventVersion !== ev)
     throw new Error("mixed-event-semantics");
   const next: Replay = {
@@ -415,8 +516,32 @@ export function fold(replay: Replay, event: Event): Replay {
       throw new Error("duplicate-acceptance");
     next.state =
       ev === 1
-        ? reduceOperations(replay.state, a.operations)
-        : reduceSemanticOperations(replay.state, a.operations);
+        ? reduceOperations(replay.state, a.operations as LegacyOperation[])
+        : ev === 2
+          ? reduceLegacySemanticOperations(
+              replay.state,
+              a.operations as LegacyOperation[],
+            )
+          : reduceAcceptedOperations(replay.state, a);
+    if (ev === 3 && a.lane === "Live" && a.processing) {
+      const key = a.processing.inspectionKey,
+        prior = replay.attempts[key];
+      if (prior?.id === a.taskId)
+        next.attempts = {
+          ...replay.attempts,
+          [key]: {
+            ...prior,
+            outcome: "SUCCEEDED",
+            reason: null,
+            category: null,
+          },
+        };
+    }
+    if (ev === 3 && a.context && a.processing)
+      next.inspectionContexts = {
+        ...replay.inspectionContexts,
+        [a.processing.inspectionKey]: a.context,
+      };
     next.consumed = { ...replay.consumed };
     next.unresolved = { ...replay.unresolved };
     for (const d of a.dispositions) {
@@ -503,17 +628,48 @@ export function fold(replay: Replay, event: Event): Replay {
                 : "no-change",
           };
         }
-    } else if (ev === 2 && a.lane === "Live")
+    } else if (ev >= 2 && a.lane === "Live")
       throw new Error("missing-processing-event");
   } else if (event.type === "inspected") {
-    if (ev !== 2) throw new Error("invalid-inspection-version");
+    if (ev < 2) throw new Error("invalid-inspection-version");
     next.inspections = {
       ...replay.inspections,
       [event.inspectionKey]: event.outcome,
     };
+    if (event.context)
+      next.inspectionContexts = {
+        ...replay.inspectionContexts,
+        [event.inspectionKey]: event.context,
+      };
+    const prior = replay.attempts[event.inspectionKey];
+    if (prior?.id === event.taskId)
+      next.attempts = {
+        ...replay.attempts,
+        [event.inspectionKey]: {
+          ...prior,
+          outcome: "SUCCEEDED",
+          reason: null,
+          category: null,
+        },
+      };
+  } else if (event.type === "live-attempt") {
+    if (ev !== 3) throw new Error("invalid-attempt-version");
+    const old = replay.attempts[event.inspectionKey];
+    if (event.attempt.outcome !== "STARTED" && old?.id !== event.attempt.id)
+      throw new Error("unbound-attempt-outcome");
+    if (
+      event.attempt.outcome === "STARTED" &&
+      old?.outcome === "STARTED" &&
+      old.manual
+    )
+      throw new Error("retry-already-consumed");
+    next.attempts = {
+      ...replay.attempts,
+      [event.inspectionKey]: event.attempt,
+    };
   } else if (event.type === "capture-closed") {
     if (
-      ev !== 2 ||
+      ev < 2 ||
       replay.captureClosed ||
       event.generation !== replay.generation + 1
     )
@@ -528,6 +684,7 @@ export function fold(replay: Replay, event: Event): Replay {
       throw new Error("undrained-session");
     next.ended = true;
   }
+  indexSemanticTransition(replay.state, next.state);
   return next;
 }
 
@@ -550,7 +707,10 @@ export function semanticValue(state: TeachingState): unknown {
     cores: Object.fromEntries(
       Object.entries(state.cores).map(([id, c]) => [
         id,
-        { title: c.title, unitIds: c.unitIds },
+        {
+          ...(c.label === undefined ? { title: c.title } : { label: c.label }),
+          unitIds: c.unitIds,
+        },
       ]),
     ),
     units: Object.fromEntries(
@@ -561,6 +721,9 @@ export function semanticValue(state: TeachingState): unknown {
           valid: u.valid,
           meaning: u.meaning,
           requires: [...u.requires].sort(),
+          ...(u.links
+            ? { links: u.links, reviewRequired: u.reviewRequired ?? false }
+            : {}),
         },
       ]),
     ),
@@ -574,9 +737,9 @@ export function semanticValue(state: TeachingState): unknown {
       : null,
   };
 }
-export function reduceSemanticOperations(
+function reduceLegacySemanticOperations(
   state: TeachingState,
-  ops: Operation[],
+  ops: LegacyOperation[],
 ): TeachingState {
   let next = state;
   for (const op of ops) {
@@ -619,4 +782,211 @@ export function reduceSemanticOperations(
   return next === state
     ? structuredClone(state)
     : { ...next, revision: state.revision + 1 };
+}
+
+export function isCurrent(
+  state: TeachingState,
+  id: string,
+  seen = new Set<string>(),
+): boolean {
+  const u = state.units[id];
+  if (!u?.valid || u.reviewRequired) return false;
+  if (seen.has(id)) return true;
+  seen.add(id);
+  return (u.links ?? []).every(
+    (d) =>
+      state.units[d.target]?.valid &&
+      (d.kind === "IDENTITY" ||
+        (state.units[d.target].version === d.version &&
+          isCurrent(state, d.target, seen))),
+  );
+}
+const fields: Record<Meaning["kind"], string[]> = {
+  statement: ["text"],
+  quantity: ["expression", "symbols", "conditions", "independent", "domain"],
+  reaction: ["notation", "conditions"],
+  relation: ["targets", "relation", "text"],
+  annotation: ["target", "text"],
+};
+function linked(
+  state: TeachingState,
+  meaning: Meaning,
+  dependencies: Dependency[],
+): BoundDependency[] {
+  const refs =
+    meaning.kind === "relation"
+      ? meaning.targets
+      : meaning.kind === "annotation"
+        ? [meaning.target]
+        : [];
+  const all = new Map<string, Dependency>(
+    refs.map((target) => [target, { target, kind: "IDENTITY" }]),
+  );
+  for (const d of dependencies) all.set(d.target, d);
+  return [...all.values()].map((d) => {
+    if (!state.units[d.target]?.valid)
+      throw new Error("invalid-semantic-dependency");
+    return { ...d, version: state.units[d.target].version };
+  });
+}
+function activeBasis(u: Unit) {
+  return [
+    ...new Map(
+      Object.values(u.fieldBasis ?? {})
+        .flat()
+        .map((b) => [JSON.stringify(b), b]),
+    ).values(),
+  ];
+}
+/** Event-3 semantics. Legacy reducers above retain their original event interpretation. */
+export function reduceSemanticOperations(
+  state: TeachingState,
+  ops: Operation[],
+): TeachingState {
+  const next = structuredClone(state);
+  let changed = false;
+  for (const op of ops) {
+    if (op.type === "core") {
+      if (!("label" in op)) throw new Error("new-core-requires-topic-label");
+      if (next.cores[op.id]) throw new Error("core-identity-exists");
+      next.cores[op.id] = {
+        id: op.id,
+        label: op.label,
+        labelBasis: op.basis,
+        version: 1,
+        membership: 0,
+        unitIds: [],
+      };
+    } else if (op.type === "setCoreLabel") {
+      const core = next.cores[op.id];
+      if (!core) throw new Error("missing-core");
+      if (core.label === op.label) continue;
+      core.label = op.label;
+      core.labelBasis = op.basis;
+      core.version++;
+    } else if (op.type === "put") {
+      if (next.units[op.id]) throw new Error("revise-required");
+      const core = next.cores[op.coreId];
+      if (!core) throw new Error("invalid-core-binding");
+      const dependencies =
+        "dependencies" in op
+          ? op.dependencies
+          : op.requires.map((target) => ({
+              target,
+              kind: "IDENTITY" as const,
+            }));
+      const links = linked(next, op.meaning, dependencies);
+      const fieldBasis = Object.fromEntries(
+        [
+          ...Object.keys(op.meaning).filter((k) => k !== "kind"),
+          "dependencies",
+        ].map((k) => [k, op.basis]),
+      );
+      next.units[op.id] = {
+        id: op.id,
+        coreId: op.coreId,
+        version: 1,
+        valid: true,
+        changedAt: state.revision + 1,
+        meaning: op.meaning,
+        basis: op.basis,
+        requires: links.map((d) => d.target),
+        links,
+        declaredDependencies: dependencies,
+        fieldBasis,
+        reviewRequired: false,
+      };
+      core.unitIds.push(op.id);
+      core.membership++;
+    } else if (op.type === "revise" || op.type === "revalidate") {
+      const u = next.units[op.id];
+      if (!u?.valid) throw new Error("missing-current-unit");
+      const field = op.type === "revalidate" ? "dependencies" : op.change.field;
+      if (field !== "dependencies" && !fields[u.meaning.kind].includes(field))
+        throw new Error("invalid-revision-field");
+      if (field === "dependencies") {
+        const deps =
+          op.type === "revalidate"
+            ? (u.declaredDependencies ??
+              (u.links ?? []).map(({ target, kind }) => ({ target, kind })))
+            : (op.change.value as Dependency[]);
+        const links = linked(next, u.meaning, deps);
+        if (semanticEqual(links, u.links) && !u.reviewRequired) continue;
+        u.links = links;
+        u.declaredDependencies = deps;
+        u.requires = links.map((d) => d.target);
+      } else if (op.type === "revise") {
+        const m = { ...u.meaning } as Record<string, unknown>;
+        if (
+          op.change.value === null &&
+          ["independent", "domain"].includes(field)
+        )
+          delete m[field];
+        else m[field] = op.change.value;
+        const result = meaningSchema.parse(m);
+        if (semanticEqual(result, u.meaning)) continue;
+        u.meaning = result;
+        if (["target", "targets"].includes(field)) {
+          u.links = linked(next, result, u.declaredDependencies ?? []);
+          u.requires = u.links.map((d) => d.target);
+        }
+      }
+      u.fieldBasis = { ...(u.fieldBasis ?? {}), [field]: op.basis };
+      u.basis = activeBasis(u);
+      u.changedAt = state.revision + 1;
+      u.version++;
+      u.reviewRequired = false;
+    } else if (op.type === "invalidate") {
+      const u = next.units[op.id];
+      if (!u) throw new Error("missing-unit");
+      if (!u.valid) continue;
+      u.valid = false;
+      u.version++;
+    } else if (op.type === "mainline") {
+      if (!next.cores[op.coreId]) throw new Error("missing-mainline");
+      if (next.currentCoreId === op.coreId) continue;
+      next.currentCoreId = op.coreId;
+      next.mainlineVersion++;
+    } else {
+      if (
+        semanticEqual(
+          next.cue && { text: next.cue.text, targets: next.cue.targets },
+          op.value && { text: op.value.text, targets: op.value.targets },
+        )
+      )
+        continue;
+      next.cue = op.value;
+      next.cueVersion++;
+    }
+    changed = true;
+  }
+  // Impact is host-owned. Use the reverse index even for targets outside this capture.
+  const index = semanticIndex(next);
+  const queue = Object.values(next.units)
+    .filter((u) => u.version !== state.units[u.id]?.version)
+    .map((u) => u.id);
+  for (let at = 0; at < queue.length; at++) {
+    const target = queue[at];
+    for (const id of index.reverse.get(target) ?? []) {
+      const u = next.units[id];
+      if (
+        u.valid &&
+        !u.reviewRequired &&
+        (u.links ?? []).some(
+          (d) =>
+            !next.units[d.target]?.valid ||
+            (d.kind === "VALUE" &&
+              (next.units[d.target].version !== d.version ||
+                next.units[d.target].reviewRequired)),
+        )
+      ) {
+        u.reviewRequired = true;
+        u.version++;
+        changed = true;
+        queue.push(id);
+      }
+    }
+  }
+  if (changed) next.revision = state.revision + 1;
+  return next;
 }

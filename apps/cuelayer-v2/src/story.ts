@@ -2,10 +2,11 @@ import {
   reduceOperations,
   type Grounding,
   type Meaning,
-  type Operation,
+  type LegacyOperation as Operation,
   type LegacyProposal,
   type Task,
 } from "./contract";
+import { fixtureBasis, authoredRevisions } from "./fixture-author";
 import type { Interpreter, Session } from "./session";
 import {
   projectMeaning,
@@ -295,9 +296,9 @@ export function fixtureProposal(task: Task): LiveDecision | StageReview {
     unitNames: Record<string, string> = {};
   for (const core of Object.values(task.state.cores))
     coreNames[core.id] =
-      core.title === "Gas mixtures"
+      (core.label ?? core.title) === "Gas mixtures"
         ? "gases"
-        : core.title === "Chemical equilibrium"
+        : (core.label ?? core.title) === "Chemical equilibrium"
           ? "reactions"
           : "functions";
   for (const u of Object.values(task.state.units))
@@ -325,7 +326,12 @@ export function fixtureProposal(task: Task): LiveDecision | StageReview {
     cores: Object.fromEntries(
       Object.values(task.state.cores).map((c) => [
         core(c.id),
-        { ...c, id: core(c.id), unitIds: c.unitIds.map(unit) },
+        {
+          ...c,
+          title: c.label ?? c.title,
+          id: core(c.id),
+          unitIds: c.unitIds.map(unit),
+        },
       ]),
     ),
     units: Object.fromEntries(
@@ -365,80 +371,102 @@ export function fixtureProposal(task: Task): LiveDecision | StageReview {
     names[id] ?? (names[id] = task.capture!.request.newCores[nc++]);
   const ua = (id: string) =>
     names[id] ?? (names[id] = c.request.newUnits[nu++]);
-  const readableSources = task.review
-    ? task.review.request.context
-    : [
-        {
-          source: task.capture!.request.source.source,
-          text: task.capture!.request.source.text.replace(/<b[^>]+>/g, ""),
-        },
-        ...task.capture!.request.context,
-      ];
   const basis = (refs: Grounding[]) =>
     refs.flatMap((r) => {
-      const source = readableSources.find((s) => s.text.includes(r.quote));
-      return source ? [{ source: source.source, quote: r.quote }] : [];
+      try {
+        return fixtureBasis(task, r.quote);
+      } catch {
+        return [];
+      }
     });
-  const convert = (op: Operation): WireOperation => {
+  const convert = (op: Operation): WireOperation[] => {
     const b = basis(op.basis);
-    if (op.type === "core") return { ...op, id: ca(op.id), basis: b };
-    if (op.type === "put")
-      return {
-        ...op,
-        id: ua(op.id),
-        coreId: ca(op.coreId),
-        requires: op.requires.map(ua),
-        meaning: projectMeaning(op.meaning, ua),
-        basis: b,
-      };
-    if (op.type === "invalidate") return { ...op, id: ua(op.id), basis: b };
+    if (op.type === "core")
+      return [{ type: "core", id: ca(op.id), label: op.title, basis: b }];
+    if (op.type === "put") {
+      const previous = mapped.state.units[op.id];
+      if (previous)
+        return authoredRevisions(
+          ua(op.id),
+          previous.meaning,
+          op.meaning,
+          ua,
+          b,
+        );
+      return [
+        {
+          type: "put",
+          id: ua(op.id),
+          coreId: ca(op.coreId),
+          dependencies: op.requires.map((id) => ({
+            target: ua(id),
+            kind: "IDENTITY" as const,
+          })),
+          meaning: projectMeaning(op.meaning, ua),
+          basis: b,
+        },
+      ];
+    }
+    if (op.type === "invalidate") return [{ ...op, id: ua(op.id), basis: b }];
     if (op.type === "mainline")
-      return { ...op, coreId: ca(op.coreId), basis: b };
-    return {
-      ...op,
-      value: op.value
-        ? {
-            ...op.value,
-            targets: op.value.targets.map(ua),
-            basis: basis(op.value.basis),
-          }
-        : null,
-      basis: b,
-    };
+      return [{ ...op, coreId: ca(op.coreId), basis: b }];
+    return [
+      {
+        type: "cue",
+        value: op.value
+          ? { text: op.value.text, targets: op.value.targets.map(ua) }
+          : null,
+        basis: b,
+      },
+    ];
   };
   if (task.lane === "Stage") {
     const p = authoredLegacyDecision(mapped);
     return {
-      version: "v2-stage-review-1",
       scope: task.review!.namespace,
-      results: task.review!.items.map((i) => ({
-        item: i.id,
-        outcome: p.resolve.includes(i.subjectId) ? "RESOLVED" : "STILL_OPEN",
-        operations: p.resolve.includes(i.subjectId)
-          ? p.operations
-              .map(convert)
-              .filter(
-                (
-                  op,
-                ): op is Extract<
-                  WireOperation,
-                  { type: "put" | "invalidate" }
-                > => op.type === "put" || op.type === "invalidate",
-              )
-          : [],
-        supersededBy: null,
-      })),
+      results: task.review!.items.map((i) => {
+        if (!p.resolve.includes(i.subjectId))
+          return { item: i.id, outcome: "STILL_OPEN" as const };
+        const operations = p.operations
+          .flatMap(convert)
+          .filter(
+            (
+              op,
+            ): op is Extract<
+              WireOperation,
+              { type: "put" | "revise" | "invalidate" | "revalidate" }
+            > =>
+              ["put", "revise", "invalidate", "revalidate"].includes(op.type),
+          );
+        return {
+          item: i.id,
+          outcome: "RESOLVED" as const,
+          operations,
+          resolution: {
+            targets: operations
+              .filter((op) => op.type === "put")
+              .map((op) => op.id),
+            basis: p.operations.flatMap((op) => basis(op.basis)),
+          },
+        };
+      }),
     };
   }
   const response: LiveDecision = {
-    version: "v2-live-decision-1",
     scope: task.capture!.namespace,
     groups: [],
     suffixStatus: "NONE",
+    contextRequest: null,
     reviewRequests: [],
     attentionCandidate: null,
   };
-  for (const e of task.evidence) {
+  for (const e of task.evidence.filter(
+    (e) =>
+      (e.sequence > task.capture!.range.start.sequence ||
+        (e.sequence === task.capture!.range.start.sequence &&
+          e.text.length > task.capture!.range.start.offset)) &&
+      e.sequence <= task.capture!.range.end.sequence,
+  )) {
     const p = authoredLegacyDecision({ ...mapped, evidence: [e] });
     const through = Object.keys(task.capture!.boundaries).find((a) => {
       const b = task.capture!.boundaries[a];
@@ -448,27 +476,47 @@ export function fixtureProposal(task: Task): LiveDecision | StageReview {
       response.suffixStatus = "WAIT_MORE_INPUT";
       break;
     }
-    const operations = p.operations.map(convert),
+    const operations = p.operations.flatMap(convert),
       u = p.unresolved[0];
+    const blocked = operations.find(
+      (op) =>
+        ["revise", "invalidate", "revalidate"].includes(op.type) &&
+        "id" in op &&
+        !task.capture!.request.writableUnits.includes(op.id) &&
+        !task.capture!.request.newUnits.includes(op.id),
+    );
+    if (blocked && "id" in blocked) {
+      response.suffixStatus = "WAIT_MORE_INPUT";
+      response.contextRequest = {
+        query: unitNames[c.units[blocked.id]],
+        purpose: "MODIFY",
+        after: null,
+      };
+      break;
+    }
     // Adjacent understood filler is one source group, regardless of final fragmentation.
     const previous = response.groups.at(-1);
     if (!u && !operations.length && previous?.outcome === "NO_CHANGE") {
       previous.throughBoundary = through;
       continue;
     }
-    response.groups.push({
-      throughBoundary: through,
-      outcome: u ? "CARRY" : operations.length ? "APPLY" : "NO_CHANGE",
-      operations,
-      carry: u
+    response.groups.push(
+      u
         ? {
+            throughBoundary: through,
+            outcome: "CARRY",
             kind: "CONTEXT_REQUIRED",
-            phrase: u.phrase,
             core: u.coreId ? ca(u.coreId) : null,
           }
-        : null,
-      resolutions: [],
-    });
+        : operations.length
+          ? {
+              throughBoundary: through,
+              outcome: "APPLY",
+              operations,
+              resolutions: [],
+            }
+          : { throughBoundary: through, outcome: "NO_CHANGE" },
+    );
     mapped.state = reduceOperations(mapped.state, p.operations);
     if (p.attention)
       response.attentionCandidate = {

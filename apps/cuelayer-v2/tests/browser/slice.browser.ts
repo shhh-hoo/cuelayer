@@ -68,7 +68,7 @@ test("deterministic complete teaching story; independent delayed Stage", async (
     await page.evaluate(
       () =>
         window.v2.session.state.cores[window.v2.session.state.currentCoreId!]
-          .title,
+          .label,
     ),
   ).toBe("A function over a domain");
   expect(

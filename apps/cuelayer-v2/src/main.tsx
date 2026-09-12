@@ -174,7 +174,8 @@ function App() {
           <b>V2</b>
         </div>
         <div className="lesson-title">
-          {state.cores[state.currentCoreId ?? ""]?.title ??
+          {state.cores[state.currentCoreId ?? ""]?.label ??
+            state.cores[state.currentCoreId ?? ""]?.title ??
             "A place for the next idea"}
         </div>
         {real ? (
@@ -183,6 +184,7 @@ function App() {
               void (mic.status === "listening" ? mic.stop() : mic.start())
             }
             disabled={
+              session.readOnly ||
               session.replay.captureClosed ||
               ["starting", "draining", "failed"].includes(mic.status)
             }
@@ -194,7 +196,11 @@ function App() {
         ) : (
           <button
             onClick={run}
-            disabled={running || w.orderedCommittedEvidence.length > 0}
+            disabled={
+              session.readOnly ||
+              running ||
+              w.orderedCommittedEvidence.length > 0
+            }
           >
             {running ? "Teaching…" : "Run teaching story"}
           </button>
@@ -244,8 +250,7 @@ function App() {
             </p>
           </div>
         ) : null}
-        {frame.cueVisible &&
-        state.cue &&
+        {state.cue &&
         session.cuePresentation?.version === state.cueVersion &&
         session.cuePresentation.mainlineVersion === state.mainlineVersion ? (
           <TeachingCue
@@ -313,7 +318,7 @@ function App() {
             onClick={() =>
               void (mic.error
                 ? mic.retry().catch((e) => setError(String(e)))
-                : session.resume())
+                : session.retryFailedLive().catch((e) => setError(String(e))))
             }
           >
             Retry pending work

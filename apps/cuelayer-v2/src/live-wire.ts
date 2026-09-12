@@ -1,7 +1,6 @@
 import { z } from "zod";
-import type { Meaning, Expression, Operation } from "./contract";
-
-export const LIVE_WIRE_VERSION = "v2-live-decision-1";
+import type { Meaning, Expression } from "./contract";
+export const LIVE_WIRE_VERSION = "v2-live-decision-2";
 export const carryKindSchema = z.enum([
   "INCOMPLETE_PROPOSITION",
   "UNRESOLVED_REFERENCE",
@@ -9,55 +8,56 @@ export const carryKindSchema = z.enum([
   "CONTEXT_REQUIRED",
 ]);
 export type CarryKind = z.infer<typeof carryKindSchema>;
-const alias = z.string().min(1);
+export const alias = z.string().min(1);
 export const wireBasisSchema = z
-  .object({ source: alias, quote: z.string().min(1) })
+  .object({ source: alias, start: alias, end: alias })
   .strict();
-const basis = z.array(wireBasisSchema).min(1).max(24);
-// Flat expression DAG: host compiles earlier node references into the internal AST.
-const node = z
-  .object({
-    key: alias,
-    operator: z.enum([
-      "Symbol",
-      "Number",
-      "Equal",
-      "Multiply",
-      "Divide",
-      "Add",
-      "Sin",
+export const basis = z.array(wireBasisSchema).min(1).max(24);
+export const wireDependencySchema = z
+  .object({ target: alias, kind: z.enum(["IDENTITY", "VALUE"]) })
+  .strict();
+export const expressionNodesSchema = z
+  .array(
+    z.discriminatedUnion("operator", [
+      z.object({ operator: z.literal("Symbol"), symbol: alias }).strict(),
+      z
+        .object({ operator: z.literal("Number"), number: z.number().finite() })
+        .strict(),
+      z
+        .object({
+          operator: z.enum(["Equal", "Multiply", "Divide", "Add", "Sin"]),
+          operands: z.array(z.number().int().nonnegative()).min(1).max(2),
+        })
+        .strict(),
     ]),
-    symbol: z.string().nullable(),
-    number: z.number().nullable(),
-    operands: z.array(alias).max(2),
-  })
-  .strict();
+  )
+  .min(1)
+  .max(32);
+export const symbols = z
+  .array(
+    z.object({ symbol: alias, label: z.string(), unit: z.string() }).strict(),
+  )
+  .max(32);
+export const domain = z
+  .object({ min: z.number(), max: z.number() })
+  .strict()
+  .nullable();
 export const wireMeaningSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("statement"), text: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("statement"), text: alias }).strict(),
   z
     .object({
       kind: z.literal("quantity"),
-      nodes: z.array(node).min(1).max(32),
-      root: alias,
-      symbols: z
-        .array(
-          z
-            .object({ symbol: z.string(), label: z.string(), unit: z.string() })
-            .strict(),
-        )
-        .max(32),
+      nodes: expressionNodesSchema,
+      symbols,
       conditions: z.array(z.string()),
       independent: z.string().nullable(),
-      domain: z
-        .object({ min: z.number(), max: z.number() })
-        .strict()
-        .nullable(),
+      domain,
     })
     .strict(),
   z
     .object({
       kind: z.literal("reaction"),
-      notation: z.string().min(1),
+      notation: alias,
       conditions: z.array(z.string()),
     })
     .strict(),
@@ -66,23 +66,49 @@ export const wireMeaningSchema = z.discriminatedUnion("kind", [
       kind: z.literal("relation"),
       targets: z.array(alias).min(2),
       relation: z.enum(["comparison", "dependency"]),
-      text: z.string().min(1),
+      text: alias,
+    })
+    .strict(),
+  z
+    .object({ kind: z.literal("annotation"), target: alias, text: alias })
+    .strict(),
+]);
+export const wireChangeSchema = z.discriminatedUnion("field", [
+  z.object({ field: z.enum(["text", "notation"]), value: alias }).strict(),
+  z
+    .object({ field: z.literal("expression"), value: expressionNodesSchema })
+    .strict(),
+  z.object({ field: z.literal("symbols"), value: symbols }).strict(),
+  z
+    .object({ field: z.literal("conditions"), value: z.array(z.string()) })
+    .strict(),
+  z
+    .object({ field: z.literal("independent"), value: z.string().nullable() })
+    .strict(),
+  z.object({ field: z.literal("domain"), value: domain }).strict(),
+  z
+    .object({ field: z.literal("targets"), value: z.array(alias).min(2) })
+    .strict(),
+  z.object({ field: z.literal("target"), value: alias }).strict(),
+  z
+    .object({
+      field: z.literal("relation"),
+      value: z.enum(["comparison", "dependency"]),
     })
     .strict(),
   z
     .object({
-      kind: z.literal("annotation"),
-      target: alias,
-      text: z.string().min(1),
+      field: z.literal("dependencies"),
+      value: z.array(wireDependencySchema).max(24),
     })
     .strict(),
 ]);
 export const wireOperationSchema = z.discriminatedUnion("type", [
   z
     .object({
-      type: z.literal("core"),
+      type: z.enum(["core", "setCoreLabel"]),
       id: alias,
-      title: z.string().min(1),
+      label: alias,
       basis,
     })
     .strict(),
@@ -92,61 +118,87 @@ export const wireOperationSchema = z.discriminatedUnion("type", [
       id: alias,
       coreId: alias,
       meaning: wireMeaningSchema,
-      requires: z.array(alias),
+      dependencies: z.array(wireDependencySchema).max(24),
       basis,
     })
     .strict(),
-  z.object({ type: z.literal("invalidate"), id: alias, basis }).strict(),
+  z
+    .object({
+      type: z.literal("revise"),
+      id: alias,
+      change: wireChangeSchema,
+      basis,
+    })
+    .strict(),
+  z
+    .object({ type: z.enum(["revalidate", "invalidate"]), id: alias, basis })
+    .strict(),
   z.object({ type: z.literal("mainline"), coreId: alias, basis }).strict(),
   z
     .object({
       type: z.literal("cue"),
       value: z
-        .object({
-          text: z.string(),
-          targets: z.array(alias),
-          origin: z.literal("TEACHER"),
-          basis,
-        })
+        .object({ text: alias, targets: z.array(alias) })
         .strict()
         .nullable(),
       basis,
     })
     .strict(),
 ]);
+export const wireResolutionSchema = z
+  .object({ obligation: alias, targets: z.array(alias).min(1).max(8), basis })
+  .strict();
 export const wireAttentionSchema = z
   .object({
     targets: z.array(alias),
     mode: z.enum(["FOCUS", "COMPARE", "WIDEN"]),
   })
   .strict();
+export const contextRequestSchema = z
+  .object({
+    query: z.string().min(1).max(160),
+    purpose: z.enum(["READ", "MODIFY"]),
+    after: alias.nullable(),
+  })
+  .strict();
+export const liveGroupSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("APPLY"),
+      throughBoundary: alias,
+      operations: z.array(wireOperationSchema).max(24),
+      resolutions: z.array(wireResolutionSchema).max(8),
+    })
+    .strict(),
+  z
+    .object({ outcome: z.literal("NO_CHANGE"), throughBoundary: alias })
+    .strict(),
+  z
+    .object({
+      outcome: z.literal("CARRY"),
+      throughBoundary: alias,
+      kind: carryKindSchema,
+      core: alias.nullable(),
+    })
+    .strict(),
+]);
+// The provider schema root is always an object; alternatives are nested strict branches.
 export const liveDecisionSchema = z
   .object({
-    version: z.literal(LIVE_WIRE_VERSION),
-    scope: z.string().min(1),
-    groups: z
+    scope: alias,
+    groups: z.array(liveGroupSchema).max(24),
+    suffixStatus: z.enum(["NONE", "WAIT_MORE_INPUT", "OUTPUT_CAPACITY"]),
+    contextRequest: contextRequestSchema.nullable(),
+    reviewRequests: z
       .array(
         z
           .object({
-            throughBoundary: alias,
-            outcome: z.enum(["APPLY", "NO_CHANGE", "CARRY"]),
-            operations: z.array(wireOperationSchema).max(24),
-            carry: z
-              .object({
-                kind: carryKindSchema,
-                phrase: z.string().min(1),
-                core: alias.nullable(),
-              })
-              .strict()
-              .nullable(),
-            resolutions: z.array(alias),
+            core: alias,
+            targets: z.array(alias).max(8),
+            purpose: alias,
           })
           .strict(),
       )
-      .max(24),
-    suffixStatus: z.enum(["NONE", "WAIT_MORE_INPUT", "OUTPUT_CAPACITY"]),
-    reviewRequests: z
-      .array(z.object({ core: alias, purpose: z.string().min(1) }).strict())
       .max(4),
     attentionCandidate: wireAttentionSchema.nullable(),
   })
@@ -154,6 +206,52 @@ export const liveDecisionSchema = z
 export type LiveDecision = z.infer<typeof liveDecisionSchema>;
 export type WireOperation = z.infer<typeof wireOperationSchema>;
 export type WireMeaning = z.infer<typeof wireMeaningSchema>;
+export type WireBasis = z.infer<typeof wireBasisSchema>;
+export function compileExpression(
+  nodes: z.infer<typeof expressionNodesSchema>,
+): Expression {
+  const values: Expression[] = [],
+    sizes: { size: number; depth: number }[] = [];
+  for (const n of nodes) {
+    let value: Expression;
+    const operands = "operands" in n ? n.operands : [];
+    if (n.operator === "Symbol") value = n.symbol;
+    else if (n.operator === "Number") value = n.number;
+    else {
+      if (operands.length !== (n.operator === "Sin" ? 1 : 2))
+        throw new Error("missing-operand");
+      value = [
+        n.operator,
+        ...operands.map((i) => {
+          if (!Number.isInteger(i) || i < 0 || i >= values.length)
+            throw new Error("invalid-expression-reference");
+          return values[i];
+        }),
+      ];
+    }
+    const size = 1 + operands.reduce((s, i) => s + sizes[i].size, 0),
+      depth = 1 + Math.max(0, ...operands.map((i) => sizes[i].depth));
+    if (size > 128 || depth > 12) throw new Error("expression-budget");
+    values.push(value);
+    sizes.push({ size, depth });
+  }
+  if (!values.length) throw new Error("invalid-expression-root-or-symbols");
+  return values.at(-1)!;
+}
+export function projectExpression(expression: Expression) {
+  const nodes: z.infer<typeof expressionNodesSchema> = [];
+  const visit = (e: Expression): number => {
+    const operands = Array.isArray(e) ? e.slice(1).map(visit) : [];
+    const at = nodes.length;
+    if (typeof e === "string") nodes.push({ operator: "Symbol", symbol: e });
+    else if (typeof e === "number")
+      nodes.push({ operator: "Number", number: e });
+    else nodes.push({ operator: e[0] as "Equal", operands });
+    return at;
+  };
+  visit(expression);
+  return nodes;
+}
 export function compileMeaning(
   m: WireMeaning,
   unit: (alias: string) => string,
@@ -161,53 +259,11 @@ export function compileMeaning(
   if (m.kind === "annotation") return { ...m, target: unit(m.target) };
   if (m.kind === "relation") return { ...m, targets: m.targets.map(unit) };
   if (m.kind !== "quantity") return m;
-  const nodes = new Map<string, Expression>();
-  const sizes = new Map<string, { size: number; depth: number }>();
-  for (const n of m.nodes) {
-    if (nodes.has(n.key)) throw new Error("duplicate-expression-node");
-    let e: Expression;
-    if (n.operator === "Symbol") {
-      if (!n.symbol || n.number !== null || n.operands.length)
-        throw new Error("invalid-symbol-node");
-      e = n.symbol;
-    } else if (n.operator === "Number") {
-      if (n.number === null || n.symbol !== null || n.operands.length)
-        throw new Error("invalid-number-node");
-      e = n.number;
-    } else {
-      if (
-        n.symbol !== null ||
-        n.number !== null ||
-        n.operands.length !== (n.operator === "Sin" ? 1 : 2)
-      )
-        throw new Error("missing-operand");
-      e = [
-        n.operator,
-        ...n.operands.map((k) => {
-          const e = nodes.get(k);
-          if (e === undefined) throw new Error("invalid-expression-reference");
-          return e;
-        }),
-      ];
-    }
-    const size =
-      1 +
-      n.operands.reduce((total, key) => total + (sizes.get(key)?.size ?? 0), 0);
-    const depth =
-      1 + Math.max(0, ...n.operands.map((key) => sizes.get(key)?.depth ?? 0));
-    if (size > 128 || depth > 12) throw new Error("expression-budget");
-    sizes.set(n.key, { size, depth });
-    nodes.set(n.key, e);
-  }
-  const expression = nodes.get(m.root);
-  if (
-    expression === undefined ||
-    new Set(m.symbols.map((s) => s.symbol)).size !== m.symbols.length
-  )
-    throw new Error("invalid-expression-root-or-symbols");
+  if (new Set(m.symbols.map((s) => s.symbol)).size !== m.symbols.length)
+    throw new Error("duplicate-symbol");
   return {
     kind: "quantity",
-    expression,
+    expression: compileExpression(m.nodes),
     symbols: Object.fromEntries(
       m.symbols.map(({ symbol, ...v }) => [symbol, v]),
     ),
@@ -218,7 +274,6 @@ export function compileMeaning(
       : { domain: [m.domain.min, m.domain.max] as [number, number] }),
   };
 }
-/** Host/test projection only, never inference. */
 export function projectMeaning(
   m: Meaning,
   unit: (id: string) => string,
@@ -226,32 +281,21 @@ export function projectMeaning(
   if (m.kind === "annotation") return { ...m, target: unit(m.target) };
   if (m.kind === "relation") return { ...m, targets: m.targets.map(unit) };
   if (m.kind !== "quantity") return m;
-  const nodes: Extract<WireMeaning, { kind: "quantity" }>["nodes"] = [];
-  const visit = (e: Expression): string => {
-    const operands = Array.isArray(e) ? e.slice(1).map((x) => visit(x)) : [];
-    const key = `x${nodes.length}`;
-    nodes.push({
-      key,
-      operator: Array.isArray(e)
-        ? (e[0] as "Equal")
-        : typeof e === "string"
-          ? "Symbol"
-          : "Number",
-      symbol: typeof e === "string" ? e : null,
-      number: typeof e === "number" ? e : null,
-      operands,
-    });
-    return key;
-  };
-  const root = visit(m.expression);
   return {
     kind: "quantity",
-    nodes,
-    root,
+    nodes: projectExpression(m.expression),
     symbols: Object.entries(m.symbols).map(([symbol, v]) => ({ symbol, ...v })),
     conditions: m.conditions,
     independent: m.independent ?? null,
     domain: m.domain ? { min: m.domain[0], max: m.domain[1] } : null,
   };
 }
-export type ExpandedOperations = Operation[];
+
+export const wireDefinitions = {
+  a: alias,
+  b: basis,
+  n: expressionNodesSchema,
+  s: symbols,
+  d: domain,
+  e: wireDependencySchema,
+};

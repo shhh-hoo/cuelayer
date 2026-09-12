@@ -1,3 +1,5 @@
+import type { LiveDecision } from "../src/live-wire";
+import { fixtureBasis, authoredRange } from "./frontier-fixtures";
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { Session } from "../src/session";
 import {
@@ -158,7 +160,7 @@ describe("Gate 1: exact frontier and Live", () => {
     await admit(s, "Activation energy is");
     await admit(s, "A mole fraction is a ratio.");
     const t = s.capture("Live");
-    const d = establish(t, "A mole fraction is a ratio.");
+    const d: LiveDecision = establish(t, "A mole fraction is a ratio.");
     d.groups.unshift({
       throughBoundary: boundary(s, t, {
         evidenceId: "e0",
@@ -166,13 +168,8 @@ describe("Gate 1: exact frontier and Live", () => {
         offset: 20,
       }),
       outcome: "CARRY",
-      operations: [],
-      carry: {
-        kind: "INCOMPLETE_PROPOSITION",
-        phrase: "Activation energy is",
-        core: null,
-      },
-      resolutions: [],
+      kind: "INCOMPLETE_PROPOSITION",
+      core: null,
     });
     await s.accept(t, d);
     expect(s.window.unaccountedChars).toBe(0);
@@ -214,11 +211,20 @@ describe("Gate 1: exact frontier and Live", () => {
       },
     );
     for (const op of d.groups[0].operations)
-      op.basis.push({
-        source: next.capture!.request.obligations[0].source,
-        quote: "Activation energy is",
-      });
-    d.groups[0].resolutions = [next.capture!.request.obligations[0].id];
+      op.basis.push(
+        ...fixtureBasis(
+          next,
+          "Activation energy is",
+          next.capture!.request.obligations[0].source,
+        ),
+      );
+    d.groups[0].resolutions = [
+      {
+        obligation: next.capture!.request.obligations[0].id,
+        targets: d.attentionCandidate!.targets,
+        basis: d.groups[0].operations.flatMap((op) => op.basis),
+      },
+    ];
     await s.accept(next, d);
     expect(s.replay.unresolved).toEqual({});
   });
@@ -278,18 +284,14 @@ describe("Gate 1: exact frontier and Live", () => {
     expect(s.state.revision).toBe(0);
     expect(s.attention).toBeNull();
   });
-  it("processing groups disambiguate repeated quotes without deduplicating source", async () => {
+  it("range pointers disambiguate repeated text without deduplicating source", async () => {
     const s = await open();
     s.pause();
     const text = "A narrator tells the story.";
     await admit(s, text);
     await admit(s, text);
     const t = s.capture("Live");
-    const d = establish(t, text);
-    await expect(s.accept(t, d)).rejects.toThrow(
-      "ungrounded-or-ambiguous-quote",
-    );
-    expect(s.replay.accounted).toEqual(ORIGIN);
+    const d: LiveDecision = establish(t, text);
     const middle = cursorAt(s.replay.evidence, text.length);
     d.groups[0].throughBoundary = boundary(s, t, middle);
     d.groups.push(fullGroup(t).groups[0]);
@@ -337,10 +339,11 @@ describe("Gate 1: exact frontier and Live", () => {
     const { s, t } = await manual("A depends on B.");
     const d = establish(t, currentQuote(s, t));
     const op = d.groups[0].operations.at(-1)!;
-    if (op.type === "put") op.requires = [t.capture!.request.newUnits[1]];
-    await expect(s.accept(t, d)).rejects.toThrow(
-      "uncaptured-semantic-dependency",
-    );
+    if (op.type === "put")
+      op.dependencies = [
+        { target: t.capture!.request.newUnits[1], kind: "VALUE" },
+      ];
+    await expect(s.accept(t, d)).rejects.toThrow("invalid-semantic-dependency");
     expect(s.state.revision).toBe(0);
   });
   it("redundant semantic put cannot manufacture APPLY", async () => {
@@ -461,7 +464,13 @@ describe("Gate 1: exact frontier and Live", () => {
     const hold = new Promise<void>((r) => (release = r));
     const sizes: number[] = [];
     const s = await open(async (t) => {
-      sizes.push(t.evidence.length);
+      sizes.push(
+        new Set(
+          sourcePieces(s.replay.evidence, t.capture!.range).map(
+            (p) => p.evidenceId,
+          ),
+        ).size,
+      );
       if (sizes.length === 1) await hold;
       return fullGroup(t);
     });
@@ -483,6 +492,16 @@ describe("Gate 1: exact frontier and Live", () => {
     const check = (o: any) => {
       if (o && typeof o === "object") {
         expect(o).not.toHaveProperty("oneOf");
+        expect(o).not.toHaveProperty("allOf");
+        if (o.$ref) {
+          expect(o.$ref.startsWith("#/")).toBe(true);
+          expect(
+            o.$ref
+              .slice(2)
+              .split("/")
+              .reduce((v: any, k: string) => v?.[k], r.text.format.schema),
+          ).toBeDefined();
+        }
         if (o.type === "object") {
           expect(o.additionalProperties).toBe(false);
           expect(o.required?.sort()).toEqual(Object.keys(o.properties).sort());
@@ -492,15 +511,21 @@ describe("Gate 1: exact frontier and Live", () => {
     };
     check(r.text.format.schema);
     const operations = (r.text.format.schema as any).properties.groups.items
-      .properties.operations.items;
-    expect(operations.anyOf).toHaveLength(5);
+      .anyOf[0].properties.operations.items;
+    expect(operations.anyOf).toHaveLength(6);
+    expect(r.text.format.schema).toMatchObject({
+      type: "object",
+      additionalProperties: false,
+    });
+    expect(r.text.format.schema).not.toHaveProperty("anyOf");
+    expect(r.text.format.schema).not.toHaveProperty("$ref");
     expect(operations.anyOf[1].properties.meaning.anyOf).toHaveLength(5);
   });
   it("LEGACY_UNSPECIFIED and renderer failures cannot become new CARRY kinds", async () => {
     const { t } = await manual("Hello.");
     for (const kind of ["LEGACY_UNSPECIFIED", "REPRESENTATION_UNSUPPORTED"]) {
       const d = fullGroup(t, "CARRY");
-      (d.groups[0].carry as any).kind = kind;
+      (d.groups[0] as any).kind = kind;
       expect(liveDecisionSchema.safeParse(d).success).toBe(false);
     }
   });
@@ -674,7 +699,7 @@ it("Live cannot resolve a carry using a different range in the same provider fin
   const { s, t } = await manual(
     "Activation energy is. A mole fraction is a ratio.",
   );
-  const d = establish(t, "A mole fraction is a ratio.");
+  const d: LiveDecision = establish(t, "A mole fraction is a ratio.");
   d.groups.unshift({
     throughBoundary: boundary(s, t, {
       evidenceId: "e0",
@@ -682,27 +707,27 @@ it("Live cannot resolve a carry using a different range in the same provider fin
       offset: 22,
     }),
     outcome: "CARRY",
-    operations: [],
-    carry: {
-      kind: "INCOMPLETE_PROPOSITION",
-      phrase: "Activation energy is.",
-      core: null,
-    },
-    resolutions: [],
+    kind: "INCOMPLETE_PROPOSITION",
+    core: null,
   });
   await s.accept(t, d);
   await admit(s, "The fraction describes relative amount.");
   const next = s.capture("Live"),
     reply = establish(next, currentQuote(s, next));
-  reply.groups[0].resolutions = [next.capture!.request.obligations[0].id];
   const context = next.capture!.request.context.find(
     (c) => c.role === "CONTEXT_ONLY",
   )!;
   for (const op of reply.groups[0].operations)
-    op.basis.push({
-      source: context.source,
-      quote: "A mole fraction is a ratio.",
-    });
+    op.basis.push(
+      ...fixtureBasis(next, "A mole fraction is a ratio.", context.source),
+    );
+  reply.groups[0].resolutions = [
+    {
+      obligation: next.capture!.request.obligations[0].id,
+      targets: reply.attentionCandidate!.targets,
+      basis: reply.groups[0].operations.flatMap((op) => op.basis),
+    },
+  ];
   await expect(s.accept(next, reply)).rejects.toThrow("ungrounded-resolution");
   expect(Object.keys(s.replay.unresolved)).toHaveLength(1);
   expect(s.window.unaccountedChars).toBe(
@@ -779,8 +804,8 @@ it.each(["word", "phrase", "sentence", "sentence-plus-tail"])(
         text: "The relation holds only if the gas mixture is ideal.",
         target: req.newUnits[0],
       },
-      requires: [req.newUnits[0]],
-      basis: [{ source: req.source.source, quote: text }],
+      dependencies: [{ target: req.newUnits[0], kind: "IDENTITY" }],
+      basis: fixtureBasis(t, text),
     });
     await s.accept(t, d);
     const [quantity, condition] = Object.values(s.state.units);

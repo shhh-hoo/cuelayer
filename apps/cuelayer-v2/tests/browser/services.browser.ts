@@ -21,19 +21,20 @@ async function proposed(task: LiveRequest): Promise<LiveDecision> {
   const basis = [
     {
       source: task.source.source,
-      quote: task.source.text.replace(/<b[^>]+>/g, ""),
+      start: task.source.start,
+      end: task.source.end,
     },
   ];
   const operations: WireOperation[] = task.units.length
     ? []
     : [
-        { type: "core", id: task.newCores[0], title: "Gas mixture", basis },
+        { type: "core", id: task.newCores[0], label: "Gas mixture", basis },
         {
           type: "put",
           id: task.newUnits[0],
           coreId: task.newCores[0],
           basis,
-          requires: [],
+          dependencies: [],
           meaning: projectMeaning(
             {
               kind: "quantity",
@@ -51,18 +52,19 @@ async function proposed(task: LiveRequest): Promise<LiveDecision> {
         { type: "mainline", coreId: task.newCores[0], basis },
       ];
   return {
-    version: "v2-live-decision-1",
     scope: task.scope,
     groups: [
-      {
-        throughBoundary: task.source.end,
-        outcome: operations.length ? "APPLY" : "NO_CHANGE",
-        operations,
-        carry: null,
-        resolutions: [],
-      },
+      operations.length
+        ? {
+            throughBoundary: task.source.end,
+            outcome: "APPLY",
+            operations,
+            resolutions: [],
+          }
+        : { throughBoundary: task.source.end, outcome: "NO_CHANGE" },
     ],
     suffixStatus: "NONE",
+    contextRequest: null,
     reviewRequests: [],
     attentionCandidate: operations.length
       ? { targets: [task.newUnits[0]], mode: "FOCUS" }
@@ -196,15 +198,16 @@ test("real adapter's schema-valid fabricated grounding never reaches accepted st
 }) => {
   await page.route("**/api/v2/live", async (r) => {
     const p = await proposed(r.request().postDataJSON());
-    p.groups[0].operations[0].basis[0].quote =
-      "Fabricated unsupported evidence";
+    if (p.groups[0].outcome !== "APPLY")
+      throw new Error("fixture-expected-apply");
+    p.groups[0].operations[0].basis[0].end = "bUNISSUED";
     await r.fulfill({ contentType: "application/x-ndjson", body: stream(p) });
   });
   await page.goto(`/?services=real&session=${crypto.randomUUID()}`);
   await page.waitForFunction(() => Boolean(window.v2));
   await page.evaluate((text) => window.v2.inject(text), text);
   await expect(page.getByRole("alert")).toContainText(
-    "ungrounded-or-ambiguous-quote",
+    "unknown-or-cross-task-source-alias",
   );
   expect(await page.evaluate(() => window.v2.session.state.revision)).toBe(0);
   expect(
@@ -219,22 +222,33 @@ test("Teaching Representation: new relationship is dominant, required earlier eq
   await page.route("**/api/v2/live", async (r) => {
     const task: LiveRequest = r.request().postDataJSON(),
       p = await proposed(task);
-    const prior = task.units;
+    const prior = [...task.units].sort(
+      (a, b) =>
+        Number(
+          b.meaning.kind === "quantity" &&
+            b.meaning.symbols.some((s) => s.symbol === "p_i"),
+        ) -
+        Number(
+          a.meaning.kind === "quantity" &&
+            a.meaning.symbols.some((s) => s.symbol === "p_i"),
+        ),
+    );
     if (prior.length) {
       const basis = [
         {
           source: task.source.source,
-          quote: task.source.text.replace(/<b[^>]+>/g, ""),
+          start: task.source.start,
+          end: task.source.end,
         },
       ];
       const id = prior.length === 1 ? task.newUnits[0] : prior[1].id;
-      p.groups[0].operations = [
+      const operations: WireOperation[] = [
         {
           type: "put",
           id,
           coreId: prior[0].core,
           basis,
-          requires: [prior[0].id],
+          dependencies: [{ target: prior[0].id, kind: "IDENTITY" }],
           meaning: projectMeaning(
             {
               kind: "quantity",
@@ -256,7 +270,23 @@ test("Teaching Representation: new relationship is dominant, required earlier eq
           ),
         },
       ];
-      p.groups[0].outcome = "APPLY";
+      if (prior.length > 1) {
+        const put = operations[0];
+        if (put.type !== "put" || put.meaning.kind !== "quantity")
+          throw new Error("fixture-quantity");
+        operations[0] = {
+          type: "revise",
+          id,
+          change: { field: "symbols", value: put.meaning.symbols },
+          basis,
+        };
+      }
+      p.groups[0] = {
+        outcome: "APPLY",
+        throughBoundary: task.source.end,
+        operations,
+        resolutions: [],
+      };
       p.attentionCandidate = { mode: "FOCUS", targets: [id] };
     }
     await r.fulfill({ contentType: "application/x-ndjson", body: stream(p) });

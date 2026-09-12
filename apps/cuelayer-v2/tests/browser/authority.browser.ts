@@ -111,7 +111,7 @@ test("motion allowed: drag interrupts camera and latest Follow Teaching recovers
     await page.evaluate(
       () =>
         window.v2.session.state.cores[window.v2.session.state.currentCoreId!]
-          .title,
+          .label,
     ),
   ).toBe("Chemical equilibrium");
 });

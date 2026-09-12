@@ -1,5 +1,8 @@
+import { relatedSourceText } from "./semantic-index";
 import { z } from "zod";
 import {
+  isCurrent,
+  type Resolution,
   type Task,
   type Replay,
   type Accepted,
@@ -11,11 +14,13 @@ import {
 } from "./contract";
 import {
   wireOperationSchema,
+  wireBasisSchema,
   type WireOperation,
   projectMeaning,
 } from "./live-wire";
 import {
   selectState,
+  projectSource,
   aliasLookup,
   bytes,
   keyOf,
@@ -35,9 +40,11 @@ import {
   requireThat,
   expandOperations,
   validateOperations,
+  validateResolution,
+  affectedReviews,
 } from "./acceptance";
 
-export const STAGE_WIRE_VERSION = "v2-stage-review-1";
+export const STAGE_WIRE_VERSION = "v2-stage-review-2";
 export type ReviewConcern = {
   id: string;
   version: number;
@@ -45,6 +52,7 @@ export type ReviewConcern = {
   coreId: string;
   purpose: string;
   createdAt: number;
+  unitIds?: string[];
 };
 export type ReviewItem = {
   id: string;
@@ -56,29 +64,44 @@ export type ReviewItem = {
   purpose: string;
   key: string;
   createdAt: number;
+  unitIds?: string[];
 };
-const stageOperationSchema = z.union(
-  wireOperationSchema.options.filter((s) =>
-    ["put", "invalidate"].includes(s.shape.type.value),
-  ) as [
-    (typeof wireOperationSchema.options)[1],
-    (typeof wireOperationSchema.options)[2],
-  ],
-);
+const stageOperationSchema = z.union([
+  wireOperationSchema.options[1],
+  wireOperationSchema.options[2],
+  wireOperationSchema.options[3],
+]);
 export const stageReviewSchema = z
   .object({
-    version: z.literal(STAGE_WIRE_VERSION),
     scope: z.string().min(1),
     results: z
       .array(
-        z
-          .object({
-            item: z.string(),
-            outcome: z.enum(["RESOLVED", "STILL_OPEN", "WITHDRAWN"]),
-            operations: z.array(stageOperationSchema).max(24),
-            supersededBy: z.string().nullable(),
-          })
-          .strict(),
+        z.discriminatedUnion("outcome", [
+          z
+            .object({ item: z.string(), outcome: z.literal("STILL_OPEN") })
+            .strict(),
+          z
+            .object({
+              item: z.string(),
+              outcome: z.literal("RESOLVED"),
+              operations: z.array(stageOperationSchema).max(24),
+              resolution: z
+                .object({
+                  targets: z.array(z.string()).min(1).max(8),
+                  basis: z.array(wireBasisSchema).min(1).max(24),
+                })
+                .strict()
+                .nullable(),
+            })
+            .strict(),
+          z
+            .object({
+              item: z.string(),
+              outcome: z.literal("WITHDRAWN"),
+              supersededBy: z.string(),
+            })
+            .strict(),
+        ]),
       )
       .min(1)
       .max(4),
@@ -86,7 +109,7 @@ export const stageReviewSchema = z
   .strict();
 export type StageReview = z.infer<typeof stageReviewSchema>;
 export type StageRequest = {
-  version: "v2-stage-request-1";
+  version: "v2-stage-request-2";
   scope: string;
   items: {
     id: string;
@@ -97,13 +120,15 @@ export type StageRequest = {
     core: string | null;
   }[];
   context: { source: string; role: "REVIEW_CONTEXT"; text: string }[];
-  cores: { id: string; title: string }[];
+  cores: { id: string; label: string }[];
+  writableUnits: string[];
+  createWithin: string[];
   units: {
     id: string;
     core: string;
     valid: boolean;
     meaning: ReturnType<typeof projectMeaning>;
-    requires: string[];
+    dependencies: { target: string; kind: "IDENTITY" | "VALUE" }[];
   }[];
   newUnits: string[];
   omitted: {
@@ -120,6 +145,7 @@ export type StageCapture = Pick<
   | "obligations"
   | "obligationVersions"
   | "sources"
+  | "sourceBoundaries"
   | "namespace"
 > & { request: StageRequest; items: ReviewItem[] };
 export function reviewCandidates(replay: Replay): Omit<ReviewItem, "key">[] {
@@ -144,6 +170,7 @@ export function reviewCandidates(replay: Replay): Omit<ReviewItem, "key">[] {
       range: o.range,
       coreId: o.coreId,
       purpose: o.purpose,
+      unitIds: o.unitIds,
       createdAt: o.createdAt,
     })),
   ].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
@@ -160,15 +187,75 @@ export function captureStage(
   );
   for (const item of candidates) {
     // Source cannot exceed A; a Stage snapshot can never acquire a consumption port.
-    requireThat(
-      position(replay.evidence, item.range.end) <=
-        position(replay.evidence, replay.accounted),
-      "unaccounted-stage-scope",
-    );
-    const { state, dependencies, coreIds } = selectState(
+    if (
+      position(replay.evidence, item.range.end) >
+      position(replay.evidence, replay.accounted)
+    )
+      continue;
+    const end = replay.accounted,
+      at = position(replay.evidence, end);
+    const start =
+      legalCursors(replay.evidence, {
+        start: cursorAt(replay.evidence, 0),
+        end,
+      }).find((c) => position(replay.evidence, c) >= Math.max(0, at - 3200)) ??
+      end;
+    const sources: Record<string, SourceRange> = {
+      [`s0`]: item.range,
+    };
+    if (position(replay.evidence, start) < at) sources[`s1`] = { start, end };
+    const query =
+      readable(replay.evidence, item.range) +
+      " " +
+      relatedSourceText(
+        readable(replay.evidence, item.range),
+        sourcePieces(replay.evidence, sources.s1 ?? sources.s0).map(
+          (p) => p.text,
+        ),
+      );
+    const { state, dependencies, coreIds, writeScope } = selectState(
       replay,
       item.coreId ? [item.coreId] : [],
+      {
+        query,
+        roots:
+          item.unitIds ??
+          Object.values(replay.state.units)
+            .filter(
+              (u) =>
+                u.coreId === item.coreId &&
+                u.basis.some(
+                  (b) =>
+                    b.range &&
+                    position(replay.evidence, b.range.start) <
+                      position(replay.evidence, item.range.end) &&
+                    position(replay.evidence, b.range.end) >
+                      position(replay.evidence, item.range.start),
+                ),
+            )
+            .map((u) => u.id),
+        range: item.range,
+      },
     );
+    writeScope.units =
+      item.unitIds ??
+      Object.values(state.units)
+        .filter(
+          (u) =>
+            u.coreId === item.coreId &&
+            u.basis.some(
+              (b) =>
+                b.range &&
+                position(replay.evidence, b.range.start) <
+                  position(replay.evidence, item.range.end) &&
+                position(replay.evidence, b.range.end) >
+                  position(replay.evidence, item.range.start),
+            ),
+        )
+        .map((u) => u.id);
+    writeScope.labels = [];
+    writeScope.mainline = false;
+    writeScope.cue = false;
     delete dependencies.mainline;
     delete dependencies.cue;
     state.currentCoreId = null;
@@ -197,18 +284,6 @@ export function captureStage(
       (() => {
         throw new Error("stage-context-blocked:missing-unit");
       })();
-    const end = replay.accounted,
-      at = position(replay.evidence, end);
-    const start =
-      legalCursors(replay.evidence, {
-        start: cursorAt(replay.evidence, 0),
-        end,
-      }).find((c) => position(replay.evidence, c) >= Math.max(0, at - 3200)) ??
-      end;
-    const sources: Record<string, SourceRange> = {
-      [`s0`]: item.range,
-    };
-    if (position(replay.evidence, start) < at) sources[`s1`] = { start, end };
     // Relevant recent evidence is captured; future/unrelated admission does not invalidate this immutable review.
     const key = keyOf({
       lane: "Stage",
@@ -225,7 +300,7 @@ export function captureStage(
     if (replay.reviewInspections[key]) continue;
     const id = `r0`;
     const request: StageRequest = {
-      version: "v2-stage-request-1",
+      version: "v2-stage-request-2",
       scope: nonce,
       items: [
         {
@@ -243,20 +318,25 @@ export function captureStage(
       context: Object.entries(sources).map(([source, range]) => ({
         source,
         role: "REVIEW_CONTEXT",
-        text: readable(replay.evidence, range),
+        text: projectSource(replay.evidence, range).text,
       })),
       cores: Object.values(state.cores).map((c) => ({
         id: ca(c.id),
-        title: c.title,
+        label: c.label ?? c.title ?? "",
       })),
       units: Object.values(state.units).map((u) => ({
         id: ua(u.id),
         core: ca(u.coreId),
-        valid: u.valid,
+        valid: isCurrent(replay.state, u.id),
         meaning: projectMeaning(u.meaning, ua),
-        requires: u.requires.map(ua),
+        dependencies: (
+          u.links ??
+          u.requires.map((target) => ({ target, kind: "IDENTITY" as const }))
+        ).map((d) => ({ target: ua(d.target), kind: d.kind })),
       })),
       newUnits,
+      writableUnits: writeScope.units.map(ua),
+      createWithin: writeScope.createIn.map(ca),
       omitted: {
         earlierSource: position(replay.evidence, start) > 0,
         cores: Object.keys(replay.state.cores).length - coreIds.length,
@@ -277,6 +357,7 @@ export function captureStage(
       state,
       dependencies,
       allowedCores: coreIds,
+      writeScope,
       evidence: replay.evidence.filter((e) =>
         Object.values(sources).some((r) =>
           sourcePieces(replay.evidence, r).some((p) => p.evidenceId === e.id),
@@ -292,6 +373,12 @@ export function captureStage(
         obligations: item.kind === "OBLIGATION" ? { [id]: item.subjectId } : {},
         obligationVersions,
         sources,
+        sourceBoundaries: Object.fromEntries(
+          Object.entries(sources).map(([s, r]) => [
+            s,
+            projectSource(replay.evidence, r).boundaries,
+          ]),
+        ),
         namespace: nonce,
         request,
         items: [{ ...item, id, key }],
@@ -307,6 +394,7 @@ export function validateStage(replay: Replay, task: Task, raw: unknown) {
     !replay.ended && task.lane === "Stage" && task.review,
     "invalid-stage-task",
   );
+  requireThat(task.generation === replay.generation, "stale-generation");
   const c = task.review!,
     p = parsed.data!;
   requireThat(p.scope === c.namespace, "task-binding");
@@ -323,8 +411,10 @@ export function validateStage(replay: Replay, task: Task, raw: unknown) {
     "incomplete-stage-items",
   );
   let state = replay.state;
+  const operationBatches: number[] = [];
   const operations: Operation[] = [],
     resolved: string[] = [],
+    resolutions: Resolution[] = [],
     reviews: NonNullable<Accepted["reviews"]> = [];
   for (const result of p.results) {
     const item = c.items.find((i) => i.id === result.item);
@@ -340,38 +430,33 @@ export function validateStage(replay: Replay, task: Task, raw: unknown) {
     const ops = expandOperations(
       replay,
       task,
-      result.operations as WireOperation[],
+      result.outcome === "RESOLVED"
+        ? (result.operations as WireOperation[])
+        : [],
     );
     const next = validateOperations(state, task, ops);
     requireThat(
       !ops.length || !semanticEqual(semanticValue(state), semanticValue(next)),
       "semantic-no-op-stage",
     );
-    if (result.outcome === "STILL_OPEN")
-      requireThat(
-        !ops.length && result.supersededBy === null,
-        "still-open-cannot-mutate",
-      );
     if (result.outcome === "RESOLVED") {
-      requireThat(
-        result.supersededBy === null,
-        "invalid-resolution-supersession",
-      );
-      if (item!.kind === "OBLIGATION")
-        requireThat(
-          !semanticEqual(semanticValue(state), semanticValue(next)) &&
-            ops.some((op) =>
-              op.basis.some(
-                (b) =>
-                  b.range &&
-                  position(replay.evidence, b.range.start) <
-                    position(replay.evidence, item!.range.end) &&
-                  position(replay.evidence, b.range.end) >
-                    position(replay.evidence, item!.range.start),
-              ),
-            ),
-          "ungrounded-stage-resolution",
+      if (item!.kind === "OBLIGATION") {
+        requireThat(result.resolution, "missing-resolution-binding");
+        resolutions.push(
+          validateResolution(replay, task, next, {
+            obligation: result.item,
+            ...result.resolution!,
+          }),
         );
+      } else {
+        requireThat(!result.resolution, "unexpected-resolution-binding");
+        requireThat(
+          (item!.unitIds ?? []).every(
+            (id) => !next.units[id]?.valid || isCurrent(next, id),
+          ),
+          "review-still-required",
+        );
+      }
     }
     if (result.outcome === "WITHDRAWN") {
       requireThat(
@@ -408,6 +493,7 @@ export function validateStage(replay: Replay, task: Task, raw: unknown) {
     if (result.outcome !== "STILL_OPEN" && item!.kind === "OBLIGATION")
       resolved.push(item!.subjectId);
     operations.push(...ops);
+    operationBatches.push(ops.length);
     state = next;
     reviews.push({
       subjectId: item!.subjectId,
@@ -424,12 +510,15 @@ export function validateStage(replay: Replay, task: Task, raw: unknown) {
     lane: "Stage",
     dependencies: task.dependencies,
     operations,
+    operationBatches,
     dispositions: [],
     unresolved: [],
     resolved,
+    resolutions,
     reviewed: [],
     reviewVersion: "v2-stage-processing-1",
     reviews,
+    reviewRequests: affectedReviews(replay, state, task.id),
   };
   return { proposal: { operations, attention: null }, accepted };
 }

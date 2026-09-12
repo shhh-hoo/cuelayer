@@ -7,6 +7,11 @@ import {
   type LiveDecision,
   type WireOperation,
 } from "../src/live-wire";
+import { fixtureBasis, authoredRevisions } from "../src/fixture-author";
+export { fixtureBasis, authoredRange } from "../src/fixture-author";
+export type ApplyDecision = Omit<LiveDecision, "groups"> & {
+  groups: Extract<LiveDecision["groups"][number], { outcome: "APPLY" }>[];
+};
 export const fast = {
   coalesceMs: 2,
   maxWaitMs: 8,
@@ -15,39 +20,35 @@ export const fast = {
   maxRequestBytes: 28000,
 };
 export const waitDecision = (task?: Task): LiveDecision => ({
-  version: "v2-live-decision-1",
   scope: task?.capture?.namespace ?? "test1",
   groups: [],
   suffixStatus: "WAIT_MORE_INPUT",
+  contextRequest: null,
   reviewRequests: [],
   attentionCandidate: null,
 });
-export function fullGroup(
+export function fullGroup<O extends "NO_CHANGE" | "CARRY" = "NO_CHANGE">(
   task: Task,
-  outcome: "NO_CHANGE" | "CARRY" = "NO_CHANGE",
-): LiveDecision {
+  outcome: O = "NO_CHANGE" as O,
+): Omit<LiveDecision, "groups"> & {
+  groups: Extract<LiveDecision["groups"][number], { outcome: O }>[];
+} {
+  const throughBoundary = task.capture!.request.source.end;
   return {
     ...waitDecision(task),
     suffixStatus: "NONE",
     groups: [
-      {
-        throughBoundary: task.capture!.request.source.end,
-        outcome,
-        operations: [],
-        carry:
-          outcome === "CARRY"
-            ? {
-                kind: "INCOMPLETE_PROPOSITION",
-                phrase: task.capture!.request.source.text.replace(
-                  /<b[^>]+>/g,
-                  "",
-                ),
-                core: null,
-              }
-            : null,
-        resolutions: [],
-      },
+      outcome === "CARRY"
+        ? {
+            outcome,
+            throughBoundary,
+            kind: "INCOMPLETE_PROPOSITION",
+            core: null,
+          }
+        : { outcome, throughBoundary },
     ],
+  } as Omit<LiveDecision, "groups"> & {
+    groups: Extract<LiveDecision["groups"][number], { outcome: O }>[];
   };
 }
 export async function openSession(
@@ -57,7 +58,7 @@ export async function openSession(
     crypto.randomUUID(),
     interpreter,
     new EventStore(`frontier-${crypto.randomUUID()}`),
-    fast,
+    { ...fast },
   );
 }
 export async function admit(s: Session, text: string) {
@@ -80,32 +81,54 @@ export function establish(
   task: Task,
   quote: string,
   meaning: Meaning = { kind: "statement", text: quote },
-): LiveDecision {
+): ApplyDecision {
   const c = task.capture!,
     request = c.request,
-    basis = [{ source: request.source.source, quote }];
+    basis = fixtureBasis(task, quote, request.source.source);
   const core =
     request.currentCore ?? request.cores[0]?.id ?? request.newCores[0];
   const id = request.units[0]?.id ?? request.newUnits[0];
   const operations: WireOperation[] = [];
   if (!request.cores.length)
     operations.push(
-      { type: "core", id: core, title: "Teaching", basis },
+      { type: "core", id: core, label: "Teaching", basis },
       { type: "mainline", coreId: core, basis },
     );
-  operations.push({
-    type: "put",
-    id,
-    coreId: core,
-    meaning: projectMeaning(meaning, (a) =>
-      Object.keys(c.units).find((k) => c.units[k] === a)!,
-    ),
-    requires: [],
-    basis,
-  });
+  const previous = task.state.units[c.units[id]];
+  if (previous) {
+    const revisions = authoredRevisions(
+      id,
+      previous.meaning,
+      meaning,
+      (x) => Object.keys(c.units).find((k) => c.units[k] === x)!,
+      basis,
+    );
+    operations.push(
+      ...(revisions.length
+        ? revisions
+        : [{ type: "revalidate" as const, id, basis }]),
+    );
+  } else
+    operations.push({
+      type: "put",
+      id,
+      coreId: core,
+      meaning: projectMeaning(meaning, (a) =>
+        Object.keys(c.units).find((k) => c.units[k] === a)!,
+      ),
+      dependencies: [],
+      basis,
+    });
   return {
     ...fullGroup(task),
-    groups: [{ ...fullGroup(task).groups[0], outcome: "APPLY", operations }],
+    groups: [
+      {
+        ...fullGroup(task).groups[0],
+        outcome: "APPLY",
+        operations,
+        resolutions: [],
+      },
+    ],
     attentionCandidate: { targets: [id], mode: "FOCUS" },
   };
 }

@@ -1,3 +1,4 @@
+import { fixtureBasis } from "./frontier-fixtures";
 import { afterEach, it, expect, vi } from "vitest";
 import { Session } from "../src/session";
 import { type Task } from "../src/contract";
@@ -23,13 +24,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 const still = (t: Task): StageReview => ({
-  version: "v2-stage-review-1",
   scope: t.review!.namespace,
   results: t.review!.items.map((i) => ({
     item: i.id,
     outcome: "STILL_OPEN",
+  })),
+});
+const resolved = (
+  t: Task,
+): Omit<StageReview, "results"> & {
+  results: Extract<StageReview["results"][number], { outcome: "RESOLVED" }>[];
+} => ({
+  scope: t.review!.namespace,
+  results: t.review!.items.map((i) => ({
+    item: i.id,
+    outcome: "RESOLVED",
     operations: [],
-    supersededBy: null,
+    resolution: null,
   })),
 });
 async function concern() {
@@ -41,6 +52,7 @@ async function concern() {
   d.reviewRequests = [
     {
       core: t.capture!.request.newCores[0],
+      targets: [t.capture!.request.newUnits[0]],
       purpose: "Review terminology with wider teaching context",
     },
   ];
@@ -57,8 +69,12 @@ it("Stage has a distinct strict contract, host-captured scope, and no consumptio
   const schema = provider.text.format.schema as any;
   expect(JSON.stringify(schema)).not.toContain('"oneOf"');
   const operations =
-    schema.properties.results.items.properties.operations.items;
-  expect(operations.anyOf).toHaveLength(2);
+    schema.properties.results.items.anyOf[1].properties.operations.items;
+  expect(operations.anyOf).toHaveLength(3);
+  expect(operations.anyOf[2].properties.type.enum).toEqual([
+    "revalidate",
+    "invalidate",
+  ]);
   expect(operations.anyOf[0].properties.meaning.anyOf).toHaveLength(5);
   const d = still(t);
   expect(stageReviewSchema.safeParse({ ...d, dispositions: [] }).success).toBe(
@@ -121,8 +137,8 @@ it("Stage cannot create Core, switch mainline, write Cue or publish attention", 
     await expect(s.accept(t, { ...d, ...extra })).rejects.toThrow(
       "malformed-stage",
     );
-  d.results[0].operations = [
-    { type: "mainline", coreId: "c0", basis: [] } as any,
+  (d.results[0] as any).operations = [
+    { type: "mainline", coreId: "c0", basis: [] },
   ];
   await expect(s.accept(t, d)).rejects.toThrow("malformed-stage");
 });
@@ -130,8 +146,11 @@ it("WITHDRAWN is rejected without authoritative accepted retraction", async () =
   const s = await concern(),
     t = s.capture("Stage"),
     d = still(t);
-  d.results[0].outcome = "WITHDRAWN";
-  d.results[0].supersededBy = t.review!.request.units[0].id;
+  d.results[0] = {
+    item: d.results[0].item,
+    outcome: "WITHDRAWN",
+    supersededBy: t.review!.request.units[0].id,
+  };
   await expect(s.accept(t, d)).rejects.toThrow(
     "withdrawal-without-authoritative-retraction",
   );
@@ -191,23 +210,31 @@ it("Stage may remain occupied while Live admits and accounts subsequent source",
   release();
 });
 it("Stage resolution updates existing Core and removes CARRY without advancing A", async () => {
-  const s = await concern();
+  let s = await concern();
   await admit(s, "That fraction determines its share.");
   const t = s.capture("Live");
   const d = fullGroup(t, "CARRY");
-  d.groups[0].carry!.core = t.capture!.request.cores[0].id;
+  d.groups[0].core = t.capture!.request.cores[0].id;
   await s.accept(t, d);
   await admit(s, "By that fraction I mean the mole fraction.");
   const clue = s.capture("Live");
   await s.accept(clue, fullGroup(clue));
+  s.close();
+  s = await Session.open(
+    s.id,
+    async (t) => (t.lane === "Stage" ? still(t) : waitDecision(t)),
+    s.store,
+    s.config,
+  );
+  sessions.push(s);
+  s.pause();
   let review = s.capture("Stage");
   if (review.review!.items[0].kind === "RECONCILIATION") {
     await s.accept(review, still(review));
     review = s.capture("Stage");
   }
   const req = review.review!.request;
-  const result = still(review);
-  result.results[0].outcome = "RESOLVED";
+  const result = resolved(review);
   result.results[0].operations = [
     {
       type: "put",
@@ -218,19 +245,21 @@ it("Stage resolution updates existing Core and removes CARRY without advancing A
         target: req.units[0].id,
         text: "Mole fraction determines a component’s share.",
       },
-      requires: [req.units[0].id],
+      dependencies: [{ target: req.units[0].id, kind: "IDENTITY" }],
       basis: [
-        {
-          source: req.items[0].source,
-          quote: "That fraction determines its share.",
-        },
-        {
-          source: req.context[1].source,
-          quote: "By that fraction I mean the mole fraction.",
-        },
+        ...fixtureBasis(
+          review,
+          "That fraction determines its share.",
+          req.items[0].source,
+        ),
+        ...fixtureBasis(review, "By that fraction I mean the mole fraction."),
       ],
     },
   ];
+  result.results[0].resolution = {
+    targets: [req.newUnits[0]],
+    basis: result.results[0].operations.flatMap((op) => op.basis),
+  };
   const before = s.replay.accounted;
   await s.accept(review, result);
   expect(s.replay.accounted).toEqual(before);
@@ -244,25 +273,22 @@ it("Stage relevant refinement wakes a Live WAIT snapshot without new source", as
   let liveCalls = 0;
   const s = await open(async (t) => {
     if (t.lane === "Stage") {
-      const d = still(t),
+      const d = resolved(t),
         req = t.review!.request;
       d.results[0].outcome = "RESOLVED";
       d.results[0].operations = [
         {
-          type: "put",
+          type: "revise",
           id: req.units[0].id,
-          coreId: req.cores[0].id,
-          meaning: {
-            kind: "statement",
-            text: "A mole fraction is a ratio of amounts.",
+          change: {
+            field: "text",
+            value: "A mole fraction is a ratio of amounts.",
           },
-          requires: [],
-          basis: [
-            {
-              source: req.items[0].source,
-              quote: "A mole fraction is a ratio of amounts.",
-            },
-          ],
+          basis: fixtureBasis(
+            t,
+            "A mole fraction is a ratio of amounts.",
+            req.items[0].source,
+          ),
         },
       ];
       await new Promise((r) => setTimeout(r, 30));
@@ -281,6 +307,7 @@ it("Stage relevant refinement wakes a Live WAIT snapshot without new source", as
   d.reviewRequests = [
     {
       core: t.capture!.request.newCores[0],
+      targets: [t.capture!.request.newUnits[0]],
       purpose: "Refine the explicitly spoken definition",
     },
   ];
@@ -305,31 +332,30 @@ it("Stage WITHDRAWN needs accepted retraction covering the entire host concern",
     d.reviewRequests = [
       {
         core: t.capture!.request.newCores[0],
+        targets: [t.capture!.request.newUnits[0]],
         purpose: "Review the entire source concern",
       },
     ];
     await s.accept(t, d);
     await admit(s, "Retract the previous proposition.");
     const correction = s.capture("Live"),
-      retraction = fullGroup(correction);
-    retraction.groups[0].outcome = "APPLY";
+      retraction = establish(correction, currentQuote(s, correction));
     retraction.groups[0].operations = [
       {
         type: "invalidate",
         id: correction.capture!.request.units[0].id,
-        basis: [
-          {
-            source: correction.capture!.request.source.source,
-            quote: currentQuote(s, correction),
-          },
-        ],
+        basis: fixtureBasis(correction, currentQuote(s, correction)),
       },
     ];
+    retraction.attentionCandidate = null;
     await s.accept(correction, retraction);
     const review = s.capture("Stage"),
       result = still(review);
-    result.results[0].outcome = "WITHDRAWN";
-    result.results[0].supersededBy = review.review!.request.units[0].id;
+    result.results[0] = {
+      item: result.results[0].item,
+      outcome: "WITHDRAWN",
+      supersededBy: review.review!.request.units[0].id,
+    };
     if (partial)
       await expect(s.accept(review, result)).rejects.toThrow(
         "withdrawal-without-authoritative-retraction",

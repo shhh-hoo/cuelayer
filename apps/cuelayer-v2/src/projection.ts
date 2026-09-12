@@ -1,5 +1,7 @@
+import { references, semanticIndex } from "./semantic-index";
 import {
   same,
+  isCurrent,
   version,
   type Task,
   type Replay,
@@ -21,7 +23,7 @@ import {
 import { projectMeaning } from "./live-wire";
 
 export type LiveRequest = {
-  version: "v2-live-request-1";
+  version: "v2-live-request-2";
   scope: string;
   mode: "CONTINUOUS" | "FINALIZE";
   source: {
@@ -33,19 +35,23 @@ export type LiveRequest = {
   };
   context: {
     source: string;
-    role: "CONTEXT_ONLY" | "CARRY_CONTEXT";
+    role: "CONTEXT_ONLY" | "FOLLOWING_CONTEXT" | "CARRY_CONTEXT";
     text: string;
   }[];
-  cores: { id: string; title: string }[];
+  cores: { id: string; label: string }[];
   units: {
     id: string;
     core: string;
     valid: boolean;
     meaning: ReturnType<typeof projectMeaning>;
-    requires: string[];
+    dependencies: { target: string; kind: "IDENTITY" | "VALUE" }[];
   }[];
+  writableUnits: string[];
+  createWithin: string[];
+  labelCores: string[];
+  search: { query: string; results: string[]; nextAfter: string | null } | null;
   currentCore: string | null;
-  cue: { text: string; targets: string[]; origin: "TEACHER" } | null;
+  cue: { text: string; targets: string[] } | null;
   obligations: {
     id: string;
     kind: string;
@@ -60,6 +66,8 @@ export type LiveRequest = {
     preceding: boolean;
     cores: number;
     obligations: number;
+    units: number;
+    sourceGaps: SourceRange[];
     dependencyClosureComplete: true;
   };
 };
@@ -67,12 +75,14 @@ export type LiveCapture = {
   range: SourceRange;
   boundaries: Record<string, SourceCursor>;
   sources: Record<string, SourceRange>;
+  sourceBoundaries: Record<string, Record<string, SourceCursor>>;
   cores: Record<string, string>;
   units: Record<string, string>;
   obligations: Record<string, string>;
   obligationVersions: Record<string, number>;
   request: LiveRequest;
   namespace: string;
+  inspectionContext?: import("./contract").InspectionContext;
 };
 export const DEFAULT_BUDGET = {
   sourceChars: 2400,
@@ -84,67 +94,140 @@ export const DEFAULT_BUDGET = {
 export const bytes = (v: unknown) =>
   new TextEncoder().encode(JSON.stringify(v)).length;
 export const keyOf = (v: unknown) => JSON.stringify(v); // Exact basis, never a source identity hash.
-export function selectState(replay: Replay, explicitCores?: string[]) {
-  const selected = new Set(
+export function selectState(
+  replay: Replay,
+  explicitCores?: string[],
+  options: {
+    roots?: string[];
+    query?: string;
+    range?: SourceRange;
+    modify?: boolean;
+    after?: string | null;
+    exclude?: string[];
+    prefer?: string[];
+  } = {},
+) {
+  const all = replay.state,
+    index = semanticIndex(all);
+  const permitted = (id: string) =>
+    !explicitCores || explicitCores.includes(all.units[id]?.coreId);
+  const workingCores =
     explicitCores ??
-      [
-        replay.state.currentCoreId,
-        ...Object.values(replay.state.cores)
-          .slice(-1)
-          .map((c) => c.id),
-      ].filter((id): id is string => Boolean(id)),
+    (all.currentCoreId
+      ? [all.currentCoreId]
+      : Object.keys(all.cores).slice(-1));
+  const recent = Object.values(all.units)
+    .filter((u) => isCurrent(all, u.id) && workingCores.includes(u.coreId))
+    .sort(
+      (a, b) =>
+        (b.changedAt ?? 0) - (a.changedAt ?? 0) ||
+        Object.keys(all.units).indexOf(b.id) -
+          Object.keys(all.units).indexOf(a.id),
+    )
+    .slice(0, 8)
+    .map((u) => u.id);
+  const overlapping = options.range
+    ? index
+        .overlaps(replay.evidence, options.range)
+        .filter((id) => permitted(id) && isCurrent(all, id))
+    : [];
+  const query = options.query ?? "";
+  const matches = index
+    .search(query)
+    .filter((id) => permitted(id) && isCurrent(all, id));
+  const candidates = matches.filter((id) => !options.exclude?.includes(id));
+  const retained = (options.prefer ?? []).filter((id) =>
+    candidates.includes(id),
   );
-  if (!explicitCores)
-    for (const id of replay.state.cue?.targets ?? []) {
-      const core = replay.state.units[id]?.coreId;
-      if (core) selected.add(core);
+  const retrieved = [
+    ...retained,
+    ...candidates.filter((id) => !retained.includes(id)),
+  ].slice(0, 8);
+  const required = [
+    ...new Set([
+      ...(options.roots ?? []),
+      ...overlapping,
+      ...(!explicitCores
+        ? (all.cue?.targets ?? []).filter((id) => isCurrent(all, id))
+        : []),
+    ]),
+  ];
+  const selected = new Set<string>();
+  const add = (id: string, required: boolean) => {
+    const closure = new Set<string>();
+    const visit = (id: string) => {
+      if (closure.has(id) || selected.has(id)) return;
+      const unit = all.units[id];
+      if (!unit) throw new Error("context-blocked:missing-reference");
+      if (!unit.valid && !options.roots?.includes(id)) return;
+      closure.add(id);
+      references(unit).forEach(visit);
+    };
+    visit(id);
+    if (selected.size + closure.size > DEFAULT_BUDGET.maxUnits) {
+      if (required) throw new Error("context-blocked:semantic-closure");
+      return;
     }
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const u of Object.values(replay.state.units).filter((u) =>
-      selected.has(u.coreId),
-    )) {
-      const refs = [
-        ...u.requires,
-        ...(u.meaning.kind === "relation"
-          ? u.meaning.targets
-          : u.meaning.kind === "annotation"
-            ? [u.meaning.target]
-            : []),
-      ];
-      for (const ref of refs) {
-        const core = replay.state.units[ref]?.coreId;
-        if (core && !selected.has(core)) {
-          selected.add(core);
-          changed = true;
-        }
-      }
-    }
-  }
+    closure.forEach((id) => selected.add(id));
+  };
+  required.forEach((id) => add(id, true));
+  [...recent, ...retrieved].forEach((id) => add(id, false));
+  const coreIds = [
+    ...new Set([
+      ...workingCores.filter((id): id is string => Boolean(id)),
+      ...[...selected].map((id) => all.units[id].coreId),
+    ]),
+  ];
   const state: TeachingState = {
-    ...structuredClone(replay.state),
+    ...all,
     cores: Object.fromEntries(
-      Object.entries(replay.state.cores).filter(([id]) => selected.has(id)),
+      coreIds.map((id) => [
+        id,
+        {
+          ...all.cores[id],
+          unitIds: all.cores[id].unitIds.filter((id) => selected.has(id)),
+        },
+      ]),
     ),
     units: Object.fromEntries(
-      Object.entries(replay.state.units).filter(([, u]) =>
-        selected.has(u.coreId),
-      ),
+      [...selected].map((id) => [id, structuredClone(all.units[id])]),
     ),
+    cue:
+      all.cue && all.cue.targets.every((id) => selected.has(id))
+        ? structuredClone(all.cue)
+        : null,
   };
   const dependencies: Record<string, number> = {
-    mainline: state.mainlineVersion,
-    cue: state.cueVersion,
+    mainline: all.mainlineVersion,
+    cue: all.cueVersion,
   };
-  for (const id of selected)
-    for (const k of [
-      `core/${id}`,
-      `members/${id}`,
-      ...(state.cores[id]?.unitIds ?? []).map((id) => `unit/${id}`),
-    ])
-      dependencies[k] = version(state, k);
-  return { state, dependencies, coreIds: [...selected] };
+  coreIds.forEach((id) => {
+    dependencies[`core/${id}`] = version(all, `core/${id}`);
+  });
+  selected.forEach((id) => {
+    dependencies[`unit/${id}`] = version(all, `unit/${id}`);
+  });
+  const writes = [
+    ...new Set([
+      ...(options.roots ?? []),
+      ...overlapping,
+      ...recent,
+      ...(options.modify ? retrieved : []),
+    ]),
+  ].filter((id) => selected.has(id));
+  return {
+    state,
+    dependencies,
+    coreIds,
+    retrieved,
+    writeScope: {
+      units: writes,
+      createIn: coreIds.filter((id) => workingCores.includes(id)),
+      labels: coreIds.filter((id) => id === all.currentCoreId),
+      mainline: !explicitCores,
+      cue: !explicitCores,
+    },
+  };
 }
 export function captureLive(
   replay: Replay,
@@ -154,7 +237,50 @@ export function captureLive(
   budget = DEFAULT_BUDGET,
   explicitCores?: string[],
 ): Task {
-  const { state, dependencies, coreIds } = selectState(replay, explicitCores);
+  const nominal = boundedRange(
+    replay.evidence,
+    replay.accounted,
+    budget.sourceChars,
+  );
+  const queryContext = Object.values(replay.inspectionContexts)
+    .filter(
+      (c) =>
+        c.query &&
+        position(replay.evidence, c.anchor.start) ===
+          position(replay.evidence, replay.accounted),
+    )
+    .at(-1);
+  const queryPages = Object.values(replay.inspectionContexts).filter(
+    (c) =>
+      c.query?.query === queryContext?.query?.query &&
+      c.query &&
+      position(replay.evidence, c.anchor.start) ===
+        position(replay.evidence, replay.accounted),
+  );
+  const pageAfter = queryContext?.query?.after ?? null;
+  const excluded =
+    pageAfter === null
+      ? []
+      : queryPages
+          .filter((c) => c.pageAfter !== pageAfter)
+          .flatMap((c) => c.results ?? []);
+  const preferred = queryPages
+    .filter((c) => c.pageAfter === pageAfter)
+    .at(-1)?.results;
+  const { state, dependencies, coreIds, writeScope, retrieved } = selectState(
+    replay,
+    explicitCores,
+    {
+      range: nominal,
+      query: queryContext?.query?.query ?? readable(replay.evidence, nominal),
+      modify: queryContext?.query?.purpose === "MODIFY",
+      exclude: excluded,
+      prefer: preferred,
+    },
+  );
+  const providedRetrieved = retrieved.filter((id) => state.units[id]);
+  writeScope.mainline = true;
+  writeScope.cue = true;
   if (Object.keys(state.units).length > budget.maxUnits)
     throw new Error("context-blocked:semantic-closure");
   let limit = budget.sourceChars,
@@ -196,6 +322,38 @@ export function captureLive(
         throw new Error("context-blocked:unit-reference");
       })();
     const context: LiveRequest["context"] = [];
+    const inspected = Object.values(replay.inspectionContexts).filter(
+      (c) =>
+        position(replay.evidence, c.anchor.start) ===
+          position(replay.evidence, range.start) &&
+        position(replay.evidence, c.anchor.end) ===
+          position(replay.evidence, range.end),
+    );
+    const nextStart = inspected.at(-1)?.following?.end ?? range.end;
+    const hasFollowing =
+      position(replay.evidence, nextStart) <
+      position(replay.evidence, replay.recorded);
+    const following =
+      inspected.length && hasFollowing
+        ? boundedRange(replay.evidence, nextStart, budget.precedingChars)
+        : undefined;
+    // Keep the last real page when nothing new exists: the same basis stays suppressed.
+    const page = following ?? inspected.at(-1)?.following;
+    const inspectionContext = {
+      anchor: range,
+      ...(page ? { following: page } : {}),
+      ...(queryContext?.query
+        ? { query: queryContext.query, results: providedRetrieved, pageAfter }
+        : {}),
+    };
+    if (page) {
+      sources.s1 = page;
+      context.push({
+        source: "s1",
+        role: "FOLLOWING_CONTEXT",
+        text: readable(replay.evidence, page),
+      });
+    }
     const start = position(replay.evidence, range.start);
     // Retain whole immediately preceding lexical pieces; never alter source text.
     const allCuts = legalCursors(replay.evidence, {
@@ -208,7 +366,7 @@ export function captureLive(
           position(replay.evidence, c) >=
           Math.max(0, start - budget.precedingChars),
       ) ?? range.start;
-    if (position(replay.evidence, before) < start) {
+    if (!page && position(replay.evidence, before) < start) {
       const r = { start: before, end: range.start },
         a = `s${Object.keys(sources).length}`;
       sources[a] = r;
@@ -250,6 +408,16 @@ export function captureLive(
         text: readable(replay.evidence, o.range),
       });
     }
+    const sourceBoundaries = Object.fromEntries(
+      Object.entries(sources).map(([a, r]) => [
+        a,
+        Object.fromEntries(
+          legalCursors(replay.evidence, r).map((c, i) => [`b${i}`, c]),
+        ),
+      ]),
+    );
+    for (const entry of context)
+      entry.text = projectSource(replay.evidence, sources[entry.source]).text;
     const cuts = Object.entries(boundaries);
     let text = `<${cuts[0][0]}>`;
     for (let i = 1; i < cuts.length; i++) {
@@ -269,7 +437,7 @@ export function captureLive(
       text += join + segment + `<${cuts[i][0]}>`;
     }
     const request: LiveRequest = {
-      version: "v2-live-request-1",
+      version: "v2-live-request-2",
       scope: nonce,
       mode: replay.captureClosed ? "FINALIZE" : "CONTINUOUS",
       source: {
@@ -282,15 +450,33 @@ export function captureLive(
       context,
       cores: Object.values(state.cores).map((c) => ({
         id: coreAlias(c.id),
-        title: c.title,
+        label: c.label ?? c.title ?? "",
       })),
       units: Object.values(state.units).map((u) => ({
         id: unitAlias(u.id),
         core: coreAlias(u.coreId),
-        valid: u.valid,
+        valid: isCurrent(replay.state, u.id),
         meaning: projectMeaning(u.meaning, unitAlias),
-        requires: u.requires.map(unitAlias),
+        dependencies: (
+          u.links ??
+          u.requires.map((target) => ({ target, kind: "IDENTITY" as const }))
+        ).map((d) => ({ target: unitAlias(d.target), kind: d.kind })),
       })),
+      writableUnits: writeScope.units.map(unitAlias),
+      createWithin: writeScope.createIn.map(coreAlias),
+      labelCores: writeScope.labels.map(coreAlias),
+      search: queryContext?.query
+        ? {
+            query: queryContext.query.query,
+            results: providedRetrieved.map(unitAlias),
+            nextAfter:
+              providedRetrieved.length &&
+              (retrieved.length === 8 ||
+                providedRetrieved.length < retrieved.length)
+                ? unitAlias(providedRetrieved.at(-1)!)
+                : null,
+          }
+        : null,
       currentCore:
         state.currentCoreId && coreIds.includes(state.currentCoreId)
           ? coreAlias(state.currentCoreId)
@@ -299,7 +485,6 @@ export function captureLive(
         ? {
             text: state.cue.text,
             targets: state.cue.targets.map(unitAlias),
-            origin: state.cue.origin,
           }
         : null,
       obligations: carried,
@@ -312,6 +497,15 @@ export function captureLive(
         preceding: position(replay.evidence, before) > 0,
         cores: Object.keys(replay.state.cores).length - coreIds.length,
         obligations: relevant.length - carried.length,
+        units:
+          Object.keys(replay.state.units).length -
+          Object.keys(state.units).length,
+        sourceGaps:
+          page &&
+          position(replay.evidence, page.start) >
+            position(replay.evidence, range.end)
+            ? [{ start: range.end, end: page.start }]
+            : [],
         dependencyClosureComplete: true,
       },
     };
@@ -335,7 +529,7 @@ export function captureLive(
       dependencies,
       obligationVersions,
       mode: request.mode,
-      omitted: request.omitted,
+      writeScope,
     });
     best = {
       id: `${sessionId}:Live:${nonce}`,
@@ -346,8 +540,11 @@ export function captureLive(
       state,
       dependencies,
       allowedCores: coreIds,
+      writeScope,
       evidence: replay.evidence.filter((e) =>
-        sourcePieces(replay.evidence, range).some((p) => p.evidenceId === e.id),
+        Object.values(sources).some((r) =>
+          sourcePieces(replay.evidence, r).some((p) => p.evidenceId === e.id),
+        ),
       ),
       obligations: carried.map((o) => replay.unresolved[obligations[o.id]]),
       createdAt: performance.now(),
@@ -356,12 +553,14 @@ export function captureLive(
         range,
         boundaries,
         sources,
+        sourceBoundaries,
         cores,
         units,
         obligations,
         obligationVersions,
         request,
         namespace: nonce,
+        inspectionContext,
       },
     };
     if (limit === budget.sourceChars || lo > hi) return best;
@@ -430,6 +629,64 @@ export function expandBasis(
           offset: p.start,
         }),
       ),
+      end: { evidenceId: p.evidenceId, sequence: p.sequence, offset: p.end },
+    },
+  }));
+}
+
+export function projectSource(evidence: Evidence[], range: SourceRange) {
+  const cuts = legalCursors(evidence, range),
+    boundaries = Object.fromEntries(cuts.map((c, i) => [`b${i}`, c]));
+  let text = "<b0>";
+  for (let i = 1; i < cuts.length; i++) {
+    const segment = readable(evidence, { start: cuts[i - 1], end: cuts[i] });
+    const prev = cuts[i - 1],
+      cur = cuts[i];
+    const join =
+      i > 1 &&
+      prev.sequence > 0 &&
+      cur.sequence > prev.sequence &&
+      prev.offset === evidence[prev.sequence - 1].text.length
+        ? separator(evidence[prev.sequence - 1].text, segment)
+        : "";
+    text += join + segment + `<b${i}>`;
+  }
+  return { text, boundaries };
+}
+export function expandRangeBasis(
+  evidence: Evidence[],
+  capture: Pick<LiveCapture, "sources" | "sourceBoundaries">,
+  ref: import("./live-wire").WireBasis,
+  within?: SourceRange,
+) {
+  const range = capture.sources[ref.source],
+    cuts = capture.sourceBoundaries[ref.source];
+  if (!range || !cuts?.[ref.start] || !cuts?.[ref.end])
+    throw new Error("unknown-or-cross-task-source-alias");
+  const selected = { start: cuts[ref.start], end: cuts[ref.end] };
+  const lo = position(evidence, selected.start),
+    hi = position(evidence, selected.end);
+  if (
+    hi <= lo ||
+    lo < position(evidence, range.start) ||
+    hi > position(evidence, range.end)
+  )
+    throw new Error("invalid-grounding-range");
+  if (
+    within &&
+    (lo < position(evidence, within.start) ||
+      hi > position(evidence, within.end))
+  )
+    throw new Error("grounding-outside-processing-group");
+  return sourcePieces(evidence, selected).map((p) => ({
+    evidenceId: p.evidenceId,
+    quote: p.text,
+    range: {
+      start: {
+        evidenceId: p.evidenceId,
+        sequence: p.sequence,
+        offset: p.start,
+      },
       end: { evidenceId: p.evidenceId, sequence: p.sequence, offset: p.end },
     },
   }));

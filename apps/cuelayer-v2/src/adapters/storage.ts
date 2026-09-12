@@ -39,9 +39,11 @@ export class EventStore extends Dexie {
   async exportSession(sessionId: string) {
     const events = await this.read(sessionId);
     return JSON.stringify({
-      schema: events.some((e) => e.schema === "cuelayer-v2-event-2")
-        ? "cuelayer-v2-export-2"
-        : "cuelayer-v2-export-1",
+      schema: events.some((e) => e.schema === "cuelayer-v2-event-3")
+        ? "cuelayer-v2-export-3"
+        : events.some((e) => e.schema === "cuelayer-v2-event-2")
+          ? "cuelayer-v2-export-2"
+          : "cuelayer-v2-export-1",
       events,
     });
   }

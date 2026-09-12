@@ -7,6 +7,157 @@ const opt = (name, fallback) =>
   process.argv
     .find((a) => a.startsWith(`--${name}=`))
     ?.slice(name.length + 3) ?? fallback;
+if (process.argv.includes("--protocol-compare")) {
+  const baseline = opt("baseline", null);
+  if (!baseline)
+    throw new Error(
+      "--baseline must identify the unchanged PR46 starting checkout (727accf).",
+    );
+  const baselineRef = "727accfe79e03c85856a77db645139bae9523ed4";
+  const { createHash } = await import("node:crypto");
+  const tree = execFileSync(
+    "git",
+    ["ls-tree", "-rz", "--full-tree", baselineRef, "--", "apps/cuelayer-v2"],
+    { encoding: "utf8" },
+  )
+    .split("\0")
+    .filter(Boolean);
+  for (const entry of tree) {
+    const [meta, path] = entry.split("\t"),
+      [mode, type, hash] = meta.split(" ");
+    if (type !== "blob" || mode === "120000")
+      throw new Error(`unsupported baseline entry: ${path}`);
+    const content = await readFile(resolve(baseline, path));
+    const actual = createHash("sha1")
+      .update(`blob ${content.length}\0`)
+      .update(content)
+      .digest("hex");
+    if (actual !== hash)
+      throw new Error(`baseline differs from ${baselineRef}: ${path}`);
+  }
+  await import("fake-indexeddb/auto");
+  const { pathToFileURL } = await import("node:url");
+  const load = (p) => import(pathToFileURL(resolve(baseline, p)).href);
+  const [
+    oldHost,
+    oldStorage,
+    oldProvider,
+    oldStory,
+    newHost,
+    newStorage,
+    newProvider,
+    newStory,
+  ] = await Promise.all([
+    load("apps/cuelayer-v2/src/session.ts"),
+    load("apps/cuelayer-v2/src/adapters/storage.ts"),
+    load("apps/cuelayer-v2/server/live.ts"),
+    load("apps/cuelayer-v2/src/story.ts"),
+    import("../src/session.ts"),
+    import("../src/adapters/storage.ts"),
+    import("../server/live.ts"),
+    import("../src/story.ts"),
+  ]);
+  const old = await oldHost.Session.open(
+    "equivalent",
+    async () => null,
+    new oldStorage.EventStore(`wire-old-${crypto.randomUUID()}`),
+  );
+  const fresh = await newHost.Session.open(
+    "equivalent",
+    async () => null,
+    new newStorage.EventStore(`wire-new-${crypto.randomUUID()}`),
+  );
+  old.pause();
+  fresh.pause();
+  const size = (v) => Buffer.byteLength(JSON.stringify(v));
+  const semantic = (state) => ({
+    cores: Object.values(state.cores).map((c) => ({
+      id: c.id,
+      label: c.label ?? c.title,
+    })),
+    units: Object.values(state.units).map((u) => ({
+      id: u.id,
+      coreId: u.coreId,
+      meaning: u.meaning,
+      requires: u.requires,
+    })),
+    cue: state.cue && { text: state.cue.text, targets: state.cue.targets },
+    mainline: state.currentCoreId,
+  });
+  const rows = [];
+  for (const [sequence, index] of [0, 2, 3, 4, 9].entries()) {
+    const text = newStory.story[index];
+    for (const host of [old, fresh])
+      await host.commitEvidence({
+        id: `e${sequence}`,
+        run: "equivalent",
+        source: String(sequence),
+        text,
+        start: sequence,
+        end: sequence + 1,
+        receivedAt: performance.now(),
+        audioObservedAt: null,
+        stability: "COMMITTED",
+      });
+    const oldTask = old.capture("Live"),
+      task = fresh.capture("Live"),
+      oldDecision = oldStory.fixtureProposal(oldTask),
+      decision = newStory.fixtureProposal(task);
+    const oldPayload = await oldProvider.liveRequest(oldTask.capture.request),
+      payload = await newProvider.liveRequest(task.capture.request);
+    rows.push({
+      storyIndex: index,
+      sourceChars: text.length,
+      old: {
+        provider: size(oldPayload),
+        projection: size(oldTask.capture.request),
+        schema: size(oldPayload.text.format.schema),
+        response: size(oldDecision),
+      },
+      new: {
+        provider: size(payload),
+        projection: size(task.capture.request),
+        schema: size(payload.text.format.schema),
+        response: size(decision),
+      },
+    });
+    await old.accept(oldTask, oldDecision);
+    await fresh.accept(task, decision);
+    if (
+      JSON.stringify(semantic(old.state)) !==
+      JSON.stringify(semantic(fresh.state))
+    )
+      throw new Error(`non-equivalent semantic work at story index ${index}`);
+  }
+  const totals = Object.fromEntries(
+    ["provider", "projection", "schema", "response"].map((key) => {
+      const previous = rows.reduce((n, r) => n + r.old[key], 0),
+        current = rows.reduce((n, r) => n + r.new[key], 0);
+      return [
+        key,
+        { old: previous, new: current, reduction: 1 - current / previous },
+      ];
+    }),
+  );
+  const out = resolve(
+    opt("out", "../../.cuelayer/v2/repair/protocol-volume.json"),
+  );
+  await mkdir(resolve(out, ".."), { recursive: true });
+  const report = {
+    identity: "event3-wire2-equivalent-work-1",
+    baseline: baselineRef,
+    baselineFilesVerified: tree.length,
+    rows,
+    totals,
+    semanticEquivalent: true,
+    providerInvocations: 0,
+  };
+  await writeFile(out, JSON.stringify(report, null, 2));
+  console.log(JSON.stringify(report, null, 2));
+  old.close();
+  fresh.close();
+  process.exit(0);
+}
 if (process.argv.includes("--offline-baseline")) {
   const baseline = opt("baseline", null);
   if (!baseline)

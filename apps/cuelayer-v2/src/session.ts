@@ -2,6 +2,7 @@ import PQueue from "p-queue";
 import pRetry from "p-retry";
 import {
   emptyReplay,
+  isCurrent,
   fold,
   same,
   version,
@@ -75,6 +76,8 @@ export class Session {
     .replaceAll("/", "_");
   private suppressed = 0;
   private failedKey: string | null = null;
+  private attentionTimer: ReturnType<typeof setTimeout> | undefined;
+  private retryClaiming = false;
   private startedAt = performance.now();
   private initialRecordedChars = 0;
   private initialAccountedChars = 0;
@@ -88,7 +91,11 @@ export class Session {
   error: string | null = null;
   attention: ProjectionIntent | null = null;
   // Accepted Cue meaning survives replay; its presentation invitation does not.
-  cuePresentation: { version: number; mainlineVersion: number } | null = null;
+  cuePresentation: {
+    version: number;
+    mainlineVersion: number;
+    targets: Record<string, number>;
+  } | null = null;
   readonly trace = new Trace();
   readonly speech: SpeechEvidenceAdapter;
   constructor(
@@ -126,7 +133,10 @@ export class Session {
         for (const obligation of event.accepted.unresolved)
           session.obligationTimes.set(obligation.id, restoredAt);
     }
-    if (session.value.eventVersion === 1) {
+    if (
+      session.value.eventVersion !== null &&
+      session.value.eventVersion !== 3
+    ) {
       session.paused = true;
       session.error = "legacy-session-read-only";
     }
@@ -142,6 +152,9 @@ export class Session {
     session.schedule();
     session.scheduleStage();
     return session;
+  }
+  get readOnly() {
+    return this.value.eventVersion !== null && this.value.eventVersion !== 3;
   }
   get replay() {
     return structuredClone(this.value);
@@ -183,7 +196,7 @@ export class Session {
         : 0,
       status: this.value.ended
         ? "SEALED"
-        : this.paused
+        : this.userPaused || this.paused
           ? "INTERPRETATION_PAUSED"
           : pending.length &&
               now - (this.admissionTimes.get(pending[0].id) ?? now) > 4000
@@ -247,10 +260,12 @@ export class Session {
         : never
       : never,
   ) {
+    if (this.value.eventVersion !== null && this.value.eventVersion !== 3)
+      throw new Error("legacy-session-read-only");
     const sequence = this.value.sequence + 1;
     const event: Event = {
       ...payload,
-      schema: "cuelayer-v2-event-2",
+      schema: "cuelayer-v2-event-3",
       sessionId: this.id,
       id: `${this.id}:${sequence}`,
       sequence,
@@ -318,7 +333,6 @@ export class Session {
     );
   }
   async commitEvidence(raw: Omit<Evidence, "sequence">) {
-    const beforeAdmission = this.value.evidence.length;
     const captured = structuredClone(raw);
     this.trace.mark(
       "evidence-received",
@@ -387,15 +401,6 @@ export class Session {
         captured.receivedAt,
       );
     });
-    if (
-      this.failedKey &&
-      !this.disposed &&
-      this.value.evidence.length > beforeAdmission
-    ) {
-      this.paused = false;
-      this.failedKey = null;
-      this.error = null;
-    }
     this.schedule();
   }
   capture(
@@ -432,7 +437,8 @@ export class Session {
   private schedule() {
     if (
       this.disposed ||
-      this.paused ||
+      this.userPaused ||
+      (this.value.eventVersion !== null && this.value.eventVersion !== 3) ||
       this.value.ended ||
       this.live.pending ||
       this.live.size
@@ -455,27 +461,56 @@ export class Session {
     }, wait);
   }
   private dispatchLive() {
-    if (this.disposed || this.paused || this.live.pending || this.live.size)
+    if (
+      this.disposed ||
+      this.userPaused ||
+      (this.value.eventVersion !== null && this.value.eventVersion !== 3) ||
+      this.live.pending ||
+      this.live.size
+    )
       return;
     if (!this.pendingEvidence().length) return;
     try {
       const task = this.capture("Live");
+      const failure = this.value.attempts[task.inspectionKey!];
+      this.paused = false;
+      this.failedKey = null;
+      if (
+        !this.value.inspections[task.inspectionKey!] &&
+        (failure?.outcome === "FAILED" ||
+          (failure?.outcome === "STARTED" && failure.manual))
+      ) {
+        this.paused = true;
+        this.failedKey = task.inspectionKey!;
+        this.error = failure.reason ?? "retry-interrupted";
+      } else this.error = null;
       if (
         this.value.inspections[task.inspectionKey!] ||
         task.inspectionKey === this.failedKey
       ) {
+        if (
+          this.value.inspections[task.inspectionKey!] === "WAIT_MORE_INPUT" &&
+          (task.capture!.request.omitted.sourceAfter ||
+            task.capture!.inspectionContext?.query)
+        ) {
+          this.paused = true;
+          this.error = "context-blocked:inspected-context-exhausted";
+        }
         if (this.value.inspections[task.inspectionKey!] === "OUTPUT_CAPACITY") {
           this.paused = true;
           this.error = "output-capacity-zero-progress";
         }
         this.captures.delete(task.id);
         this.suppressed++;
+        this.notify();
         this.trace.mark("identical-inspection-suppressed", {
           inspectionKey: task.inspectionKey,
           reason: this.value.inspections[task.inspectionKey!] ?? "failure",
         });
         return;
       }
+      if (failure?.outcome === "FAILED")
+        this.trace.mark("newer-snapshot-after-failure", { taskId: task.id });
       this.enqueue(task, this.live);
     } catch (error) {
       this.error = String(error);
@@ -582,15 +617,36 @@ export class Session {
         );
         const started = performance.now();
         let attempt = 0;
+        let phase: "transport" | "semantic" = "transport";
         this.trace.mark("inference-start", {
           taskId: task.id,
           lane: task.lane,
         });
-        const signal = AbortSignal.any([
-          this.lifetime.signal,
-          AbortSignal.timeout(this.config.deadlineMs),
-        ]);
+        const deadline = new AbortController();
+        const deadlineTimer = setTimeout(
+          () =>
+            deadline.abort(
+              new DOMException("Live/Stage deadline exceeded", "TimeoutError"),
+            ),
+          this.config.deadlineMs,
+        );
+        const signal = AbortSignal.any([this.lifetime.signal, deadline.signal]);
         try {
+          if (task.lane === "Live")
+            await this.writer.add(async () => {
+              const current = this.value.attempts[task.inspectionKey!];
+              if (current?.id !== task.id)
+                await this.append({
+                  type: "live-attempt",
+                  inspectionKey: task.inspectionKey!,
+                  attempt: {
+                    id: task.id,
+                    outcome: "STARTED",
+                    manual: false,
+                    reason: null,
+                  },
+                });
+            });
           const raw = await pRetry(
             () => {
               const attemptStart = performance.now();
@@ -626,6 +682,7 @@ export class Session {
             started,
             parent,
           );
+          phase = "semantic";
           await this.accept(task, raw, signal);
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);
@@ -634,19 +691,38 @@ export class Session {
             lane: task.lane,
             reason,
           });
-          if (
+          const stale =
             reason.startsWith("stale-dependency") ||
-            reason === "stale-generation"
-          ) {
-            // The changed dependency/generation produces a fresh eligible capture.
-          } else if (task.lane === "Stage") {
-            this.failedStage.add(task.inspectionKey!);
-          } else if (!this.disposed && task.lane === "Live") {
+            reason === "stale-generation";
+          if (task.lane === "Stage") {
+            if (!stale) this.failedStage.add(task.inspectionKey!);
+          } else if (!this.disposed) {
+            await this.writer.add(async () => {
+              if (this.value.acceptedTaskIds.includes(task.id)) return;
+              const attempt = this.value.attempts[task.inspectionKey!];
+              if (attempt?.id === task.id)
+                await this.append({
+                  type: "live-attempt",
+                  inspectionKey: task.inspectionKey!,
+                  attempt: {
+                    ...attempt,
+                    outcome: "FAILED",
+                    reason,
+                    category: stale ? "stale" : phase,
+                  },
+                });
+            });
             this.error = reason;
-            this.paused = true;
             this.failedKey = task.inspectionKey ?? null;
+            this.paused = false; // Recompute eligibility after this slot becomes idle.
+            this.trace.mark("live-snapshot-failed", {
+              taskId: task.id,
+              reason,
+              category: stale ? "stale" : phase,
+            });
           }
         } finally {
+          clearTimeout(deadlineTimer);
           this.tasks[task.lane] = null;
           this.captures.delete(task.id);
           const window = this.window;
@@ -700,6 +776,22 @@ export class Session {
       if (decision && !decision.groups.length) {
         await this.append({
           type: "inspected",
+          taskId: task.id,
+          context: task.capture
+            ? {
+                ...task.capture.inspectionContext!,
+                ...(decision.contextRequest
+                  ? {
+                      query: {
+                        ...decision.contextRequest,
+                        after: decision.contextRequest.after
+                          ? task.capture.units[decision.contextRequest.after]
+                          : null,
+                      },
+                    }
+                  : {}),
+              }
+            : undefined,
           inspectionKey: task.inspectionKey!,
           outcome: decision.suffixStatus as
             "WAIT_MORE_INPUT" | "OUTPUT_CAPACITY",
@@ -719,7 +811,11 @@ export class Session {
         return;
       }
       await this.append({ type: "accepted", accepted });
-      if (task.lane === "Live") this.error = null;
+      if (task.lane === "Live") {
+        this.error = null;
+        this.paused = false;
+        this.failedKey = null;
+      }
       if (
         task.lane === "Stage" &&
         this.failedKey &&
@@ -749,6 +845,7 @@ export class Session {
       }
       if (
         decision?.suffixStatus === "WAIT_MORE_INPUT" &&
+        !decision.contextRequest &&
         this.pendingEvidence().length &&
         position(this.value.evidence, this.value.recorded) ===
           position(this.value.evidence, task.capture!.range.end)
@@ -775,7 +872,11 @@ export class Session {
         consumed: accepted.dispositions.map((d) => d.evidenceId),
         sourceRanges: accepted.processing?.groups.map((g) => g.range) ?? [],
         changedUnits: accepted.operations
-          .filter((op) => op.type === "put")
+          .filter(
+            (op): op is Extract<typeof op, { id: string }> =>
+              "id" in op &&
+              ["put", "revise", "revalidate", "invalidate"].includes(op.type),
+          )
           .map((op) => op.id),
         carryCreated: accepted.unresolved.map((o) => o.id),
         carryResolved: accepted.resolved,
@@ -786,11 +887,41 @@ export class Session {
           ) ?? 0,
         reviewKeys: accepted.reviews?.map((r) => r.key) ?? [],
       });
+      if (
+        this.cuePresentation &&
+        (this.cuePresentation.version !== this.value.state.cueVersion ||
+          this.cuePresentation.mainlineVersion !==
+            this.value.state.mainlineVersion ||
+          Object.entries(this.cuePresentation.targets).some(
+            ([id, v]) =>
+              !isCurrent(this.value.state, id) ||
+              this.value.state.units[id].version !== v,
+          ))
+      ) {
+        this.cuePresentation = null;
+        this.trace.mark("cue-presentation-invalidated", { taskId: task.id });
+      }
       if (task.lane === "Live") {
+        if (
+          accepted.operations.some((op) => op.type === "cue") &&
+          this.value.state.cue
+        ) {
+          this.cuePresentation = {
+            version: this.value.state.cueVersion,
+            mainlineVersion: this.value.state.mainlineVersion,
+            targets: Object.fromEntries(
+              this.value.state.cue.targets.map((id) => [
+                id,
+                this.value.state.units[id].version,
+              ]),
+            ),
+          };
+          this.trace.mark("cue-presentation-published", { taskId: task.id });
+        }
         let attentionOutcome = "no-attention-produced";
         if (proposal.attention) {
-          const validTargets = proposal.attention.targets.every(
-            (id) => this.value.state.units[id]?.valid,
+          const validTargets = proposal.attention.targets.every((id) =>
+            isCurrent(this.value.state, id),
           );
           const sameTeaching =
             task.generation === this.value.generation &&
@@ -808,15 +939,17 @@ export class Session {
           else if (performance.now() - task.createdAt >= 750)
             attentionOutcome = "attention-expired";
           else {
-            if (accepted.operations.some((op) => op.type === "cue"))
-              this.cuePresentation = {
-                version: this.value.state.cueVersion,
-                mainlineVersion: this.value.state.mainlineVersion,
-              };
             this.attention = {
               ...proposal.attention,
               expiresAt: performance.now() + 750,
             };
+            if (this.attentionTimer) clearTimeout(this.attentionTimer);
+            this.attentionTimer = setTimeout(() => {
+              this.attention = null;
+              this.attentionTimer = undefined;
+              this.trace.mark("attention-expired", { taskId: task.id });
+              this.notify();
+            }, 750);
             this.epoch++;
             attentionOutcome = "attention-published";
           }
@@ -850,12 +983,71 @@ export class Session {
     this.schedule();
     this.scheduleStage();
   }
+  async retryFailedLive() {
+    if (
+      this.retryClaiming ||
+      this.disposed ||
+      this.userPaused ||
+      this.live.pending ||
+      this.live.size
+    )
+      return false;
+    this.retryClaiming = true;
+    try {
+      const task = await this.writer.add(async () => {
+        if (
+          this.value.ended ||
+          this.value.eventVersion !== 3 ||
+          !this.pendingEvidence().length
+        )
+          return null;
+        const t = this.capture("Live"),
+          key = t.inspectionKey!,
+          prior = this.value.attempts[key];
+        if (
+          !prior ||
+          prior.outcome === "SUCCEEDED" ||
+          this.value.inspections[key]
+        ) {
+          this.captures.delete(t.id);
+          return null;
+        }
+        // An interrupted manual claim is settled before an explicit new claim. Reload alone never does this.
+        if (prior.outcome === "STARTED")
+          await this.append({
+            type: "live-attempt",
+            inspectionKey: key,
+            attempt: {
+              ...prior,
+              outcome: "FAILED",
+              reason: "retry-interrupted",
+              category: "interrupted",
+            },
+          });
+        await this.append({
+          type: "live-attempt",
+          inspectionKey: key,
+          attempt: { id: t.id, outcome: "STARTED", manual: true, reason: null },
+        });
+        return t;
+      });
+      if (!task) return false;
+      this.paused = false;
+      this.failedKey = null;
+      this.error = null;
+      this.trace.mark("explicit-live-retry", { taskId: task.id });
+      this.enqueue(task, this.live);
+      return true;
+    } finally {
+      this.retryClaiming = false;
+    }
+  }
   async drainLive() {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
     while (this.pendingEvidence().length) {
       const before = position(this.value.evidence, this.value.accounted);
-      if (this.paused) throw new Error(this.error ?? "paused");
+      if (this.userPaused) throw new Error("user-paused");
       this.dispatchLive();
       await this.live.onIdle();
       if (this.timer) clearTimeout(this.timer);
@@ -895,6 +1087,7 @@ export class Session {
   }
   close() {
     this.disposed = true;
+    if (this.attentionTimer) clearTimeout(this.attentionTimer);
     this.pause();
     this.lifetime.abort();
     this.live.clear();

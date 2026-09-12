@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "fix/cuelayer-v2-incremental-semantic-frontier": false
+    }
+  },
   "functions": {
     "api/teaching/interpretation.ts": {
       "includeFiles": "server/teaching/**"
