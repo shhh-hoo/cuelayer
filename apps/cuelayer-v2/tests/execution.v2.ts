@@ -292,6 +292,7 @@ it.each([
 );
 
 it("preserves 429/5xx retry classification without adding SDK retries", async () => {
+  const observations: ExecutionObservation[] = [];
   const transport = vi.fn(
     async () =>
       new Response(
@@ -303,9 +304,15 @@ it("preserves 429/5xx retry classification without adding SDK retries", async ()
   );
   const task = captureLive(input(), "execution", "transient", 0);
   await expect(
-    execute(capturedRequest(task), transport as typeof fetch),
+    execute(capturedRequest(task), transport as typeof fetch, (event) => {
+      observations.push(event);
+    }),
   ).rejects.toBeInstanceOf(TransientFailure);
   expect(transport).toHaveBeenCalledTimes(1);
+  expect(
+    observations.find((e) => e.phase === "provider-payload")?.details
+      .serializedProviderRequestBytes,
+  ).toBeGreaterThan(0);
 });
 
 const pendingFetch: typeof fetch = (_input, init) =>

@@ -163,7 +163,12 @@ export async function providerResponse(
       }),
       {
         status: reason === "model-transient" ? 503 : 502,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(providerBytes > 0
+            ? { "X-V2-Provider-Request-Bytes": String(providerBytes) }
+            : {}),
+        },
       },
     );
   }
