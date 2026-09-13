@@ -1,11 +1,11 @@
-import { Stream } from "openai/core/streaming";
 import type { Plugin } from "vite";
 import { Readable } from "node:stream";
 import { StringDecoder } from "node:string_decoder";
 import { pipeline } from "node:stream/promises";
 import { createSpeechmaticsJWT } from "@speechmatics/auth";
-import { modelProfile, openLiveResponse } from "./live";
+import { modelProfile } from "./live";
 import type { ProviderRequest } from "./live";
+import { createProviderDeadline, providerResponse } from "./provider-execution";
 
 /** Local experiment endpoints. No production route or credential-bearing client. */
 export function realServices(): Plugin {
@@ -19,16 +19,16 @@ export function realServices(): Plugin {
           res.writeHead(403).end();
           return;
         }
-        const controller = new AbortController();
         const observation = Number(process.env.CUELAYER_V2_OBSERVATION_MS);
         const providerTimeoutMs =
           observation >= 6000 && observation <= 60000
             ? observation
             : modelProfile.providerTimeoutMs;
-        const timeout = setTimeout(
-          () => controller.abort("model-timeout"),
+        const deadline = createProviderDeadline(
+          new AbortController().signal,
           providerTimeoutMs,
         );
+        const { controller } = deadline;
         res.on("close", () => {
           if (!res.writableEnded) controller.abort();
         });
@@ -76,36 +76,20 @@ export function realServices(): Plugin {
               json(503, { error: "model-not-configured" });
               return;
             }
-            const upstream = await openLiveResponse(
-              task,
-              process.env.OPENAI_API_KEY,
-              process.env.OPENAI_MODEL || modelProfile.model,
-              controller.signal,
-              (size) =>
-                res.setHeader("X-V2-Provider-Request-Bytes", String(size)),
-            );
-            const forwarded = new Stream<unknown>(async function* () {
-              try {
-                yield* upstream;
-                if (controller.signal.aborted)
-                  yield { type: "v2.failure", reason: "model-timeout" };
-              } catch {
-                yield {
-                  type: "v2.failure",
-                  reason: controller.signal.aborted
-                    ? "model-timeout"
-                    : "model-stream-failed",
-                };
-              }
-            }, controller);
-            res.writeHead(200, {
-              "Content-Type": "application/x-ndjson",
-              "X-Accel-Buffering": "no",
+            const response = await providerResponse(task, {
+              apiKey: process.env.OPENAI_API_KEY,
+              model: process.env.OPENAI_MODEL || modelProfile.model,
+              signal: controller.signal,
+              deadline,
             });
+            res.writeHead(
+              response.status,
+              Object.fromEntries(response.headers),
+            );
             res.flushHeaders();
             await pipeline(
               Readable.fromWeb(
-                forwarded.toReadableStream() as import("node:stream/web").ReadableStream<Uint8Array>,
+                response.body as import("node:stream/web").ReadableStream<Uint8Array>,
               ),
               res,
             );
@@ -131,7 +115,7 @@ export function realServices(): Plugin {
             });
           else res.destroy();
         } finally {
-          clearTimeout(timeout);
+          deadline.close();
         }
       });
     },
