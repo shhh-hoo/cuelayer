@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { interpretationDeadlines } from "../lesson-stream/runtime-policy";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -159,7 +160,7 @@ describe("actual live hook generation and recovery", () => {
   it("bounds real timeout retries without amplification and recovers preserved evidence after resume", async () => {
     await render({ canonicalSpeech: speech("a", "First point.") });
     await render({ canonicalSpeech: { spans: [...speech("a", "First point.").spans, ...speech("b", "Second point.").spans] } as CanonicalSpeechState });
-    await act(async () => { await vi.advanceTimersByTimeAsync(40_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3 * interpretationDeadlines().clientMs + 10_000); });
     expect(records).toHaveLength(3);
     expect(records.map((item) => item.request.newEvidence.map((c) => c.text))).toEqual([["First point."], ["First point."], ["First point."]]);
     expect(latest.health).toMatchObject({ paused: true, lagging: true, consecutiveFailures: 3, pendingCount: 2 });

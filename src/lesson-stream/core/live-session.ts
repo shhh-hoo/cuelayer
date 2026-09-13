@@ -1,3 +1,4 @@
+import { coreAbortSource, type CoreAbortSource, type CoreTiming, type CoreRequestWeight, type CoreQueuePressure } from "./diagnostics.ts";
 import { ZodError } from "zod";
 import type { CanonicalSpeechSpan, SpeechRunId } from "../../session/speech-types.ts";
 import { RetryBackoff } from "../../session/retry-backoff.ts";
@@ -14,8 +15,9 @@ import { CoreTrace, coreContextDiagnostics, coreProviderResponseAudit } from "./
 import { VerificationDispatcher, type VerificationSink } from "./verification-dispatcher.ts";
 
 export type CoreProviderDiagnostic =
-  | { stage: "request"; request: unknown; identity: { contract: string; policy: string }; requestedModel: string }
-  | { stage: "response"; response?: unknown; transportError?: string; elapsedMs: number };
+  | { stage: "request"; request: unknown; identity: { contract: string; policy: string }; requestedModel: string; startedAt?: string; weight?: CoreRequestWeight }
+  | { stage: "response"; response?: unknown; transportError?: string; elapsedMs: number; startedAt?: string; completedAt?: string; outcome?: "success" | "failure"; abortSource?: CoreAbortSource }
+  | ({ stage: "endpoint" | "http" } & CoreTiming);
 export type CoreLiveInterpreter = (binding: CoreInterpretationBinding, options: {
   signal: AbortSignal; observe: (diagnostic: CoreProviderDiagnostic) => void;
 }) => Promise<unknown>;
@@ -30,7 +32,7 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 type RequestStage = "provider" | "normalization" | "validation" | "persistence";
 function failureCategory(error: unknown, stage: RequestStage, signal?: AbortSignal): InterpretationFailure {
   const reason = message(error);
-  if (signal?.reason === "core-provider-timeout") return "timeout";
+  if (signal?.reason === "core-client-timeout") return "timeout";
   if (signal?.aborted || reason === "core-stale-result") return "cancelled";
   if (/core-(knowledge|cue)-conflict/.test(reason) || reason.includes("pending-prefix")) return "conflict";
   if (reason.includes("budget")) return "budget";
@@ -145,21 +147,29 @@ export class CoreLiveSession {
   }
 
   private async perform(binding: CoreInterpretationBinding, schedulerRequestId: string, generation: number, controller: AbortController) {
+    const scheduledAt = new Date(this.scheduler.currentWork!.startedAtMs).toISOString();
+    const started = performance.now();
+    let outcome: "accepted" | "needs_context" | "failure" = "failure";
+    let abortSource: CoreAbortSource | undefined;
+    let remoteAbortSource: CoreAbortSource | undefined;
     const correlation = { coreRequestId: binding.requestId, runId: this.runId };
     const current = () => !this.closed && generation === this.generation && this.scheduler.currentWork?.requestId === schedulerRequestId;
-    const deadline = setTimeout(() => controller.abort("core-provider-timeout"), this.options.deadlineMs ?? interpretationDeadlines().clientMs);
+    const deadline = setTimeout(() => controller.abort("core-client-timeout"), this.options.deadlineMs ?? interpretationDeadlines().clientMs);
     let validated = false;
     let stage: RequestStage = "provider";
     try {
       this.trace.record("core.request", () => ({ requestId: binding.requestId, checkpointIds: binding.newEvidenceIds,
+        scheduledAt, queue: this.queuePressure(binding.newEvidenceIds.length),
         diagnostics: coreContextDiagnostics(binding), context: binding.context,
         entities: [...binding.entities].map(([handle, entity]) => ({ handle, ...entity })) }), correlation);
       const raw = await abortable(() => this.options.interpreter(binding, { signal: controller.signal, observe: diagnostic => {
-        if (!current() || controller.signal.aborted) return;
+        if (diagnostic.stage !== "request" && diagnostic.abortSource) remoteAbortSource = diagnostic.abortSource;
+        // Cancellation diagnostics still explain the settled flight; they cannot accept state.
         if (diagnostic.stage === "request") this.trace.record("core.provider_request", () => ({ ...diagnostic, requestDigest: persistedAuditDigest(diagnostic.request) }), correlation);
-        else this.trace.record("core.provider_response", () => {
+        else if (diagnostic.stage === "http" || diagnostic.stage === "endpoint") this.trace.record(diagnostic.stage === "http" ? "core.http" : "core.endpoint", () => diagnostic, correlation);
+        else if (diagnostic.stage === "response") this.trace.record("core.provider_response", () => {
           const audit = coreProviderResponseAudit(diagnostic.response);
-          return { ...audit, elapsedMs: diagnostic.elapsedMs, transportError: diagnostic.transportError?.slice(0, 2_048), responseDigest: persistedAuditDigest(audit.response) };
+          return { ...audit, startedAt: diagnostic.startedAt, completedAt: diagnostic.completedAt, outcome: diagnostic.outcome, abortSource: diagnostic.abortSource, elapsedMs: diagnostic.elapsedMs, transportError: diagnostic.transportError?.slice(0, 2_048), responseDigest: persistedAuditDigest(audit.response) };
         }, correlation);
       } }), controller.signal);
       clearTimeout(deadline); // A provider deadline must never abort an ongoing store transaction.
@@ -184,6 +194,7 @@ export class CoreLiveSession {
         },
       });
       if (accepted.kind === "NEEDS_CONTEXT") {
+        outcome = "needs_context";
         // Explicit pause. Host resume reprojects with the grounded retrieval phrase;
         // newly arriving evidence cannot bypass this gate or cause an infinite loop.
         this.unresolved = accepted.checkpointIds.map(checkpointId => ({ checkpointId, phrase: accepted.query }));
@@ -194,6 +205,7 @@ export class CoreLiveSession {
       }
       this.scheduler.settleAccepted(schedulerRequestId, accepted.steps.flatMap(step => step.consumesCheckpointIds));
       this.retry.accept(); this.error = undefined; this.unresolved = [];
+      outcome = "accepted";
       this.trace.record("core.accepted", () => ({ steps: accepted.steps, events: accepted.events,
         eventIds: accepted.events.map(e => e.eventId), eventsDigest: persistedAuditDigest(accepted.events) }), correlation);
       this.trace.record("core.published", () => ({ eventIds: accepted.events.map(e => e.eventId),
@@ -218,6 +230,7 @@ export class CoreLiveSession {
       const remaining = new Set(this.runtime.pending.map(checkpoint => checkpoint.checkpointId));
       if (this.scheduler.pendingCheckpoints.some(checkpoint => !remaining.has(checkpoint.checkpointId))) this.scheduler.restore(this.runtime.pending);
       const category = failureCategory(error, stage, controller.signal);
+      if (controller.signal.aborted || stage === "provider" || message(error) === "core-stale-result") abortSource = controller.signal.aborted ? coreAbortSource(controller.signal) : remoteAbortSource ?? coreAbortSource(undefined, error);
       this.trace.record("core.request_failed", () => ({ reason: message(error), category: stage === "persistence" && !controller.signal.aborted ? "persistence" : category, stage, pendingCount: this.scheduler.pendingCount }), correlation);
       if (!validated && stage === "validation") this.trace.record("core.validation", () => ({ status: "rejected", reason: message(error),
         knowledgeRevision: this.state.knowledge.revision, cueRevision: this.state.cue.revision }), correlation);
@@ -225,7 +238,21 @@ export class CoreLiveSession {
         this.error = message(error);
         this.retry.fail(() => this.pump(), category);
       }
-    } finally { clearTimeout(deadline); }
+    } finally {
+      clearTimeout(deadline);
+      this.trace.record("core.attempt_completed", () => ({ scheduledAt, completedAt: new Date().toISOString(),
+        elapsedMs: performance.now() - started, outcome, abortSource, queue: this.queuePressure(binding.newEvidenceIds.length) }), correlation);
+    }
+  }
+
+  private queuePressure(requestCheckpointCount: number): CoreQueuePressure {
+    const oldest = this.scheduler.pendingCheckpoints[0];
+    const committed = oldest && this.runtime.events.find(event => event.type === "evidence.checkpoint_committed" && event.checkpoint.checkpointId === oldest.checkpointId);
+    return { pendingCheckpointCount: this.scheduler.pendingCount,
+      oldestPendingAgeMs: committed?.type === "evidence.checkpoint_committed" ? Math.max(0, Date.now() - Date.parse(committed.timestamp)) : null,
+      requestCheckpointCount, processedThroughSequence: this.state.processedThroughSequence,
+      consecutiveFailures: this.retry.consecutiveFailures, paused: !this.running || this.retry.isPaused,
+      backingOff: this.retry.active && !this.retry.isPaused };
   }
 
   /** Caller first drains capture. Refuse new spans while draining the semantic tail. */

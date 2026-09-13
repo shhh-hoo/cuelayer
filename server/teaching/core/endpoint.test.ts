@@ -43,10 +43,16 @@ it('missing configuration, invalid or over-budget input makes no transport call'
 it.each(['bad json', '{"outcome":{"kind":"bad"}}'])('invalid provider output rejects and preserves response diagnostics: %s', async output_text => {
   const result = await coreInterpretationResponse({ context: (await binding()).context }, { transport: async () => ({ output_text }) });
   expect(result.status).toBe(502); expect(result.body.error).toBe('core-provider-output-invalid');
-  expect(result.body.diagnostics.map(d => d.stage)).toEqual(['request', 'response']);
+  expect(result.body.diagnostics.map(d => d.stage)).toEqual(['request', 'response', 'endpoint']);
 });
 it('HTTP invalid output remains a validation failure for the scheduler', async () => {
   const request = await binding();
   const interpreter = createHttpCoreInterpreter(vi.fn(async () => ({ ok: false, json: async () => ({ error: 'core-provider-output-invalid' }) })) as unknown as typeof fetch);
   await expect(interpreter(request, { signal: new AbortController().signal, observe: vi.fn() })).rejects.toBeInstanceOf(SyntaxError);
+});
+
+it('malformed diagnostics and throwing HTTP observers cannot change a valid proposal', async () => {
+  const request = await binding(), proposal = proposalFor(request);
+  const interpreter = createHttpCoreInterpreter(async () => new Response(JSON.stringify({ proposal, diagnostics: [null, {}, { stage: 'endpoint', outcome: 'success' }] })));
+  expect(await interpreter(request, { signal: new AbortController().signal, observe: () => { throw new Error('trace-broken'); } })).toEqual(proposal);
 });

@@ -209,8 +209,8 @@ describe("bounded lossless recovery", () => {
     retry.fail(pump, "cancelled"); expect(retry.consecutiveFailures).toBe(0);
     retry.fail(pump, "validation"); vi.runAllTimers(); expect(pump).not.toHaveBeenCalled(); expect(retry.isPaused).toBe(true);
     expect(["proposal-invalid", "teaching-provider-http-500", "teaching-interpretation-timeout", "interpretation-state-conflict"].map((s) => classifyInterpretationFailure(s))).toEqual(["validation", "provider", "timeout", "conflict"]);
-    expect(interpretationDeadlines()).toEqual({ providerMs: 6000, clientMs: 8000 });
+    expect(interpretationDeadlines()).toEqual({ providerMs: 12000, clientMs: 14000 });
     expect(interpretationDeadlines("30000", true)).toEqual({ providerMs: 30000, clientMs: 32000 });
-    expect(interpretationDeadlines("30000", false).providerMs).toBe(6000);
+    expect(interpretationDeadlines("30000", false).providerMs).toBe(12000);
   });
 });
