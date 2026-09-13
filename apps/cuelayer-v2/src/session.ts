@@ -20,9 +20,38 @@ import { decisionEventPayload } from "./acceptance-event";
 import { EventStore } from "./adapters/storage";
 import { Trace } from "./adapters/trace";
 import { SpeechEvidenceAdapter } from "./adapters/speech";
+import type { RuntimeLatencyPolicy } from "./latency-policy";
 
 import { TransientFailure, type Interpreter } from "./execution-contract";
 export { TransientFailure, type Interpreter } from "./execution-contract";
+
+// Abort must release the lane even when an interpreter ignores its signal.
+// The detached computation has no acceptance port; its late settlement is observed.
+function abortable<T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> {
+  signal.throwIfAborted();
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => {
+      signal.removeEventListener("abort", abort);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    Promise.resolve()
+      .then(() => {
+        signal.throwIfAborted();
+        return work();
+      })
+      .then(
+        (value) => {
+          signal.removeEventListener("abort", abort);
+          resolve(value);
+        },
+        (error) => {
+          signal.removeEventListener("abort", abort);
+          reject(error);
+        },
+      );
+  });
+}
 export type WorkingWindow = {
   orderedCommittedEvidence: string[];
   preflight: unknown;
@@ -99,7 +128,14 @@ export class Session {
     readonly id: string,
     readonly store: EventStore,
     private interpreter: Interpreter,
-    readonly config = {
+    readonly config: {
+      coalesceMs: number;
+      deadlineMs: number;
+      maxWaitMs: number;
+      sourceChars: number;
+      maxRequestBytes: number;
+      latencyPolicy?: RuntimeLatencyPolicy;
+    } = {
       coalesceMs: 250,
       deadlineMs: 8000,
       maxWaitMs: 750,
@@ -682,18 +718,28 @@ export class Session {
         );
         const started = performance.now();
         let attempt = 0;
+        let firstDispatch: number | null = null;
         let phase: "transport" | "semantic" = "transport";
+        const lanePolicy = this.config.latencyPolicy?.lanes[task.lane];
+        const hostDeadlineMs =
+          lanePolicy?.hostTotalMs ?? this.config.deadlineMs;
         this.trace.mark("inference-start", {
           taskId: task.id,
           lane: task.lane,
+          latencyPolicyVersion: this.config.latencyPolicy?.version ?? null,
+          hostDeadlineMs,
+          freshness: lanePolicy?.freshness ?? null,
         });
         const deadline = new AbortController();
         const deadlineTimer = setTimeout(
           () =>
             deadline.abort(
-              new DOMException("Live/Stage deadline exceeded", "TimeoutError"),
+              new DOMException(
+                `${task.lane} hard deadline exceeded`,
+                "TimeoutError",
+              ),
             ),
-          this.config.deadlineMs,
+          hostDeadlineMs,
         );
         const signal = AbortSignal.any([this.lifetime.signal, deadline.signal]);
         try {
@@ -715,22 +761,25 @@ export class Session {
           const raw = await pRetry(
             () => {
               const attemptStart = performance.now();
+              firstDispatch ??= attemptStart;
               this.trace.mark("inference-attempt", {
                 taskId: task.id,
                 lane: task.lane,
                 attempt: ++attempt,
               });
               let first = false;
-              return this.interpreter(structuredClone(task), signal, () => {
-                if (first) return;
-                first = true;
-                this.trace.mark(
-                  "first-provider-byte",
-                  { taskId: task.id, lane: task.lane, attempt },
-                  attemptStart,
-                  parent,
-                );
-              });
+              return abortable(signal, () =>
+                this.interpreter(structuredClone(task), signal, () => {
+                  if (first || signal.aborted) return;
+                  first = true;
+                  this.trace.mark(
+                    "first-provider-byte",
+                    { taskId: task.id, lane: task.lane, attempt },
+                    attemptStart,
+                    parent,
+                  );
+                }),
+              );
             },
             {
               retries: 2,
@@ -749,6 +798,23 @@ export class Session {
           );
           phase = "semantic";
           await this.accept(task, raw, signal);
+          if (lanePolicy && firstDispatch !== null) {
+            const elapsedMs = performance.now() - firstDispatch;
+            const accepted = this.value.acceptedTaskIds.includes(task.id);
+            this.trace.mark("latency-policy-outcome", {
+              taskId: task.id,
+              lane: task.lane,
+              latencyPolicyVersion: this.config.latencyPolicy!.version,
+              origin: "first-interpreter-dispatch",
+              endpoint: accepted ? "host-accepted" : "host-inspected",
+              elapsedMs,
+              freshnessTargetMs: lanePolicy.freshness.acceptedMs,
+              freshnessMet: accepted
+                ? elapsedMs <= lanePolicy.freshness.acceptedMs
+                : null,
+              accepted,
+            });
+          }
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);
           this.trace.mark("proposal-rejected", {
@@ -759,6 +825,14 @@ export class Session {
           const stale =
             reason.startsWith("stale-dependency") ||
             reason === "stale-generation";
+          const category = stale
+            ? "stale"
+            : phase === "semantic" ||
+                ["model-malformed-json", "model-schema-invalid"].includes(
+                  reason,
+                )
+              ? "semantic"
+              : "transport";
           if (task.lane === "Stage") {
             if (!stale) this.failedStage.add(task.inspectionKey!);
           } else if (!this.disposed) {
@@ -773,7 +847,7 @@ export class Session {
                     ...attempt,
                     outcome: "FAILED",
                     reason,
-                    category: stale ? "stale" : phase,
+                    category,
                   },
                 });
             });
@@ -783,7 +857,7 @@ export class Session {
             this.trace.mark("live-snapshot-failed", {
               taskId: task.id,
               reason,
-              category: stale ? "stale" : phase,
+              category,
             });
           }
         } finally {
@@ -989,12 +1063,17 @@ export class Session {
             attentionOutcome = "attention-suppressed";
           else if (task.attentionEpoch !== this.epoch || newerSource)
             attentionOutcome = "attention-superseded";
-          else if (performance.now() - task.createdAt >= 750)
+          else if (
+            performance.now() - task.createdAt >=
+            (this.config.latencyPolicy?.attention.admissionMs ?? 750)
+          )
             attentionOutcome = "attention-expired";
           else {
             this.attention = {
               ...proposal.attention,
-              expiresAt: performance.now() + 750,
+              expiresAt:
+                performance.now() +
+                (this.config.latencyPolicy?.attention.publishedTtlMs ?? 750),
             };
             if (this.attentionTimer) clearTimeout(this.attentionTimer);
             this.attentionTimer = setTimeout(() => {
@@ -1002,7 +1081,7 @@ export class Session {
               this.attentionTimer = undefined;
               this.trace.mark("attention-expired", { taskId: task.id });
               this.notify();
-            }, 750);
+            }, this.config.latencyPolicy?.attention.publishedTtlMs ?? 750);
             this.epoch++;
             attentionOutcome = "attention-published";
           }

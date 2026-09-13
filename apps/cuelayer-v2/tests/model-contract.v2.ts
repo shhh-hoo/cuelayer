@@ -161,7 +161,7 @@ it("compact quantity leaves preserve operators, numeric values, symbols, units, 
   ).toThrow("missing-operand");
 });
 
-it("production strict schema exposes only the new continuation and compact leaves without changing deadlines", async () => {
+it("production strict schema keeps the continuation and compact leaves with the selected validation profile", async () => {
   const s = await openSession();
   s.pause();
   try {
@@ -174,12 +174,13 @@ it("production strict schema exposes only the new continuation and compact leave
     expect(schema.properties.suffixStatus).toBeUndefined();
     expect(JSON.stringify(schema)).not.toContain('"const":"Symbol"');
     expect(modelProfile).toMatchObject({
-      providerTimeoutMs: 6000,
-      clientTimeoutMs: 8000,
+      providerTimeoutMs: 12000,
+      clientTimeoutMs: 15000,
       sdkRetries: 0,
       transportRetries: 2,
-      reasoning: "none",
-      stageReasoning: "none",
+      reasoning: "medium",
+      stageReasoning: "medium",
+      serviceTier: "default",
     });
   } finally {
     s.close();

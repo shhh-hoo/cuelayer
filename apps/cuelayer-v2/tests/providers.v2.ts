@@ -96,8 +96,9 @@ describe("official SDK transport → existing proposal port", () => {
   it("fixes Current model profile, includes only bounded host context and issues stable IDs", async () => {
     const request = await liveRequest(task.capture!.request);
     expect(request).toMatchObject({
-      model: "gpt-5.6-luna",
-      reasoning: { effort: "none" },
+      model: "gpt-6-astra",
+      reasoning: { effort: "medium" },
+      service_tier: "default",
       max_output_tokens: 8192,
       store: false,
       text: { format: { type: "json_schema", strict: true } },

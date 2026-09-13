@@ -37,6 +37,7 @@ const session = await Session.open(
         sourceChars: 2400,
         maxRequestBytes: 28000,
         deadlineMs: serviceConfig.clientTimeoutMs,
+        latencyPolicy: serviceConfig.effectiveLatencyPolicy,
       }
     : undefined,
 );

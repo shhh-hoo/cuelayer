@@ -4,7 +4,8 @@ import {
   type ObservationOptions,
   type ExecutionObservation,
 } from "../src/execution-contract";
-import { modelProfile, openLiveResponse, type ProviderRequest } from "./live";
+import { latencyPolicy } from "../src/latency-policy";
+import { openLiveResponse, type ProviderRequest } from "./live";
 
 export type ProviderDeadline = {
   controller: AbortController;
@@ -16,7 +17,7 @@ export type ProviderDeadline = {
  */
 export function createProviderDeadline(
   signal: AbortSignal,
-  timeoutMs = modelProfile.providerTimeoutMs,
+  timeoutMs = latencyPolicy.lanes.Live.providerHardMs,
 ): ProviderDeadline {
   const controller = new AbortController();
   const abort = () => controller.abort(signal.reason);
@@ -72,10 +73,12 @@ export async function providerResponse(
       },
       observedOptions,
     );
+    controller.signal.throwIfAborted();
     const forwarded = new Stream<unknown>(async function* () {
       let firstAnswer = false;
       try {
         for await (const event of upstream) {
+          controller.signal.throwIfAborted();
           if (
             event.type === "response.output_text.delta" &&
             event.delta &&
