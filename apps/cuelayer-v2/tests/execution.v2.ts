@@ -115,19 +115,19 @@ function execute(
   });
 }
 
-it("pins the reviewed declarative Stage and field-grounded Live profile", async () => {
+it("pins the source-review and declarative Stage profile", async () => {
   const formats = [];
-  for (const version of ["v2-live-request-4", "v2-stage-request-5"])
+  for (const version of ["v2-live-request-5", "v2-stage-request-6"])
     formats.push(
       (await liveRequest({ version } as ProviderRequest)).text.format,
     );
-  // #56 intentionally changes provider grammar and per-field grounding;
+  // #57 intentionally adds source-classification and non-consuming Live review;
   // transport/model/deadline equivalence remains separately checked below.
   const digest = createHash("sha256")
     .update(JSON.stringify({ modelProfile, livePolicy, stagePolicy, formats }))
     .digest("hex");
   expect(digest).toBe(
-    "0ef3274262aadceb531a0072a060070a1def8f33a9c634021ec976e3b1fac332",
+    "756280a88a10a9c6d9b331b0d58ad1472404ce34e9137b2965d8a06a0c60fe7d",
   );
 });
 

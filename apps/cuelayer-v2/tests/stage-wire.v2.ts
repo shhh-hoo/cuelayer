@@ -1,13 +1,15 @@
 import { afterEach, expect, it } from "vitest";
 import { Session } from "../src/session";
-import type { Task } from "../src/contract";
-import { validateStage } from "../src/stage";
+import { emptyReplay, fold, type Task } from "../src/contract";
+import { validateStage, type StageRequest } from "../src/stage";
 import {
   compileStageDeclarations,
   stageDeclarationReviewSchema,
   type StageDeclarationReview,
 } from "../src/stage-wire";
-import { liveRequest } from "../server/live";
+import { capturedRequest, executeCapturedRequest } from "../src/execution";
+import { liveRequest, modelProfile } from "../server/live";
+import { providerResponse } from "../server/provider-execution";
 import {
   admit,
   establish,
@@ -386,5 +388,213 @@ it("serializes an equivalent grounded annotation with less mechanical response d
   expect(newBytes).toBeLessThan(oldBytes * 0.75);
   console.info("Stage annotation response bytes", { oldBytes, newBytes });
   const payload = await liveRequest(r);
-  expect(payload.text.format.name).toBe("v2_stage_declarations_1");
+  expect(payload.text.format.name).toBe("v2_stage_declarations_2");
 });
+
+async function sourceSetup() {
+  const s = await openSession();
+  sessions.push(s);
+  s.pause();
+  await admit(s, "The ratio we will use next is...");
+  const live = s.capture("Live");
+  await s.accept(live, fullGroup(live));
+  const t = s.capture("Stage"),
+    r = t.review!.request;
+  expect(r.items[0].kind).toBe("SOURCE_NO_CHANGE");
+  return { s, t, r };
+}
+const sourceResult = (
+  r: StageRequest,
+  outcome: "STILL_OPEN" | "CONFIRMED_NO_CHANGE" | "READY_FOR_LIVE" | "CARRY",
+) => ({
+  scope: r.scope,
+  results: [
+    {
+      item: r.items[0].id,
+      outcome,
+      ...(outcome === "CARRY"
+        ? { kind: "INCOMPLETE_PROPOSITION", core: null }
+        : {}),
+    },
+  ],
+});
+
+it.each([
+  "STILL_OPEN",
+  "CONFIRMED_NO_CHANGE",
+  "READY_FOR_LIVE",
+  "CARRY",
+] as const)(
+  "passes %s through only for a source-only review item",
+  async (outcome) => {
+    const { s, t, r } = await sourceSetup();
+    const raw = sourceResult(r, outcome);
+    const before = structuredClone(s.replay);
+    const compiled = compileStageDeclarations(r, raw);
+    expect(compiled).toEqual(raw);
+    expect(r.newUnits).toEqual([]);
+    expect(r.createWithin).toEqual([]);
+    const accepted = validateStage(s.replay, t, compiled).accepted;
+    expect(accepted.operations).toEqual([]);
+    expect(accepted.sourceReviews?.[0].outcome).toBe(outcome);
+    await s.accept(t, compiled);
+    expect(s.state).toEqual(before.state);
+    expect(s.replay.accounted).toEqual(before.accounted);
+    expect(s.replay.consumed).toEqual(before.consumed);
+  },
+);
+
+it("rejects knowledge resolution and withdrawal declarations on a source-only item", async () => {
+  const { r } = await sourceSetup();
+  for (const result of [
+    {
+      item: r.items[0].id,
+      outcome: "RESOLVED",
+      referents: [],
+      declarations: [
+        {
+          action: "CONFIRM",
+          unit: "u0",
+          basis: [{ source: "s0", start: "b0", end: "b1" }],
+        },
+      ],
+    },
+    { item: r.items[0].id, outcome: "WITHDRAWN", supersededBy: "u0" },
+  ])
+    expect(() =>
+      compileStageDeclarations(r, { scope: r.scope, results: [result] }),
+    ).toThrow("source-review-cannot-write-knowledge");
+});
+
+it("rejects source classification on ordinary obligation and reconciliation items", async () => {
+  const { r } = await setup();
+  for (const kind of ["OBLIGATION", "RECONCILIATION"] as const)
+    for (const outcome of [
+      "CONFIRMED_NO_CHANGE",
+      "READY_FOR_LIVE",
+      "CARRY",
+    ] as const) {
+      const ordinary = {
+        ...r,
+        items: r.items.map((item) => ({ ...item, kind })),
+      };
+      expect(() =>
+        compileStageDeclarations(ordinary, sourceResult(ordinary, outcome)),
+      ).toThrow("unexpected-source-review-outcome");
+    }
+});
+
+it("requires a non-null source CARRY Core to be an explicitly captured Core alias", async () => {
+  const { r: source } = await sourceSetup();
+  // A compiler contract fixture explicitly supplies readable Core metadata.
+  // Host acceptance remains responsible for its actual version/capability.
+  const r = { ...source, cores: [{ id: "c0", label: "Ratios" }] };
+  const raw = sourceResult(r, "CARRY");
+  expect(r.cores).toHaveLength(1);
+  for (const core of [r.cores[0].id, null]) {
+    const declared = { ...raw, results: [{ ...raw.results[0], core }] };
+    expect(compileStageDeclarations(r, declared)).toEqual(declared);
+  }
+  for (const core of ["", "u0", "nc0", "uncaptured"])
+    expect(() =>
+      compileStageDeclarations(r, {
+        ...raw,
+        results: [{ ...raw.results[0], core }],
+      }),
+    ).toThrow("uncaptured-core");
+});
+
+it("keeps source classifications strict and bound to the request scope and items", async () => {
+  const { r } = await sourceSetup();
+  const raw = sourceResult(r, "READY_FOR_LIVE");
+  for (const extra of [{ declarations: [] }, { operations: [] }, { basis: [] }])
+    expect(
+      stageDeclarationReviewSchema.safeParse({
+        ...raw,
+        results: [{ ...raw.results[0], ...extra }],
+      }).success,
+    ).toBe(false);
+  expect(() =>
+    compileStageDeclarations(r, { ...raw, scope: "another-task" }),
+  ).toThrow("scope");
+  expect(() =>
+    compileStageDeclarations(r, {
+      ...raw,
+      results: [{ ...raw.results[0], item: "another-item" }],
+    }),
+  ).toThrow("item");
+  const carry = sourceResult(r, "CARRY");
+  expect(
+    stageDeclarationReviewSchema.safeParse({
+      ...carry,
+      results: [{ ...carry.results[0], core: undefined }],
+    }).success,
+  ).toBe(false);
+});
+
+it.each(["CONFIRMED_NO_CHANGE", "CARRY", "READY_FOR_LIVE"] as const)(
+  "executes serialized SDK %s output through the shared compiler, host and durable reducer",
+  async (outcome) => {
+    const { s, t, r } = await sourceSetup();
+    const raw = sourceResult(r, outcome),
+      before = structuredClone(s.replay);
+    let calls = 0;
+    const transport: typeof fetch = async (_url, init) => {
+      calls++;
+      const payload = JSON.parse(String(init?.body));
+      expect(payload).toEqual(await liveRequest(r));
+      expect(payload.text.format.name).toBe("v2_stage_declarations_2");
+      const schema = payload.text.format.schema;
+      const branches = schema.properties.results.items.anyOf;
+      const carry = branches.find(
+        (branch: any) =>
+          branch.properties.outcome.const === "CARRY" ||
+          branch.properties.outcome.enum?.includes("CARRY"),
+      );
+      expect(carry.additionalProperties).toBe(false);
+      expect([...carry.required].sort()).toEqual([
+        "core",
+        "item",
+        "kind",
+        "outcome",
+      ]);
+      const events = [
+        { type: "response.output_text.delta", delta: JSON.stringify(raw) },
+        {
+          type: "response.completed",
+          response: {
+            status: "completed",
+            model: modelProfile.model,
+            id: "offline-source-classification",
+            usage: null,
+          },
+        },
+      ];
+      return new Response(
+        events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
+        {
+          headers: { "Content-Type": "text/event-stream" },
+        },
+      );
+    };
+    const executed = await executeCapturedRequest(capturedRequest(t), {
+      signal: new AbortController().signal,
+      transport: (captured, signal) =>
+        providerResponse(captured.request, {
+          apiKey: "offline-test",
+          model: modelProfile.model,
+          signal,
+          fetch: transport,
+        }),
+    });
+    expect(calls).toBe(1);
+    expect(executed.provider.completed).toBe(true);
+    expect(executed.proposal).toEqual(raw);
+    await s.accept(t, executed.proposal);
+    expect(s.state).toEqual(before.state);
+    expect(s.replay.accounted).toEqual(before.accounted);
+    expect(s.replay.consumed).toEqual(before.consumed);
+    const events = await s.store.read(s.id);
+    expect(events.reduce(fold, emptyReplay())).toEqual(s.replay);
+  },
+);

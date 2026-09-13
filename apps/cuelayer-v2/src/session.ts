@@ -417,7 +417,7 @@ export class Session {
       this.captures.set(task.id, structuredClone(task));
       return task;
     }
-    const recoverySubject =
+    const recoveryCandidates =
       !this.pendingEvidence().length && !this.value.captureClosed
         ? [
             ...Object.values(this.value.reviewConcerns).filter(
@@ -430,7 +430,7 @@ export class Session {
             .sort(
               (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
             )
-            .find((o) => {
+            .map((o) => {
               const projected = captureLive(
                 this.value,
                 this.id,
@@ -444,14 +444,24 @@ export class Session {
                 coreIds,
                 o.id,
               );
-              return (
-                !this.value.inspections[projected.inspectionKey!] &&
-                (includeFailedRecovery ||
-                  this.value.attempts[projected.inspectionKey!]?.outcome !==
-                    "FAILED")
-              );
-            })?.id
-        : undefined;
+              return {
+                id: o.id,
+                key: projected.inspectionKey!,
+                prior: this.value.attempts[projected.inspectionKey!],
+              };
+            })
+            .filter((candidate) => !this.value.inspections[candidate.key])
+        : [];
+    // Prefer new work; retain a failed capture as the fallback so dispatch can
+    // restore the persisted paused/error state and expose the existing retry UI.
+    const recoverySubject = (
+      recoveryCandidates.find(({ prior }) =>
+        includeFailedRecovery
+          ? prior?.outcome === "FAILED" || prior?.outcome === "STARTED"
+          : prior?.outcome !== "FAILED" &&
+            !(prior?.outcome === "STARTED" && prior.manual),
+      ) ?? recoveryCandidates[0]
+    )?.id;
     if (!this.pendingEvidence().length && !recoverySubject)
       throw new Rejection("no-eligible-source-review");
     const task = captureLive(

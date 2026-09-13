@@ -347,3 +347,86 @@ it("an unfinished clause and clarification in one NO_CHANGE group retain their f
   expect(s.replay.accounted).toEqual(before);
   expect(s.replay.reviewConcerns).toEqual({});
 });
+it("recovered quantity fields cite the actual accounted clarification while the resolution binds the original", async () => {
+  const { s } = await flagged();
+  await admit(
+    s,
+    "The ratio r is pressure p divided by temperature T; r is in Pa/K, p in Pa and T in K.",
+  );
+  const clue = s.capture("Live");
+  await s.accept(clue, fullGroup(clue));
+  await classify(s);
+  const t = s.capture("Live"),
+    d = complete(t);
+  const source = t.capture!.request.context.find(
+    (c) => c.role === "FOLLOWING_CONTEXT",
+  )!.source;
+  const basis = [allBasis(t, source)];
+  d.groups[0].operations = [
+    { type: "core", id: "nc0", label: "Pressure-temperature ratio", basis },
+    { type: "mainline", coreId: "nc0", basis },
+    {
+      type: "put",
+      id: "nu0",
+      coreId: "nc0",
+      dependencies: [],
+      basis,
+      meaning: {
+        kind: "quantity",
+        nodes: [
+          "r",
+          "p",
+          "T",
+          { operator: "Divide", operands: [1, 2] },
+          { operator: "Equal", operands: [0, 3] },
+        ],
+        symbols: [
+          { symbol: "r", label: "ratio", unit: "Pa/K" },
+          { symbol: "p", label: "pressure", unit: "Pa" },
+          { symbol: "T", label: "temperature", unit: "K" },
+        ],
+        conditions: [],
+        independent: null,
+        domain: null,
+      },
+      fieldBasis: [
+        { field: "expression", basis },
+        { field: "symbols", basis },
+      ],
+    },
+  ];
+  await s.accept(t, d);
+  const quantity = Object.values(s.state.units)[0];
+  expect(
+    quantity.fieldBasis?.expression?.every((b) => b.evidenceId === "e1"),
+  ).toBe(true);
+  expect(
+    quantity.fieldBasis?.symbols?.every((b) => b.evidenceId === "e1"),
+  ).toBe(true);
+});
+it("earlier PROCESS inspection pages do not make a newly flagged source skip its first clarification", async () => {
+  const s = await open();
+  s.pause();
+  s.config.sourceChars = original.length;
+  await admit(s, original);
+  const first = s.capture("Live");
+  await s.accept(first, waitDecision(first));
+  await admit(s, "The ratio is pressure divided by temperature.");
+  const inspected = s.capture("Live");
+  expect(inspected.capture!.inspectionContext?.following).toBeDefined();
+  await s.accept(inspected, waitDecision(inspected));
+  const terminal = s.capture("Live");
+  await s.accept(terminal, fullGroup(terminal));
+  await admit(s, "Please turn to the next page.");
+  s.config.sourceChars = 2400;
+  const rest = s.capture("Live");
+  await s.accept(rest, fullGroup(rest));
+  await classify(s);
+  const review = s.capture("Live");
+  const page = review.capture!.request.context.find(
+    (c) => c.role === "FOLLOWING_CONTEXT",
+  )!;
+  expect(page.text.replace(/<b\d+>/g, "")).toContain(
+    "The ratio is pressure divided by temperature.",
+  );
+});

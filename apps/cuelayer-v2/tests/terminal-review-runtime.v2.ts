@@ -226,6 +226,8 @@ it("a failed recovery stays suppressed across reload and one explicit retry can 
   const restored = await open(interpreter, store, id);
   await settle();
   expect(recoveryCalls).toBe(1);
+  expect(restored.error).toBe("offline-recovery-failure");
+  expect(restored.window.status).toBe("INTERPRETATION_PAUSED");
   expect(await restored.retryFailedLive()).toBe(true);
   await eventually(() =>
     expect(Object.keys(restored.state.units)).toHaveLength(1),
@@ -339,4 +341,107 @@ it("capture closure seals without waiting for an in-flight recovery and prevents
   await settle();
   expect(session.state.units).toEqual({});
   expect((await session.store.read(session.id)).at(-1)?.type).toBe("ended");
+});
+
+it("Stage classification invalidates an in-flight Live capture and the queue recaptures the clarification", async () => {
+  const classification = gate(),
+    liveReply = gate();
+  let stageCalls = 0;
+  const clarificationCaptures: Task[] = [];
+  const session = await open(async (task) => {
+    if (task.lane === "Stage") {
+      stageCalls++;
+      await classification.promise;
+      return stage(task, "CARRY");
+    }
+    if (!task.capture!.request.obligations.length) return fullGroup(task);
+    clarificationCaptures.push(task);
+    if (clarificationCaptures.length === 1) await liveReply.promise;
+    return complete(task);
+  });
+  await admit(session, original);
+  await eventually(() => expect(stageCalls).toBe(1));
+  await admit(session, clarification);
+  await eventually(() => expect(clarificationCaptures).toHaveLength(1));
+  classification.release();
+  await eventually(() =>
+    expect(
+      Object.values(session.replay.unresolved)[0]?.sourceReview,
+    ).toBeDefined(),
+  );
+  liveReply.release();
+  await eventually(() =>
+    expect(Object.keys(session.state.units)).toHaveLength(1),
+  );
+  expect(clarificationCaptures).toHaveLength(2);
+  expect(clarificationCaptures[1].id).not.toBe(clarificationCaptures[0].id);
+  expect(
+    Object.values(clarificationCaptures[0].capture!.obligationVersions),
+  ).toEqual([1]);
+  expect(
+    Object.values(clarificationCaptures[1].capture!.obligationVersions),
+  ).toEqual([2]);
+  expect(
+    Object.values(session.replay.attempts).filter(
+      (attempt) => attempt.category === "stale",
+    ),
+  ).toHaveLength(1);
+  expect(session.replay.accounted).toEqual(session.replay.recorded);
+  expect(session.replay.unresolved).toEqual({});
+  expect(stageCalls).toBe(1);
+});
+
+it("WAIT recovery visits every accounted follow-up page once before suppressing the unchanged context", async () => {
+  const classification = gate();
+  let stageCalls = 0;
+  const captures: Task[] = [];
+  const session = await open(async (task) => {
+    if (task.lane === "Stage") {
+      stageCalls++;
+      await classification.promise;
+      return stage(task, "CARRY");
+    }
+    if (task.capture!.recovery) {
+      captures.push(task);
+      return waitDecision(task);
+    }
+    return fullGroup(task);
+  });
+  await admit(session, original);
+  await eventually(() => expect(stageCalls).toBe(1));
+  for (let page = 0; page < 8; page++)
+    await admit(
+      session,
+      `Reminder ${page}: ` +
+        "Please continue reading the handout and review the examples on the next page. ".repeat(
+          4,
+        ),
+    );
+  await eventually(() =>
+    expect(session.replay.accounted).toEqual(session.replay.recorded),
+  );
+  const accounted = structuredClone(session.replay.accounted);
+  classification.release();
+  await eventually(() =>
+    expect(captures.at(-1)?.capture!.recovery!.through).toEqual(accounted),
+  );
+  await settle();
+  expect(captures.length).toBeGreaterThan(2);
+  let previous = position(
+    session.replay.evidence,
+    captures[0].capture!.range.end,
+  );
+  for (const task of captures) {
+    const following = task.capture!.inspectionContext!.following!;
+    expect(position(session.replay.evidence, following.start)).toBe(previous);
+    previous = position(session.replay.evidence, following.end);
+    expect(task.capture!.request.source.role).toBe("REVIEW");
+  }
+  expect(previous).toBe(position(session.replay.evidence, accounted));
+  const calls = captures.length;
+  await settle();
+  expect(captures).toHaveLength(calls);
+  expect(stageCalls).toBe(1);
+  expect(session.replay.accounted).toEqual(accounted);
+  expect(session.state.units).toEqual({});
 });

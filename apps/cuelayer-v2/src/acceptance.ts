@@ -443,7 +443,7 @@ export function validate(replay: Replay, task: Task, raw: unknown) {
       replay,
       task,
       g.outcome === "APPLY" ? g.operations : [],
-      range,
+      c.recovery ? undefined : range,
     );
     const localUnits = Object.fromEntries(
       Object.entries(state.units).filter(([id]) => !replay.state.units[id]),
