@@ -32,7 +32,7 @@ function known(units: LiveRequest["units"]) {
 export function interpretWorkload(
   request: LiveRequest | StageRequest,
 ): LiveDecision | StageDeclarationReview {
-  if (request.version === "v2-stage-request-5") {
+  if (request.version === "v2-stage-request-6") {
     const samples = known(request.units);
     return {
       scope: request.scope,

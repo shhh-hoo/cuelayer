@@ -6,12 +6,14 @@ import {
   indexAppend,
   position,
   sourcePieces,
+  readable,
   type SourceCursor,
   type SourceRange,
 } from "./source";
 import type { LiveCapture } from "./projection";
 import type { StageCapture, ReviewConcern } from "./stage";
 import type { CarryKind } from "./live-wire";
+import { getSourceSubject, terminalRisk } from "./terminal-review";
 export type { SourceCursor, SourceRange } from "./source";
 
 export type Expression = string | number | [string, ...Expression[]];
@@ -153,6 +155,7 @@ export type Obligation = {
   version?: number;
   kind?: CarryKind | "LEGACY_UNSPECIFIED";
   range?: SourceRange;
+  sourceReview?: { version: "v2-terminal-review-1"; cursor: SourceCursor };
 };
 export type Disposition = {
   evidenceId: string;
@@ -286,6 +289,27 @@ export type Accepted = {
     outcome: "RESOLVED" | "STILL_OPEN" | "WITHDRAWN";
     basis?: Grounding[];
   }[];
+  sourceReviews?: {
+    version: "v2-terminal-review-1";
+    subjectId: string;
+    subjectVersion: number;
+    range: SourceRange;
+    inspectionKey: string;
+    outcome: "STILL_OPEN" | "CONFIRMED_NO_CHANGE" | "CARRY" | "READY_FOR_LIVE";
+    horizon: SourceCursor;
+    through: SourceCursor;
+    carry?: { kind: CarryKind; coreId: string | null };
+  }[];
+  recovery?: {
+    version: "v2-live-source-review-1";
+    subjectId: string;
+    subjectVersion: number;
+    range: SourceRange;
+    inspectionKey: string;
+    outcome: "APPLY" | "NO_CHANGE" | "CARRY";
+    through: SourceCursor;
+    carry?: { kind: CarryKind; coreId: string | null };
+  };
   processing?: {
     version: "v2-source-processing-1";
     groups: { range: SourceRange; outcome: "APPLY" | "NO_CHANGE" | "CARRY" }[];
@@ -326,6 +350,7 @@ export type ContextRequest = {
   after: string | null;
 };
 export type InspectionContext = {
+  reviewSubject?: string;
   anchor: SourceRange;
   following?: SourceRange;
   query?: ContextRequest;
@@ -480,6 +505,74 @@ function reduceAcceptedOperations(state: TeachingState, accepted: Accepted) {
   }
   return state;
 }
+function sourceTransition(
+  replay: Replay,
+  record: {
+    subjectId: string;
+    subjectVersion: number;
+    range: SourceRange;
+    through: SourceCursor;
+  },
+) {
+  const subject = getSourceSubject(replay, record.subjectId);
+  if (
+    !subject ||
+    (subject.version ?? 1) !== record.subjectVersion ||
+    !same(subject.range, record.range)
+  )
+    throw new Error("invalid-source-review-subject");
+  const cursor =
+    "sourceReview" in subject
+      ? (subject.sourceReview?.cursor ?? subject.range.end)
+      : "cursor" in subject
+        ? (subject.cursor ?? subject.range.end)
+        : subject.range.end;
+  if (
+    position(replay.evidence, record.through) <
+      position(replay.evidence, cursor) ||
+    position(replay.evidence, record.through) >
+      position(replay.evidence, replay.accounted)
+  )
+    throw new Error("invalid-source-review-cursor");
+  return subject;
+}
+function carrySubject(
+  replay: Replay,
+  subject: NonNullable<ReturnType<typeof getSourceSubject>>,
+  carry: { kind: CarryKind; coreId: string | null } | undefined,
+  cursor: SourceCursor,
+): Obligation {
+  if (
+    !carry ||
+    ![
+      "INCOMPLETE_PROPOSITION",
+      "UNRESOLVED_REFERENCE",
+      "ASR_AMBIGUITY",
+      "CONTEXT_REQUIRED",
+    ].includes(carry.kind) ||
+    (carry.coreId !== null && !replay.state.cores[carry.coreId])
+  )
+    throw new Error("invalid-source-review-carry");
+  const old = replay.unresolved[subject.id];
+  const changed =
+    !old ||
+    old.kind !== carry.kind ||
+    old.coreId !== carry.coreId ||
+    !same(old.sourceReview?.cursor ?? old.range!.end, cursor);
+  return {
+    id: subject.id,
+    evidenceIds: sourcePieces(replay.evidence, subject.range).map(
+      (p) => p.evidenceId,
+    ),
+    phrase: old?.phrase ?? readable(replay.evidence, subject.range),
+    range: subject.range,
+    coreId: carry.coreId,
+    kind: carry.kind,
+    createdAt: subject.createdAt,
+    version: (subject.version ?? 1) + Number(changed),
+    sourceReview: { version: "v2-terminal-review-1", cursor },
+  };
+}
 export function fold(replay: Replay, event: Event): Replay {
   if (
     ![
@@ -519,6 +612,31 @@ export function fold(replay: Replay, event: Event): Replay {
     const a = event.accepted;
     if (replay.acceptedTaskIds.includes(a.taskId))
       throw new Error("duplicate-acceptance");
+    if (a.recovery) {
+      if (
+        ev !== 3 ||
+        a.lane !== "Live" ||
+        replay.captureClosed ||
+        a.recovery.version !== "v2-live-source-review-1" ||
+        a.processing ||
+        a.dispositions.length ||
+        a.unresolved.length ||
+        a.sourceReviews?.length ||
+        !["APPLY", "NO_CHANGE", "CARRY"].includes(a.recovery.outcome) ||
+        (a.recovery.outcome !== "APPLY" && a.operations.length) ||
+        a.resolved.some((id) => id !== a.recovery!.subjectId)
+      )
+        throw new Error("invalid-source-recovery-event");
+      sourceTransition(replay, a.recovery);
+      if (
+        a.recovery.outcome === "NO_CHANGE" &&
+        position(replay.evidence, a.recovery.through) !==
+          position(replay.evidence, replay.recorded)
+      )
+        throw new Error("source-review-horizon-changed");
+      if ((a.recovery.outcome === "CARRY") !== Boolean(a.recovery.carry))
+        throw new Error("invalid-source-review-carry");
+    }
     next.state =
       ev === 1
         ? reduceOperations(replay.state, a.operations as LegacyOperation[])
@@ -528,8 +646,8 @@ export function fold(replay: Replay, event: Event): Replay {
               a.operations as LegacyOperation[],
             )
           : reduceAcceptedOperations(replay.state, a);
-    if (ev === 3 && a.lane === "Live" && a.processing) {
-      const key = a.processing.inspectionKey,
+    if (ev === 3 && a.lane === "Live" && (a.processing || a.recovery)) {
+      const key = (a.processing ?? a.recovery)!.inspectionKey,
         prior = replay.attempts[key];
       if (prior?.id === a.taskId)
         next.attempts = {
@@ -542,10 +660,10 @@ export function fold(replay: Replay, event: Event): Replay {
           },
         };
     }
-    if (ev === 3 && a.context && a.processing)
+    if (ev === 3 && a.context && (a.processing || a.recovery))
       next.inspectionContexts = {
         ...replay.inspectionContexts,
-        [a.processing.inspectionKey]: a.context,
+        [(a.processing ?? a.recovery)!.inspectionKey]: a.context,
       };
     next.consumed = { ...replay.consumed };
     next.unresolved = { ...replay.unresolved };
@@ -561,10 +679,121 @@ export function fold(replay: Replay, event: Event): Replay {
     for (const id of a.resolved) delete next.unresolved[id];
     next.reviewConcerns = { ...replay.reviewConcerns };
     next.reviewInspections = { ...replay.reviewInspections };
+    for (const id of a.resolved)
+      if (next.reviewConcerns[id]?.kind === "SOURCE_NO_CHANGE")
+        delete next.reviewConcerns[id];
     for (const request of a.reviewRequests ?? []) {
       if (next.reviewConcerns[request.id])
         throw new Error("duplicate-review-concern");
+      if (
+        request.kind === "SOURCE_NO_CHANGE" &&
+        (ev !== 3 ||
+          a.lane !== "Live" ||
+          request.version !== 1 ||
+          request.readyForLive ||
+          (request.cursor && !same(request.cursor, request.range.end)) ||
+          request.risk?.version !== "v2-terminal-risk-1" ||
+          !request.risk.reasons.length ||
+          !same(
+            request.risk.reasons,
+            terminalRisk(readable(replay.evidence, request.range)),
+          ) ||
+          !a.processing?.groups.some(
+            (g) => g.outcome === "NO_CHANGE" && same(g.range, request.range),
+          ))
+      )
+        throw new Error("invalid-source-review-concern");
       next.reviewConcerns[request.id] = request;
+    }
+    if (
+      new Set((a.sourceReviews ?? []).map((r) => r.subjectId)).size !==
+      (a.sourceReviews ?? []).length
+    )
+      throw new Error("duplicate-source-review-subject");
+    for (const record of a.sourceReviews ?? []) {
+      if (
+        ev !== 3 ||
+        a.lane !== "Stage" ||
+        a.operations.length ||
+        a.processing ||
+        a.recovery ||
+        a.dispositions.length ||
+        a.unresolved.length ||
+        a.resolved.length ||
+        a.reviews?.length ||
+        a.resolutions?.length ||
+        a.reviewRequests?.length ||
+        !record.inspectionKey ||
+        record.version !== "v2-terminal-review-1" ||
+        ![
+          "STILL_OPEN",
+          "CONFIRMED_NO_CHANGE",
+          "CARRY",
+          "READY_FOR_LIVE",
+        ].includes(record.outcome)
+      )
+        throw new Error("invalid-source-review-event");
+      const subject = sourceTransition(next, record);
+      if (subject.kind !== "SOURCE_NO_CHANGE")
+        throw new Error("invalid-source-review-subject");
+      if (
+        position(replay.evidence, record.horizon) <
+          position(replay.evidence, record.through) ||
+        position(replay.evidence, record.horizon) >
+          position(replay.evidence, replay.recorded) ||
+        (record.outcome === "CARRY") !== Boolean(record.carry)
+      )
+        throw new Error("invalid-source-review-horizon");
+      if (record.outcome === "CONFIRMED_NO_CHANGE") {
+        if (
+          !same(record.horizon, replay.recorded) ||
+          position(replay.evidence, record.through) !==
+            position(replay.evidence, replay.recorded)
+        )
+          throw new Error("source-review-horizon-changed");
+        delete next.reviewConcerns[subject.id];
+      } else if (record.outcome === "CARRY") {
+        next.unresolved[subject.id] = carrySubject(
+          next,
+          subject,
+          record.carry,
+          subject.range.end,
+        );
+        delete next.reviewConcerns[subject.id];
+      } else if (record.outcome === "READY_FOR_LIVE") {
+        next.reviewConcerns[subject.id] = {
+          ...subject,
+          version: subject.version + 1,
+          readyForLive: true,
+          cursor: subject.range.end,
+        };
+      } else if (
+        position(replay.evidence, record.through) >
+        position(replay.evidence, subject.cursor ?? subject.range.end)
+      )
+        next.reviewConcerns[subject.id] = {
+          ...subject,
+          version: subject.version + 1,
+          cursor: record.through,
+        };
+      next.reviewInspections[record.inspectionKey] = record.outcome;
+    }
+    if (a.recovery) {
+      const record = a.recovery,
+        subject = sourceTransition(replay, record);
+      if (record.outcome === "CARRY")
+        next.unresolved[subject.id] = carrySubject(
+          replay,
+          subject,
+          record.carry,
+          record.through,
+        );
+      else delete next.unresolved[subject.id];
+      delete next.reviewConcerns[subject.id];
+      next.inspections = {
+        ...next.inspections,
+        [record.inspectionKey]: "WAIT_MORE_INPUT",
+      };
     }
     for (const review of a.reviews ?? []) {
       if (
@@ -633,7 +862,7 @@ export function fold(replay: Replay, event: Event): Replay {
                 : "no-change",
           };
         }
-    } else if (ev >= 2 && a.lane === "Live")
+    } else if (ev >= 2 && a.lane === "Live" && !a.recovery)
       throw new Error("missing-processing-event");
   } else if (event.type === "inspected") {
     if (ev < 2) throw new Error("invalid-inspection-version");

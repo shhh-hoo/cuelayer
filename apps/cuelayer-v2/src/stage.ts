@@ -8,6 +8,7 @@ import {
   type Accepted,
   type Operation,
   type Unit,
+  type SourceCursor,
   version,
   same,
   semanticValue,
@@ -18,6 +19,7 @@ import {
   wireBasisSchema,
   type WireOperation,
   projectMeaning,
+  carryKindSchema,
 } from "./live-wire";
 import {
   selectState,
@@ -46,19 +48,23 @@ import {
   affectedReviews,
 } from "./acceptance";
 
-export const STAGE_WIRE_VERSION = "v2-stage-review-4";
+export const STAGE_WIRE_VERSION = "v2-stage-review-5";
 export type ReviewConcern = {
+  kind?: "RECONCILIATION" | "SOURCE_NO_CHANGE";
   id: string;
   version: number;
   range: SourceRange;
-  coreId: string;
+  coreId: string | null;
   purpose: string;
   createdAt: number;
   unitIds?: string[];
+  risk?: { version: "v2-terminal-risk-1"; reasons: string[] };
+  readyForLive?: boolean;
+  cursor?: SourceCursor;
 };
 export type ReviewItem = {
   id: string;
-  kind: "OBLIGATION" | "RECONCILIATION";
+  kind: "OBLIGATION" | "RECONCILIATION" | "SOURCE_NO_CHANGE";
   subjectId: string;
   version: number;
   range: SourceRange;
@@ -105,6 +111,20 @@ export const stageReviewSchema = z
               supersededBy: z.string(),
             })
             .strict(),
+          z
+            .object({
+              item: z.string(),
+              outcome: z.enum(["CONFIRMED_NO_CHANGE", "READY_FOR_LIVE"]),
+            })
+            .strict(),
+          z
+            .object({
+              item: z.string(),
+              outcome: z.literal("CARRY"),
+              kind: carryKindSchema,
+              core: z.string().nullable(),
+            })
+            .strict(),
         ]),
       )
       .min(1)
@@ -113,7 +133,7 @@ export const stageReviewSchema = z
   .strict();
 export type StageReview = z.infer<typeof stageReviewSchema>;
 export type StageRequest = {
-  version: "v2-stage-request-5";
+  version: "v2-stage-request-6";
   scope: string;
   items: {
     id: string;
@@ -140,6 +160,7 @@ export type StageRequest = {
     cores: number;
     reviewItems: number;
     dependencyClosureComplete: true;
+    followingSource?: boolean;
   };
 };
 export type StageCapture = Pick<
@@ -151,11 +172,15 @@ export type StageCapture = Pick<
   | "sources"
   | "sourceBoundaries"
   | "namespace"
-> & { request: StageRequest; items: ReviewItem[] };
+> & {
+  request: StageRequest;
+  items: ReviewItem[];
+  sourceReview?: { horizon: SourceCursor; through: SourceCursor };
+};
 export function reviewCandidates(replay: Replay): Omit<ReviewItem, "key">[] {
   return [
     ...Object.values(replay.unresolved)
-      .filter((o) => o.range)
+      .filter((o) => o.range && !o.sourceReview)
       .map((o) => ({
         id: o.id,
         kind: "OBLIGATION" as const,
@@ -166,18 +191,140 @@ export function reviewCandidates(replay: Replay): Omit<ReviewItem, "key">[] {
         purpose: "Resolve grounded incomplete meaning or reference",
         createdAt: o.createdAt,
       })),
-    ...Object.values(replay.reviewConcerns).map((o) => ({
-      id: o.id,
-      kind: "RECONCILIATION" as const,
-      subjectId: o.id,
-      version: o.version,
-      range: o.range,
-      coreId: o.coreId,
-      purpose: o.purpose,
-      unitIds: o.unitIds,
-      createdAt: o.createdAt,
-    })),
+    ...Object.values(replay.reviewConcerns)
+      .filter((o) => !o.readyForLive)
+      .map((o) => ({
+        id: o.id,
+        kind: o.kind ?? ("RECONCILIATION" as const),
+        subjectId: o.id,
+        version: o.version,
+        range: o.range,
+        coreId: o.coreId,
+        purpose: o.purpose,
+        unitIds: o.unitIds,
+        createdAt: o.createdAt,
+      })),
   ].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+}
+function captureSourceReview(
+  replay: Replay,
+  item: Omit<ReviewItem, "key">,
+  sessionId: string,
+  nonce: string,
+  epoch: number,
+  remaining: number,
+): Task | null {
+  const concern = replay.reviewConcerns[item.subjectId];
+  const start = concern.cursor ?? item.range.end;
+  const startAt = position(replay.evidence, start);
+  const through =
+    legalCursors(replay.evidence, { start, end: replay.accounted })
+      .filter((cursor) => position(replay.evidence, cursor) <= startAt + 3200)
+      .at(-1) ?? start;
+  const sources: Record<string, SourceRange> = { s0: item.range };
+  if (position(replay.evidence, through) > startAt)
+    sources.s1 = { start, end: through };
+  const core = item.coreId ? replay.state.cores[item.coreId] : undefined;
+  const cores: Record<string, string> = core ? { c0: core.id } : {};
+  const dependencies = core
+    ? { [`core/${core.id}`]: version(replay.state, `core/${core.id}`) }
+    : {};
+  const state = {
+    ...replay.state,
+    cores: core ? { [core.id]: core } : {},
+    units: {},
+    currentCoreId: null,
+    mainlineVersion: 0,
+    cue: null,
+    cueVersion: 0,
+  };
+  const key = keyOf({
+    lane: "Stage",
+    subject: item.subjectId,
+    version: item.version,
+    sources: Object.values(sources).map((range) => ({
+      range,
+      pieces: sourcePieces(replay.evidence, range),
+    })),
+    dependencies,
+  });
+  if (replay.reviewInspections[key]) return null;
+  const request: StageRequest = {
+    version: "v2-stage-request-6",
+    scope: nonce,
+    items: [
+      {
+        id: "r0",
+        kind: "SOURCE_NO_CHANGE",
+        source: "s0",
+        purpose: item.purpose,
+        phrase: readable(replay.evidence, item.range),
+        core: core ? "c0" : null,
+      },
+    ],
+    context: Object.entries(sources).map(([source, range]) => ({
+      source,
+      role: "REVIEW_CONTEXT",
+      text: projectSource(replay.evidence, range).text,
+    })),
+    cores: core ? [{ id: "c0", label: core.label ?? core.title ?? "" }] : [],
+    units: [],
+    writableUnits: [],
+    createWithin: [],
+    newUnits: [],
+    omitted: {
+      earlierSource: position(replay.evidence, item.range.start) > 0,
+      cores: Object.keys(replay.state.cores).length - Number(Boolean(core)),
+      reviewItems: remaining,
+      dependencyClosureComplete: true,
+      followingSource:
+        position(replay.evidence, through) <
+        position(replay.evidence, replay.recorded),
+    },
+  };
+  if (bytes(request) > 28000) throw new Error("stage-context-blocked:request");
+  return {
+    id: `${sessionId}:Stage:${nonce}`,
+    sessionId,
+    generation: replay.generation,
+    inspectionKey: key,
+    lane: "Stage",
+    state,
+    dependencies,
+    allowedCores: core ? [core.id] : [],
+    writeScope: {
+      units: [],
+      createIn: [],
+      labels: [],
+      mainline: false,
+      cue: false,
+    },
+    evidence: replay.evidence.filter((e) =>
+      Object.values(sources).some((range) =>
+        sourcePieces(replay.evidence, range).some((p) => p.evidenceId === e.id),
+      ),
+    ),
+    obligations: [],
+    createdAt: performance.now(),
+    attentionEpoch: epoch,
+    review: {
+      cores,
+      units: {},
+      obligations: {},
+      obligationVersions: {},
+      sources,
+      sourceBoundaries: Object.fromEntries(
+        Object.entries(sources).map(([source, range]) => [
+          source,
+          projectSource(replay.evidence, range).boundaries,
+        ]),
+      ),
+      namespace: nonce,
+      request,
+      items: [{ ...item, id: "r0", key }],
+      sourceReview: { horizon: replay.recorded, through },
+    },
+  };
 }
 export function captureStage(
   replay: Replay,
@@ -196,6 +343,18 @@ export function captureStage(
       position(replay.evidence, replay.accounted)
     )
       continue;
+    if (item.kind === "SOURCE_NO_CHANGE") {
+      const task = captureSourceReview(
+        replay,
+        item,
+        sessionId,
+        nonce,
+        epoch,
+        candidates.length - 1,
+      );
+      if (task) return task;
+      continue;
+    }
     const end = replay.accounted,
       at = position(replay.evidence, end);
     const start =
@@ -304,7 +463,7 @@ export function captureStage(
     if (replay.reviewInspections[key]) continue;
     const id = `r0`;
     const request: StageRequest = {
-      version: "v2-stage-request-5",
+      version: "v2-stage-request-6",
       scope: nonce,
       items: [
         {
@@ -437,7 +596,8 @@ export function validateStage(replay: Replay, task: Task, raw: unknown) {
   const operations: Operation[] = [],
     resolved: string[] = [],
     resolutions: Resolution[] = [],
-    reviews: NonNullable<Accepted["reviews"]> = [];
+    reviews: NonNullable<Accepted["reviews"]> = [],
+    sourceReviews: NonNullable<Accepted["sourceReviews"]> = [];
   for (const result of p.results) {
     const item = c.items.find((i) => i.id === result.item);
     requireThat(item, "unknown-or-cross-task-review-alias");
@@ -448,6 +608,59 @@ export function validateStage(replay: Replay, task: Task, raw: unknown) {
     requireThat(
       current?.version === item!.version,
       `stale-dependency:review/${item!.subjectId}`,
+    );
+    if (item!.kind === "SOURCE_NO_CHANGE") {
+      requireThat(
+        "kind" in current &&
+          current.kind === "SOURCE_NO_CHANGE" &&
+          !current.readyForLive &&
+          c.sourceReview &&
+          !task.writeScope?.units.length &&
+          !task.writeScope?.createIn.length &&
+          !c.request.newUnits.length,
+        "invalid-source-review-authority",
+      );
+      requireThat(
+        [
+          "STILL_OPEN",
+          "CONFIRMED_NO_CHANGE",
+          "CARRY",
+          "READY_FOR_LIVE",
+        ].includes(result.outcome),
+        "source-review-cannot-write-knowledge",
+      );
+      if (result.outcome === "CONFIRMED_NO_CHANGE")
+        requireThat(
+          !c.request.omitted.followingSource &&
+            same(c.sourceReview!.horizon, replay.recorded) &&
+            position(replay.evidence, c.sourceReview!.through) ===
+              position(replay.evidence, replay.recorded),
+          "source-review-horizon-changed",
+        );
+      const coreId =
+        result.outcome === "CARRY" && result.core
+          ? aliasLookup(c.cores, result.core)
+          : null;
+      sourceReviews.push({
+        version: "v2-terminal-review-1",
+        subjectId: item!.subjectId,
+        subjectVersion: item!.version,
+        range: item!.range,
+        inspectionKey: item!.key,
+        outcome: result.outcome as NonNullable<
+          Accepted["sourceReviews"]
+        >[number]["outcome"],
+        horizon: c.sourceReview!.horizon,
+        through: c.sourceReview!.through,
+        ...(result.outcome === "CARRY"
+          ? { carry: { kind: result.kind, coreId } }
+          : {}),
+      });
+      continue;
+    }
+    requireThat(
+      ["RESOLVED", "STILL_OPEN", "WITHDRAWN"].includes(result.outcome),
+      "unexpected-source-review-outcome",
     );
     const ops = expandOperations(
       replay,
@@ -588,7 +801,7 @@ export function validateStage(replay: Replay, task: Task, raw: unknown) {
       key: item!.key,
       range: item!.range,
       purpose: item!.purpose,
-      outcome: result.outcome,
+      outcome: result.outcome as "RESOLVED" | "STILL_OPEN" | "WITHDRAWN",
       ...(reviewBasis ? { basis: reviewBasis } : {}),
     });
   }
@@ -605,6 +818,7 @@ export function validateStage(replay: Replay, task: Task, raw: unknown) {
     reviewed: [],
     reviewVersion: "v2-stage-processing-1",
     reviews,
+    ...(sourceReviews.length ? { sourceReviews } : {}),
     reviewRequests: affectedReviews(replay, state, task.id),
   };
   return { proposal: { operations, attention: null }, accepted };

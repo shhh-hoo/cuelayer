@@ -9,9 +9,13 @@ import {
   type WireMeaning,
   type WireOperation,
 } from "./live-wire";
-import type { StageRequest, StageReview } from "./stage";
+import {
+  stageReviewSchema,
+  type StageRequest,
+  type StageReview,
+} from "./stage";
 
-export const STAGE_DECLARATION_VERSION = "v2-stage-declarations-1";
+export const STAGE_DECLARATION_VERSION = "v2-stage-declarations-2";
 // Integers refer to earlier declarations in this result, never persistent IDs.
 export const stageReferenceSchema = z.union([
   alias,
@@ -99,6 +103,9 @@ export const stageDeclarationReviewSchema = z
               supersededBy: alias,
             })
             .strict(),
+          // Source classification is already a strict canonical declaration.
+          stageReviewSchema.shape.results.element.options[3],
+          stageReviewSchema.shape.results.element.options[4],
         ]),
       )
       .min(1)
@@ -139,6 +146,19 @@ export function compileStageDeclarations(
       const item = request.items.find((i) => i.id === result.item);
       if (!item) fail("item");
       if (result.outcome === "STILL_OPEN") return result;
+      if (item!.kind === "SOURCE_NO_CHANGE") {
+        if (result.outcome === "RESOLVED" || result.outcome === "WITHDRAWN")
+          return fail("source-review-cannot-write-knowledge");
+        if (
+          result.outcome === "CARRY" &&
+          result.core !== null &&
+          !request.cores.some((core) => core.id === result.core)
+        )
+          return fail("uncaptured-core");
+        return result;
+      }
+      if (result.outcome !== "RESOLVED" && result.outcome !== "WITHDRAWN")
+        return fail("unexpected-source-review-outcome");
       if (result.outcome === "WITHDRAWN")
         return { ...result, supersededBy: captured(result.supersededBy) };
       const referents = result.referents.map(captured);

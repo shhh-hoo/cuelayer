@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Meaning, Expression } from "./contract";
-export const LIVE_WIRE_VERSION = "v2-live-decision-4";
+export const LIVE_WIRE_VERSION = "v2-live-decision-5";
 export const carryKindSchema = z.enum([
   "INCOMPLETE_PROPOSITION",
   "UNRESOLVED_REFERENCE",

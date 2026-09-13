@@ -404,6 +404,7 @@ export class Session {
     lane: Task["lane"],
     _evidence?: Evidence[],
     coreIds?: string[],
+    includeFailedRecovery = false,
   ): Task {
     if (lane === "Stage") {
       const task = captureStage(
@@ -416,6 +417,53 @@ export class Session {
       this.captures.set(task.id, structuredClone(task));
       return task;
     }
+    const recoveryCandidates =
+      !this.pendingEvidence().length && !this.value.captureClosed
+        ? [
+            ...Object.values(this.value.reviewConcerns).filter(
+              (o) => o.kind === "SOURCE_NO_CHANGE" && o.readyForLive,
+            ),
+            ...Object.values(this.value.unresolved).filter(
+              (o) => o.sourceReview,
+            ),
+          ]
+            .sort(
+              (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
+            )
+            .map((o) => {
+              const projected = captureLive(
+                this.value,
+                this.id,
+                "eligibility",
+                this.epoch,
+                {
+                  ...DEFAULT_BUDGET,
+                  sourceChars: this.config.sourceChars,
+                  maxRequestBytes: this.config.maxRequestBytes,
+                },
+                coreIds,
+                o.id,
+              );
+              return {
+                id: o.id,
+                key: projected.inspectionKey!,
+                prior: this.value.attempts[projected.inspectionKey!],
+              };
+            })
+            .filter((candidate) => !this.value.inspections[candidate.key])
+        : [];
+    // Prefer new work; retain a failed capture as the fallback so dispatch can
+    // restore the persisted paused/error state and expose the existing retry UI.
+    const recoverySubject = (
+      recoveryCandidates.find(({ prior }) =>
+        includeFailedRecovery
+          ? prior?.outcome === "FAILED" || prior?.outcome === "STARTED"
+          : prior?.outcome !== "FAILED" &&
+            !(prior?.outcome === "STARTED" && prior.manual),
+      ) ?? recoveryCandidates[0]
+    )?.id;
+    if (!this.pendingEvidence().length && !recoverySubject)
+      throw new Rejection("no-eligible-source-review");
     const task = captureLive(
       this.value,
       this.id,
@@ -427,6 +475,7 @@ export class Session {
         maxRequestBytes: this.config.maxRequestBytes,
       },
       coreIds,
+      recoverySubject,
     );
     this.captures.set(task.id, structuredClone(task));
     return task;
@@ -442,7 +491,22 @@ export class Session {
     )
       return;
     const pending = this.pendingEvidence();
-    if (!pending.length) return;
+    if (!pending.length) {
+      if (
+        !this.value.captureClosed &&
+        (Object.values(this.value.reviewConcerns).some(
+          (o) => o.kind === "SOURCE_NO_CHANGE" && o.readyForLive,
+        ) ||
+          Object.values(this.value.unresolved).some((o) => o.sourceReview))
+      ) {
+        if (this.timer) clearTimeout(this.timer);
+        this.timer = setTimeout(() => {
+          this.timer = undefined;
+          this.dispatchLive();
+        }, 0);
+      }
+      return;
+    }
     if (this.timer) clearTimeout(this.timer);
     // Quiet coalescing and independent oldest-item deadline are domain policy.
     const eligible = Math.min(
@@ -466,7 +530,6 @@ export class Session {
       this.live.size
     )
       return;
-    if (!this.pendingEvidence().length) return;
     try {
       const task = this.capture("Live");
       const failure = this.value.attempts[task.inspectionKey!];
@@ -510,6 +573,11 @@ export class Session {
         this.trace.mark("newer-snapshot-after-failure", { taskId: task.id });
       this.enqueue(task, this.live);
     } catch (error) {
+      if (
+        error instanceof Rejection &&
+        error.message === "no-eligible-source-review"
+      )
+        return;
       this.error = String(error);
       this.paused = true;
       this.trace.mark("context-blocked", { reason: this.error });
@@ -847,6 +915,15 @@ export class Session {
         lane: task.lane,
         consumed: accepted.dispositions.map((d) => d.evidenceId),
         sourceRanges: accepted.processing?.groups.map((g) => g.range) ?? [],
+        ...(accepted.recovery
+          ? {
+              sourceReview: {
+                subjectId: accepted.recovery.subjectId,
+                outcome: accepted.recovery.outcome,
+                range: accepted.recovery.range,
+              },
+            }
+          : {}),
         changedUnits: accepted.operations
           .filter(
             (op): op is Extract<typeof op, { id: string }> =>
@@ -971,14 +1048,19 @@ export class Session {
     this.retryClaiming = true;
     try {
       const task = await this.writer.add(async () => {
-        if (
-          this.value.ended ||
-          this.value.eventVersion !== 3 ||
-          !this.pendingEvidence().length
-        )
-          return null;
-        const t = this.capture("Live"),
-          key = t.inspectionKey!,
+        if (this.value.ended || this.value.eventVersion !== 3) return null;
+        let t: Task;
+        try {
+          t = this.capture("Live", undefined, undefined, true);
+        } catch (error) {
+          if (
+            error instanceof Rejection &&
+            error.message === "no-eligible-source-review"
+          )
+            return null;
+          throw error;
+        }
+        const key = t.inspectionKey!,
           prior = this.value.attempts[key];
         if (
           !prior ||
