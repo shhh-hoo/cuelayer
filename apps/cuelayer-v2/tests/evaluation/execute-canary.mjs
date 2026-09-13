@@ -216,6 +216,7 @@ export async function runCaptured(
   apiKey,
   mode,
   writeDiagnostic = exclusive,
+  hooks = {},
 ) {
   const { manifest, product, out, scenarios } = verified;
   if (
@@ -276,11 +277,23 @@ export async function runCaptured(
   function settleAttempt(attempt) {
     if (!attempt) return;
     // Release known usage synchronously before another retry can reserve cost.
-    scope.discipline.budget.settle(
-      attempt.reservation,
-      attempt.usage,
-      attempt.actual_model,
-    );
+    try {
+      if (hooks.settleAttempt)
+        hooks.settleAttempt(
+          attempt,
+          recordings.get(attempt.number)?.bytes() ?? Buffer.alloc(0),
+          scope,
+        );
+      else
+        scope.discipline.budget.settle(
+          attempt.reservation,
+          attempt.usage,
+          attempt.actual_model,
+        );
+    } catch (error) {
+      guardError = error.message;
+      throw error;
+    }
     const budget = scope.discipline.budget.calls.find(
       (c) => c.id === attempt.reservation,
     );
@@ -356,15 +369,17 @@ export async function runCaptured(
         activeAttempt
       )
         throw Error("unapproved-provider-request");
-      reservation = reserveApprovedAttempt(
-        manifest,
-        scope.authorization,
-        scope.discipline,
-        id,
-        url,
-        method,
-        body,
-      );
+      reservation = hooks.reserveAttempt
+        ? hooks.reserveAttempt(id, url, method, body)
+        : reserveApprovedAttempt(
+            manifest,
+            scope.authorization,
+            scope.discipline,
+            id,
+            url,
+            method,
+            body,
+          );
     } catch (error) {
       guardError = error.message;
       throw error;
@@ -449,7 +464,14 @@ export async function runCaptured(
                 observe,
                 clockId,
                 transport: (captured, signal) =>
-                  product.providerExecution.providerResponse(captured.request, {
+                  (
+                    hooks.providerResponse ??
+                    ((captured, options) =>
+                      product.providerExecution.providerResponse(
+                        captured.request,
+                        options,
+                      ))
+                  )(captured, {
                     apiKey,
                     model: manifest.profile.model_requested,
                     signal,
@@ -584,9 +606,21 @@ export async function runCaptured(
         after: validationEnd ?? Date.now(),
       },
     };
-    const assessment = parser?.success
-      ? assessCanary(product, scenario, { ...recorded, response: parser.value })
-      : partialAssessment(product, scenario, snapshot, events, replay, parser);
+    const assessment = hooks.assess
+      ? hooks.assess(product, scenario, recorded, parser)
+      : parser?.success
+        ? assessCanary(product, scenario, {
+            ...recorded,
+            response: parser.value,
+          })
+        : partialAssessment(
+            product,
+            scenario,
+            snapshot,
+            events,
+            replay,
+            parser,
+          );
     let operational = operationalFailure(
       attempts,
       guardError,
@@ -657,7 +691,7 @@ export async function runCaptured(
     if (result.adjudication_status === "ADJUDICATION_REQUIRED")
       await exclusive(resolve(directory, "adjudication-package.json"), {
         scenario,
-        adjudication_rules: scenario.adjudication_rules,
+        adjudication_rules: scenario?.adjudication_rules ?? snapshot.oracle,
         snapshot,
         result,
         manifest_sha256: sha256(manifest),

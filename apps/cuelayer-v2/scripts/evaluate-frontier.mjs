@@ -14,6 +14,11 @@ if (
     "replay-events",
     "prepare-canary",
     "prepare-shared-canary",
+    "prepare-qualification",
+    "verify-qualification",
+    "execute-qualification",
+    "export-qualification-review",
+    "import-qualification-review",
     "verify-canary",
     "execute-canary",
   ].includes(process.argv[2])

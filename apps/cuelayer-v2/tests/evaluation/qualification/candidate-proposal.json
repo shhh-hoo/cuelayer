@@ -1,0 +1,202 @@
+{
+  "identity": "cuelayer-v2-semantic-qualification-proposal-1",
+  "review_status": "REVIEWED",
+  "paid_enabled": false,
+  "authorization_required": true,
+  "candidate_policy": "OpenAI-only phase 1 requested by the user: Astra medium and low compare frontier reasoning/latency, Sol none tests a strong configuration without reasoning, and Luna none is the existing baseline. This phase cannot establish cross-provider superiority or close broader qualification.",
+  "documentation_checked_on": "2026-09-13",
+  "candidates": [
+    {
+      "candidate_id": "astra-medium",
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "selection_role": "frontier",
+      "configuration": {
+        "reasoning": {
+          "effort": "medium"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "prices_usd_per_million": {
+        "input": 10,
+        "output": 50,
+        "cached_input": 1,
+        "cache_write": 12.5
+      },
+      "evidence_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-6-astra"
+      ],
+      "context_window_tokens": 1050000,
+      "long_context_pricing": {
+        "threshold_input_tokens": 272000,
+        "input_multiplier": 2,
+        "output_multiplier": 1.5
+      }
+    },
+    {
+      "candidate_id": "astra-low",
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "selection_role": "latency-oriented",
+      "configuration": {
+        "reasoning": {
+          "effort": "low"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "prices_usd_per_million": {
+        "input": 10,
+        "output": 50,
+        "cached_input": 1,
+        "cache_write": 12.5
+      },
+      "evidence_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-6-astra"
+      ],
+      "context_window_tokens": 1050000,
+      "long_context_pricing": {
+        "threshold_input_tokens": 272000,
+        "input_multiplier": 2,
+        "output_multiplier": 1.5
+      }
+    },
+    {
+      "candidate_id": "sol-none",
+      "provider": "openai",
+      "model": "gpt-5.6-sol",
+      "selection_role": "latency-oriented",
+      "configuration": {
+        "reasoning": {
+          "effort": "none"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "prices_usd_per_million": {
+        "input": 4,
+        "output": 20,
+        "cached_input": 0.4,
+        "cache_write": 5
+      },
+      "evidence_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.6-sol"
+      ],
+      "context_window_tokens": 1050000,
+      "long_context_pricing": {
+        "threshold_input_tokens": 272000,
+        "input_multiplier": 2,
+        "output_multiplier": 1.5
+      }
+    },
+    {
+      "candidate_id": "luna-none",
+      "provider": "openai",
+      "model": "gpt-5.6-luna",
+      "selection_role": "baseline",
+      "configuration": {
+        "reasoning": {
+          "effort": "none"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "prices_usd_per_million": {
+        "input": 0.2,
+        "output": 1.2,
+        "cached_input": 0.02,
+        "cache_write": 0.25
+      },
+      "evidence_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.6-luna"
+      ],
+      "context_window_tokens": 1050000,
+      "long_context_pricing": {
+        "threshold_input_tokens": 272000,
+        "input_multiplier": 2,
+        "output_multiplier": 1.5
+      }
+    }
+  ],
+  "excluded_candidates": [
+    {
+      "model": "claude-fable-5-1 / claude-sonnet-5 / gemini-3.8-flash",
+      "reason": "Deferred by explicit user choice to prepare OpenAI-only first. No Anthropic or Google credentials are required for this manifest."
+    }
+  ],
+  "common_protocol": {
+    "semantic_input": "Identical product-generated source/context, policy text and semantic output schema for every candidate. The oracle is never sent to the model.",
+    "transport": "The existing product OpenAI SDK and NDJSON executor are reused. Only model, reasoning effort and output cap are replaced with the frozen candidate configuration; prompt, source/context and strict semantic schema remain byte-equivalent.",
+    "tools": [],
+    "conversation": "Independent single-turn requests; no hidden prior interaction or provider conversation.",
+    "cache": "No explicit prompt-cache write requests, prewarming or discarded warmups. Report observed cache tokens and first schema use separately; provider-injected format instructions and automatic grammar caching are observable envelope differences.",
+    "sampling": "Use the explicit supported OpenAI reasoning effort. No temperature or other sampling override.",
+    "service_tier": "Explicit Responses service_tier=default for standard pricing; auto/project-default routing is forbidden. Record returned tier; unexpected tier stops execution and absent tier retains full cost reservation."
+  },
+  "repetitions": 3,
+  "order": {
+    "seed": "micro58-order-1",
+    "strategy": "Interleave candidates within each case, rotate first candidate by case/repetition; every planned row is emitted even if later stopped."
+  },
+  "runtime_reference": {
+    "provider_deadline_ms": 6000,
+    "host_deadline_ms": 8000,
+    "transport_retries": 2,
+    "retry_min_ms": 20,
+    "retry_factor": 2,
+    "sdk_retries": 0
+  },
+  "observation_profile": {
+    "provider_deadline_ms": 30000,
+    "host_deadline_ms": 35000,
+    "concurrency": 1,
+    "purpose": "Bounded qualification observation window, not a new product freshness SLO. Retain whether each result crossed the unchanged 6s/8s runtime reference. Values beyond the observation window remain censored, not zero-latency or semantic failures.",
+    "freshness_thresholds": "UNSELECTED_PENDING_RESULTS",
+    "retry_policy": "Same two transient transport retries; schema, semantic and host rejection never trigger a model repair attempt."
+  },
+  "proposed_limits": {
+    "max_trials": 312,
+    "max_provider_attempts": 936,
+    "max_input_tokens_per_attempt": 1050000,
+    "max_output_tokens_per_attempt": 8192,
+    "max_total_input_tokens": 20000000,
+    "max_total_output_tokens": 7667712,
+    "max_cost_usd": 100,
+    "enforcement": "Reserve documented model-context input capacity plus full output cap at the maximum applicable published tariff before dispatch. Settle actual usage before the next attempt; missing usage retains its conservative reservation. Stop before any USD/call/token limit and retain all remaining NOT_RUN rows. The USD ceiling takes precedence over theoretical token/call maxima. Context-cap reservation is deliberately conservative for the actual14\u201316KB payloads and does not enlarge the frozen request."
+  },
+  "selection_rule": "Report all 78 trials per configuration, attempt and trial failure rates, and per-case semantic adjudication; shortlist two or three from non-dominated semantic reliability and completed/accepted tail latency. Price is descriptive. No success-only averages; no reliable p99 claim from this small corpus.",
+  "required_metrics": [
+    "semantic_disposition_accuracy",
+    "false_terminal_no_change_rate",
+    "reference_resolution_accuracy",
+    "knowledge_mutation_correctness",
+    "field_provenance_correctness",
+    "structured_output_validity",
+    "host_acceptance_reason",
+    "end_state_correctness",
+    "first_answer_text_ms",
+    "provider_complete_ms",
+    "host_accepted_ms",
+    "timeout_failure_rate",
+    "latency_variance",
+    "latency_p50",
+    "latency_p95",
+    "cache_state",
+    "tokens",
+    "cost_usd"
+  ],
+  "freeze_requirements": [
+    "independent corpus/oracle review",
+    "clean final product #57 SHA and module hashes",
+    "all 26 product-generated request/precondition snapshots and hashes",
+    "OpenAI SDK payload parity and shared execution failure/usage tests",
+    "account model availability for every included candidate",
+    "current pricing recheck and documented context-window reservation bounds",
+    "exact approved limits and reviewable execution command; no authorization inferred from preparation"
+  ],
+  "paid_execution_requirements": [
+    "Separate explicit approval of this exact manifest SHA-256 and limits SHA-256",
+    "All required API credentials preflight before dispatch; active unexpired manifest, clean bound code and exact request bytes"
+  ]
+}
