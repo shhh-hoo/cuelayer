@@ -6,7 +6,7 @@ test("a value-dependent outside the Live capture disappears from the DOM immedia
   await page.goto(`/?session=${crypto.randomUUID()}`);
   await page.waitForFunction(() => Boolean(window.v2?.handle.editor));
   const ids = await page.evaluate(async () => {
-    const { admit, waitDecision, fixtureBasis } = (await import(
+    const { admit, waitDecision, fixtureBasis, authoredPut } = (await import(
       "/tests/frontier-fixtures.ts" as string
     )) as typeof import("../frontier-fixtures");
     const { projectMeaning } = (await import(
@@ -32,27 +32,31 @@ test("a value-dependent outside the Live capture disappears from the DOM immedia
           operations: [
             { type: "core", id: c, label: "Pressure", basis: b },
             { type: "mainline", coreId: c, basis: b },
-            ...["P", "Q"].map((symbol, i) => ({
-              type: "put",
-              id: r.newUnits[i],
-              coreId: c,
-              meaning: projectMeaning(
-                {
-                  kind: "quantity",
-                  expression: ["Equal", symbol, i ? 400 : 200],
-                  symbols: {
-                    [symbol]: {
-                      label: i ? "derived flow" : "pressure",
-                      unit: "kPa",
+            ...["P", "Q"].map((symbol, i) =>
+              authoredPut({
+                type: "put",
+                id: r.newUnits[i],
+                coreId: c,
+                meaning: projectMeaning(
+                  {
+                    kind: "quantity",
+                    expression: ["Equal", symbol, i ? 400 : 200],
+                    symbols: {
+                      [symbol]: {
+                        label: i ? "derived flow" : "pressure",
+                        unit: "kPa",
+                      },
                     },
+                    conditions: ["at constant temperature"],
                   },
-                  conditions: ["at constant temperature"],
-                },
-                (x) => x,
-              ),
-              dependencies: i ? [{ target: r.newUnits[0], kind: "VALUE" }] : [],
-              basis: b,
-            })),
+                  (x) => x,
+                ),
+                dependencies: i
+                  ? [{ target: r.newUnits[0], kind: "VALUE" }]
+                  : [],
+                basis: b,
+              }),
+            ),
           ],
         },
       ],

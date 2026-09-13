@@ -6,7 +6,7 @@ import {
   type LegacyProposal,
   type Task,
 } from "./contract";
-import { fixtureBasis, authoredRevisions } from "./fixture-author";
+import { fixtureBasis, authoredPut, authoredRevisions } from "./fixture-author";
 import type { Interpreter, Session } from "./session";
 import {
   projectMeaning,
@@ -394,7 +394,7 @@ export function fixtureProposal(task: Task): LiveDecision | StageReview {
           b,
         );
       return [
-        {
+        authoredPut({
           type: "put",
           id: ua(op.id),
           coreId: ca(op.coreId),
@@ -404,7 +404,7 @@ export function fixtureProposal(task: Task): LiveDecision | StageReview {
           })),
           meaning: projectMeaning(op.meaning, ua),
           basis: b,
-        },
+        }),
       ];
     }
     if (op.type === "invalidate") return [{ ...op, id: ua(op.id), basis: b }];

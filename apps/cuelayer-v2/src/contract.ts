@@ -224,6 +224,7 @@ export type Operation =
       requires: string[];
       dependencies: Dependency[];
       basis: Grounding[];
+      fieldBasis?: Record<string, Grounding[]>;
     }
   | {
       type: "revise";
@@ -283,6 +284,7 @@ export type Accepted = {
     range: SourceRange;
     purpose: string;
     outcome: "RESOLVED" | "STILL_OPEN" | "WITHDRAWN";
+    basis?: Grounding[];
   }[];
   processing?: {
     version: "v2-source-processing-1";
@@ -879,12 +881,18 @@ export function reduceSemanticOperations(
               kind: "IDENTITY" as const,
             }));
       const links = linked(next, op.meaning, dependencies);
-      const fieldBasis = Object.fromEntries(
-        [
-          ...Object.keys(op.meaning).filter((k) => k !== "kind"),
-          "dependencies",
-        ].map((k) => [k, op.basis]),
-      );
+      const suppliedBasis = "fieldBasis" in op ? op.fieldBasis : undefined;
+      const fieldBasis = suppliedBasis
+        ? {
+            ...suppliedBasis,
+            ...(links.length ? { dependencies: op.basis } : {}),
+          }
+        : Object.fromEntries(
+            [
+              ...Object.keys(op.meaning).filter((k) => k !== "kind"),
+              "dependencies",
+            ].map((k) => [k, op.basis]),
+          );
       next.units[op.id] = {
         id: op.id,
         coreId: op.coreId,

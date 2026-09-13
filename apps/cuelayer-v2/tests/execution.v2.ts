@@ -115,19 +115,19 @@ function execute(
   });
 }
 
-it("keeps the reviewed Stage graph profile, prompt bytes and strict schemas unchanged", async () => {
+it("pins the reviewed declarative Stage and field-grounded Live profile", async () => {
   const formats = [];
-  for (const version of ["v2-live-request-3", "v2-stage-request-4"])
+  for (const version of ["v2-live-request-4", "v2-stage-request-5"])
     formats.push(
       (await liveRequest({ version } as ProviderRequest)).text.format,
     );
-  // Reviewed identity after #55's explicit Stage graph policy change. PR64
-  // separately proved extraction parity against the original PR50 profile.
+  // #56 intentionally changes provider grammar and per-field grounding;
+  // transport/model/deadline equivalence remains separately checked below.
   const digest = createHash("sha256")
     .update(JSON.stringify({ modelProfile, livePolicy, stagePolicy, formats }))
     .digest("hex");
   expect(digest).toBe(
-    "8c7428df72ed3e0966b209a78436e7109e975bd3907333b434bfd48ea27c9caf",
+    "0ef3274262aadceb531a0072a060070a1def8f33a9c634021ec976e3b1fac332",
   );
 });
 

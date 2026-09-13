@@ -23,7 +23,7 @@ import {
 import { projectMeaning } from "./live-wire";
 
 export type LiveRequest = {
-  version: "v2-live-request-3";
+  version: "v2-live-request-4";
   scope: string;
   mode: "CONTINUOUS" | "FINALIZE";
   source: {
@@ -437,7 +437,7 @@ export function captureLive(
       text += join + segment + `<${cuts[i][0]}>`;
     }
     const request: LiveRequest = {
-      version: "v2-live-request-3",
+      version: "v2-live-request-4",
       scope: nonce,
       mode: replay.captureClosed ? "FINALIZE" : "CONTINUOUS",
       source: {

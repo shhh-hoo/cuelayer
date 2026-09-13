@@ -2,7 +2,12 @@ import { fixtureBasis } from "./frontier-fixtures";
 import { afterEach, it, expect, vi } from "vitest";
 import { Session } from "../src/session";
 import { type Task } from "../src/contract";
-import { stageReviewSchema, type StageReview } from "../src/stage";
+import {
+  stageReviewSchema,
+  validateStage,
+  type StageReview,
+} from "../src/stage";
+import { compileStageDeclarations } from "../src/stage-wire";
 import { liveRequest } from "../server/live";
 import {
   admit,
@@ -68,14 +73,43 @@ it("Stage has a distinct strict contract, host-captured scope, and no consumptio
   expect(provider.text.format.strict).toBe(true);
   const schema = provider.text.format.schema as any;
   expect(JSON.stringify(schema)).not.toContain('"oneOf"');
-  const operations =
-    schema.properties.results.items.anyOf[1].properties.operations.items;
-  expect(operations.anyOf).toHaveLength(3);
-  expect(operations.anyOf[2].properties.type.enum).toEqual([
-    "revalidate",
-    "invalidate",
+  const check = (value: unknown) => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) return value.forEach(check);
+    const node = value as Record<string, any>;
+    expect(node).not.toHaveProperty("allOf");
+    if (node.$ref) {
+      expect(node.$ref.startsWith("#/")).toBe(true);
+      expect(
+        node.$ref
+          .slice(2)
+          .split("/")
+          .reduce((result: any, key: string) => result?.[key], schema),
+      ).toBeDefined();
+    }
+    if (node.type === "object") {
+      expect(node.additionalProperties).toBe(false);
+      expect(node.required?.sort()).toEqual(
+        Object.keys(node.properties).sort(),
+      );
+    }
+    Object.values(node).forEach(check);
+  };
+  check(schema);
+  const resolved = schema.properties.results.items.anyOf[1].properties;
+  expect(resolved).not.toHaveProperty("operations");
+  expect(resolved).not.toHaveProperty("resolution");
+  const declarations = resolved.declarations.items;
+  expect(declarations.anyOf).toHaveLength(6);
+  expect(declarations.anyOf[4].properties.action.enum).toEqual([
+    "REVALIDATE",
+    "INVALIDATE",
   ]);
-  expect(operations.anyOf[0].properties.meaning.anyOf).toHaveLength(5);
+  expect(declarations.anyOf[0].properties.meaning.anyOf).toHaveLength(4);
+  expect(declarations.anyOf[0].properties).not.toHaveProperty("id");
+  expect(declarations.anyOf[0].properties).not.toHaveProperty("coreId");
+  expect(declarations.anyOf[1].required).toContain("fieldBasis");
+  expect(declarations.anyOf[1].properties).not.toHaveProperty("basis");
   const d = still(t);
   expect(stageReviewSchema.safeParse({ ...d, dispositions: [] }).success).toBe(
     false,
@@ -91,6 +125,48 @@ it("Stage has a distinct strict contract, host-captured scope, and no consumptio
     expect(e.accepted.processing).toBeUndefined();
     expect(e.accepted.reviews?.[0].range).toEqual(t.review!.items[0].range);
   }
+});
+it("checks reconciliation CONFIRM source even when no knowledge mutation is needed", async () => {
+  const s = await concern(),
+    task = s.capture("Stage"),
+    request = task.review!.request,
+    basis = fixtureBasis(task, "A mole fraction is a ratio.")[0];
+  const reply = (grounding: typeof basis) =>
+    compileStageDeclarations(request, {
+      scope: request.scope,
+      results: [
+        {
+          item: request.items[0].id,
+          outcome: "RESOLVED",
+          referents: [],
+          declarations: [
+            {
+              action: "CONFIRM",
+              unit: request.units[0].id,
+              basis: [grounding],
+            },
+          ],
+        },
+      ],
+    });
+  for (const invalid of [
+    { ...basis, source: "uncaptured-source" },
+    { ...basis, end: "unissued-cut" },
+    { ...basis, end: basis.start },
+  ])
+    expect(() => validateStage(s.replay, task, reply(invalid))).toThrow();
+  const before = structuredClone(s.state),
+    accounted = structuredClone(s.replay.accounted);
+  await s.accept(task, reply(basis));
+  expect(s.state).toEqual(before);
+  expect(s.replay.accounted).toEqual(accounted);
+  expect(s.replay.reviewConcerns).toEqual({});
+  expect((await s.store.read(s.id)).at(-1)).toMatchObject({
+    type: "accepted",
+    accepted: {
+      reviews: [{ basis: [{ quote: "A mole fraction is a ratio." }] }],
+    },
+  });
 });
 it("STILL_OPEN succeeds without Live dispositions or duplicate obligation, and suppresses repeat review", async () => {
   const s = await open();

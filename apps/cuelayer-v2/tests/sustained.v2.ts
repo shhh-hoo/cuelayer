@@ -8,6 +8,7 @@ import { position } from "../src/source";
 import type { Event } from "../src/contract";
 import { workload, workloadProfile as profile } from "./workload-fixture";
 import { interpretWorkload } from "./workload-interpreter";
+import { compileStageDeclarations } from "../src/stage-wire";
 
 /** Zero virtual-time append port: the browser test separately uses real IndexedDB transactions. */
 class ClockStore extends EventStore {
@@ -54,7 +55,9 @@ it("600 seconds at 40 source characters/s retains every expected result within f
           : (stageCalls++, profile.stageDelay);
       const answer = interpretWorkload(t.review?.request ?? t.capture!.request);
       await delay(ms, signal);
-      return answer;
+      return t.review
+        ? compileStageDeclarations(t.review.request, answer)
+        : answer;
     },
     new ClockStore(`sustained-${crypto.randomUUID()}`),
   );
@@ -473,7 +476,7 @@ it.each(["transport", "semantic"] as const)(
         );
         if (t.lane === "Stage") {
           await delay(6000, signal);
-          return answer;
+          return compileStageDeclarations(t.review!.request, answer);
         }
         const n = calls++;
         await delay(profile.liveDelays[n % 3], signal);

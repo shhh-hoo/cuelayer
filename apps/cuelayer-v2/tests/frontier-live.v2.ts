@@ -512,14 +512,19 @@ describe("Gate 1: exact frontier and Live", () => {
     check(r.text.format.schema);
     const operations = (r.text.format.schema as any).properties.groups.items
       .anyOf[0].properties.operations.items;
-    expect(operations.anyOf).toHaveLength(6);
+    expect(operations.anyOf).toHaveLength(7);
     expect(r.text.format.schema).toMatchObject({
       type: "object",
       additionalProperties: false,
     });
     expect(r.text.format.schema).not.toHaveProperty("anyOf");
     expect(r.text.format.schema).not.toHaveProperty("$ref");
-    expect(operations.anyOf[1].properties.meaning.anyOf).toHaveLength(5);
+    expect(operations.anyOf[2].properties.meaning.anyOf).toHaveLength(4);
+    expect(operations.anyOf[2].properties).not.toHaveProperty("fieldBasis");
+    expect(operations.anyOf[1].required).toContain("fieldBasis");
+    expect(operations.anyOf[1].properties.meaning.properties.kind.const).toBe(
+      "quantity",
+    );
   });
   it("LEGACY_UNSPECIFIED and renderer failures cannot become new CARRY kinds", async () => {
     const { t } = await manual("Hello.");

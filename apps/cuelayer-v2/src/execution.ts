@@ -2,7 +2,8 @@ import { Stream } from "openai/core/streaming";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses";
 import type { Task } from "./contract";
 import { bytes } from "./projection";
-import { stageReviewSchema } from "./stage";
+import { stageReviewSchema, type StageRequest } from "./stage";
+import { compileStageDeclarations } from "./stage-wire";
 import { liveDecisionSchema, expandProviderDecision } from "./live-wire";
 
 export * from "./execution-contract";
@@ -231,6 +232,13 @@ export async function executeCapturedRequest(
     ) {
       try {
         raw = expandProviderDecision(raw);
+      } catch {
+        throw new ExecutionFailure("model-schema-invalid");
+      }
+    }
+    if (request.lane === "Stage") {
+      try {
+        raw = compileStageDeclarations(request.request as StageRequest, raw);
       } catch {
         throw new ExecutionFailure("model-schema-invalid");
       }

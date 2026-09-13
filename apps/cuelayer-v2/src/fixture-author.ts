@@ -3,8 +3,25 @@ import type { Task, Meaning } from "./contract";
 import {
   projectMeaning,
   type WireBasis,
+  type WireFieldBasis,
   type WireOperation,
 } from "./live-wire";
+
+/** The fixture author asserts that this exact source supports every supplied field. */
+export function authoredPut(
+  operation: Extract<WireOperation, { type: "put" }>,
+): Extract<WireOperation, { type: "put" }> {
+  const meaning = operation.meaning;
+  if (meaning.kind !== "quantity") return operation;
+  const fields: WireFieldBasis["field"][] = ["expression", "symbols"];
+  if (meaning.conditions.length) fields.push("conditions");
+  if (meaning.independent !== null) fields.push("independent");
+  if (meaning.domain !== null) fields.push("domain");
+  return {
+    ...operation,
+    fieldBasis: fields.map((field) => ({ field, basis: operation.basis })),
+  };
+}
 
 export function authoredRange(
   source: { source: string; text: string },

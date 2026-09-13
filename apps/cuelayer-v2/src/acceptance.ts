@@ -116,7 +116,50 @@ export function expandOperations(
   const unit = (a: string) => aliasLookup(c.units, a),
     core = (a: string) => aliasLookup(c.cores, a);
   return wire.map((op) => {
-    const basis = expandGrounding(replay, task, op.basis, group);
+    let basis = expandGrounding(replay, task, op.basis, group);
+    const meaning =
+      op.type === "put" ? compileMeaning(op.meaning, unit) : undefined;
+    let fieldBasis: Record<string, Grounding[]> | undefined;
+    if (op.type === "put") {
+      requireThat(
+        meaning!.kind !== "quantity" || op.fieldBasis,
+        "missing-quantity-field-basis",
+      );
+      if (op.fieldBasis) {
+        const required = Object.keys(meaning!).filter(
+          (field) =>
+            field !== "kind" &&
+            !(
+              field === "conditions" &&
+              "conditions" in meaning! &&
+              meaning!.conditions.length === 0
+            ),
+        );
+        const provided = op.fieldBasis.map((entry) => entry.field);
+        requireThat(
+          provided.length === new Set(provided).size,
+          "duplicate-field-basis",
+        );
+        requireThat(
+          semanticEqual([...required].sort(), [...provided].sort()),
+          "incomplete-or-invalid-field-basis",
+        );
+        fieldBasis = Object.fromEntries(
+          op.fieldBasis.map((entry) => [
+            entry.field,
+            expandGrounding(replay, task, entry.basis, group),
+          ]),
+        );
+        basis = [
+          ...new Map(
+            [...basis, ...Object.values(fieldBasis).flat()].map((b) => [
+              JSON.stringify(b),
+              b,
+            ]),
+          ).values(),
+        ];
+      }
+    }
     if (group)
       requireThat(
         currentGrounding(replay, basis, group),
@@ -142,13 +185,14 @@ export function expandOperations(
         ...op,
         id: unit(op.id),
         coreId: core(op.coreId),
-        meaning: compileMeaning(op.meaning, unit),
+        meaning: meaning!,
         requires: op.dependencies.map((d) => unit(d.target)),
         dependencies: op.dependencies.map((d) => ({
           ...d,
           target: unit(d.target),
         })),
         basis,
+        ...(fieldBasis ? { fieldBasis } : {}),
       };
     }
     if (op.type === "revise") {
