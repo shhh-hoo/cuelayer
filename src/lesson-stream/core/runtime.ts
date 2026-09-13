@@ -1,3 +1,5 @@
+import { SessionIndexes } from "./session-indexes.ts";
+import { liveDecisionSchema, type LiveDecision, type LiveProcessing } from "./session-processing.ts";
 import type { CanonicalSpeechSpan, SpeechRunId } from "../../session/speech-types.ts";
 import { checkpointFromClosedSpan } from "../evidence-checkpoints.ts";
 import { LocalLessonEventStore } from "../store.ts";
@@ -18,12 +20,13 @@ export type CoreAcceptance = ReturnType<typeof acceptCoreInterpretation>;
 /** The only publication boundary for a live Core session. */
 export class CoreLessonStreamRuntime {
   readonly domain = "core" as const;
+  readonly indexes = new SessionIndexes();
   private closed = false;
   private lifetime = new AbortController();
   private writes: Promise<unknown> = Promise.resolve();
   private listeners = new Set<() => void>();
 
-  private constructor(readonly sessionId: string, private store: CoreEventStore, private value: CoreReplay) {}
+  private constructor(readonly sessionId: string, private store: CoreEventStore, private value: CoreReplay) { this.indexes.sync(value); }
 
   static async open(sessionId: string, providedStore?: CoreEventStore) {
     const store = providedStore ?? await LocalLessonEventStore.open<CoreEvent>("core");
@@ -52,14 +55,21 @@ export class CoreLessonStreamRuntime {
     return { type, schemaVersion: CORE_EVENT_SCHEMA_VERSION, sessionId: this.sessionId, sequence,
       eventId: JSON.stringify([this.sessionId, type, sequence]), timestamp };
   }
-  private async appendNow(events: CoreEvent[], signal = this.lifetime.signal) {
+  private async appendNow(events: CoreEvent[], signal = this.lifetime.signal, candidate = events.reduce(appendCoreEvent, this.value)) {
     const combined = AbortSignal.any([this.lifetime.signal, signal]);
     combined.throwIfAborted();
-    const candidate = events.reduce(appendCoreEvent, this.value);
-    await this.store.append(events, combined);
+    try { await this.store.append(events, combined); }
+    catch (error) {
+      // A transport/store may lose its acknowledgement AFTER atomic commit.
+      // Only exact durable event identity/content proves success; never re-propose it.
+      const durable = await this.store.readSession(this.sessionId);
+      const byId = new Map(durable.map(event => [event.eventId, event]));
+      if (!events.every(event => JSON.stringify(byId.get(event.eventId)) === JSON.stringify(event))) throw error;
+    }
     // Commit is the linearization point. A late abort must not leave durable
     // events unpublished/unconsumed and cause a duplicate acceptance on retry.
     this.value = candidate;
+    this.indexes.sync(candidate);
     if (!this.closed) for (const listener of this.listeners) {
       try { listener(); } catch { /* Observers cannot change a committed result. */ }
     }
@@ -83,7 +93,7 @@ export class CoreLessonStreamRuntime {
     return this.serialize(async () => {
       const result = checkpointFromClosedSpan(closed, speechRunId, this.value.checkpoints.length + 1);
       if (!result) return undefined;
-      const existing = this.value.checkpoints.find(c => c.checkpointId === result.checkpoint.checkpointId);
+      const existing = this.indexes.checkpoints.get(result.checkpoint.checkpointId);
       if (existing) {
         const candidate = { ...result.checkpoint, lessonSequence: existing.lessonSequence };
         if (JSON.stringify(candidate) !== JSON.stringify(existing)
@@ -95,19 +105,44 @@ export class CoreLessonStreamRuntime {
     });
   }
   acceptProposal(binding: CoreInterpretationBinding, proposal: unknown, options: {
+    processing?: LiveDecision;
     signal?: AbortSignal; isCurrent?: () => boolean; acceptedAt?: string;
     onValidated?: (result: CoreAcceptance) => void;
   } = {}): Promise<CoreAcceptance> {
     const input = structuredClone(proposal);
+    const decision = options.processing && liveDecisionSchema.parse(options.processing);
     return this.serialize(async () => {
       options.signal?.throwIfAborted();
       if (options.isCurrent && !options.isCurrent()) throw new Error("core-stale-result");
+      if (this.value.ended) throw new Error("core-lesson-ended");
       const result = acceptCoreInterpretation(binding, input, options.acceptedAt ?? new Date().toISOString(), this.value);
-      try { options.onValidated?.(result); } catch { /* Diagnostic only. */ }
-      if (result.kind === "NEEDS_CONTEXT") return result;
+      if (result.kind === "NEEDS_CONTEXT") {
+        try { options.onValidated?.(result); } catch { /* Diagnostic only. */ }
+        return result;
+      }
       if (options.isCurrent && !options.isCurrent()) throw new Error("core-stale-result");
-      await this.appendNow(result.events, options.signal);
-      return { ...result, replay: this.value };
+      const deferred = new Map(decision?.deferred.map(item => [item.checkpointId, item]));
+      if (deferred.size !== (decision?.deferred.length ?? 0) || [...deferred.keys()].some(id => !binding.newEvidenceIds.includes(id))) throw new Error("core-processing-deferred-invalid");
+      const resolved = decision?.resolvedObligationIds ?? [];
+      if (new Set(resolved).size !== resolved.length || resolved.some(id => !this.value.unresolved.has(id)
+        || ![...binding.evidence.values()].some(c => c.checkpointId === id))) throw new Error("core-processing-resolution-unavailable");
+      const steps = result.steps.map((step, index) => {
+        const changed = result.replay.dispositions.get(step.consumesCheckpointIds[0]!)?.kind === "semantic_change";
+        const liveProcessing: LiveProcessing = {
+          version: "session-live-processing-v1", adapter: decision ? "explicit" : "legacy-propose",
+          dispositions: step.consumesCheckpointIds.map(checkpointId => deferred.has(checkpointId)
+            ? { ...deferred.get(checkpointId)!, kind: "deferred_unresolved" }
+            : { checkpointId, kind: changed ? "semantic_change" : "resolved_no_change" }),
+          resolvedObligationIds: index === result.steps.length - 1 ? resolved : [],
+          ...(decision?.reviewRequired ? { review: { id: JSON.stringify([step.requestId, step.stepIndex, "STAGE"]), checkpointIds: step.consumesCheckpointIds, status: "incomplete" as const } } : {}),
+        };
+        return { ...step, liveProcessing };
+      });
+      const events = result.events.map((event, index) => coreEventSchema.parse({ ...event, step: steps[index] }));
+      const candidate = events.reduce(appendCoreEvent, this.value);
+      try { options.onValidated?.({ ...result, steps, events, replay: candidate }); } catch { /* Diagnostic only. */ }
+      await this.appendNow(events, options.signal, candidate);
+      return { ...result, steps, events, replay: this.value };
     });
   }
   expireCue(cueId: string, baseCueRevision: number, timestamp?: string) {
