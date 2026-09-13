@@ -256,7 +256,7 @@ it("rejects missing, cross-task, slot, forward and cyclic references without rea
 it("resolves directly to confirmed existing knowledge without inventing an operation", async () => {
   const { s, t, r, basis, referent } = await setup("That interval.");
   const before = structuredClone(s.state);
-  const value = reply(t, [{ action: "CONFIRM", unit: referent, basis }], basis);
+  const value = reply(t, [{ action: "CONFIRM", unit: referent, basis }]);
   await s.accept(t, compileStageDeclarations(r, value));
   expect(s.state).toEqual(before);
   expect(s.replay.unresolved).toEqual({});
