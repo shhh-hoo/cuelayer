@@ -269,3 +269,32 @@ Compare ASR settings, Live model/reasoning profile, output grammar, context weig
 Evaluate runtime/semantic quality and display/readability in parallel, then join them in a small normal-route vertical slice. Do not postpone latency until after every display capability, or improve speed while knowingly preserving unusable framing. Development harnesses isolate failures, but acceptance requires normal `/session` without manual authored attention plans.
 
 Report exact base/final SHAs, schema/policy/profile identities, changed files, deterministic commands actually run, frozen hashes, candidate/selected forms, visible frames, long-session queue behavior, live call counts and known unsupported cases. Preserve historical frozen evaluators. New production capability and schema boundaries are deliberately reviewed, not hidden behind claims that all old contract bytes remain unchanged. Paid/audio runs require explicit authorization; documentation-only PRs do not claim these implementation gates passed.
+## Parallel V2 experiment — deterministic gate
+
+Evaluation identity: `cuelayer-v2-deterministic-slice-1`. Run inside `apps/cuelayer-v2/`:
+
+```sh
+npm ci
+npx playwright install chromium
+npm run typecheck
+npm test
+npm run build
+npm run test:browser
+npm run measure
+```
+
+The separate test filenames (`*.v2.ts`, `*.browser.ts`) prevent the unchanged production Vitest runner from discovering V2 tests. The new V2 CI workflow installs and tests only this package. The original production typecheck/test/build and both frozen exemplar validators remain required and unchanged.
+
+The unit suite exercises the real V2 writer, validator, reducer and Dexie database through fake-indexeddb. It covers partial/PREFLIGHT rejection, provider interval identity and retransmission, conflicting content, persistence-frontier blocking, persist-before-publish, lost acknowledgements, competing writers, bounded continuous batches, independent Stage, stale dependencies, missing operands, explicit dispositions, unresolved recovery, retry classification, local correction and dependency-safe invalidation.
+
+Playwright drives actual speech messages through the V2 browser entry and normal V2 acceptance, storage and display code. The nine cases cover presentationless/overlay, desktop/narrow, reduced and enabled motion, continuous arrival during Live inference, delayed and stale Stage, FOCUS/COMPARE, safe Cue geometry and expired-invitation suppression on return, Canvas growth, teacher drag/wheel, automatic-camera suppression, Follow Teaching, representation failure/recovery, reload, durable-frontier failure and unexpected browser console errors. A deterministic Board screenshot equality assertion checks that no-change evidence does not move or redraw accepted content. Screenshots/results remain ignored, not historical GOLD.
+
+The authored fixture establishes exactly what it says, including units and conditions. Its Stage annotation requires two distinct committed fragments. It intentionally leaves an ambiguous Kc expression unresolved across reload. The finite sine plot and chemistry reaction are capability checks within this story, not independent subject holdouts or a general semantic benchmark.
+
+The continuous browser workload is 240 additional finals at 45 ms intervals with injected 180 ms Live service and bounded batches; record the actual pending-age samples, maximum age and progress while input is still arriving. The default story uses injected 120 ms Live and 1,200 ms Stage service. These are synthetic loads of seconds, not the mandatory future real 20-minute test.
+
+`npm run measure` inventories complete infrastructure-bearing source files against base `3ac50ab0918191605c8b7152d9ae943061f3a459`. It formats both sides identically before counting nonblank lines, includes mixed policy and every adapter, and emits per-file raw/normalized LOC and bytes. V2 queue/retry integration is counted in the complete Session file, not hidden by reporting zero standalone queue engines. Display policy and DOM probes are included in Canvas. The report also counts the full React shell and speech adapter in a separate all-infrastructure-bearing upper bound, even though their old counterparts are outside the selected comparison. All other V2 source is listed separately. These are conservative infrastructure-bearing totals, not exact pure-mechanics LOC or feature-parity savings. Trace breadth, provider transport, legacy import and the number of function variants differ and must remain explicit.
+
+Bundle measurements sum actual emitted JavaScript and gzip bytes for the unchanged production build and V2, including optional lazy chunks. This comparison must accompany LOC claims: fewer custom lines can still mean a much larger downloaded/runtime substrate. Reports are generated under `.cuelayer/v2/`, never source or frozen corpora.
+
+Passing this gate supports only the isolated deterministic slice. Real Speechmatics behavior, model interpretation quality/cost, productive-work/AI-intervention calibration, independent Chemistry/Math/non-STEM holdouts, scalable context retrieval, 20-minute throughput and production cutover remain unproven.

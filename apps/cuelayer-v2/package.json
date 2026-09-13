@@ -1,0 +1,40 @@
+{
+  "name": "@cuelayer/v2",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5192 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "measure": "node scripts/complexity.mjs"
+  },
+  "dependencies": {
+    "@cortex-js/compute-engine": "0.128.2",
+    "@floating-ui/dom": "1.8.0",
+    "dexie": "4.4.6",
+    "katex": "0.18.7",
+    "mafs": "0.21.0",
+    "p-queue": "9.3.3",
+    "p-retry": "8.0.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "tldraw": "5.4.2",
+    "zod": "4.6.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/katex": "0.16.8",
+    "@types/node": "22.20.2",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "@vitejs/plugin-react": "6.1.1",
+    "fake-indexeddb": "6.2.5",
+    "prettier": "3.9.6",
+    "typescript": "7.0.2",
+    "vite": "8.3.0",
+    "vitest": "5.0.0"
+  }
+}
