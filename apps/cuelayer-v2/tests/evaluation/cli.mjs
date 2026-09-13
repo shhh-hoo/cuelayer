@@ -27,6 +27,26 @@ const required = (name) => {
 };
 export async function run() {
   const command = process.argv[2];
+  if (command === "execute-qualification") {
+    const options = process.argv.slice(3);
+    if (
+      options.length !== 2 ||
+      options.some((x) => !/^--(manifest|authorization)=.+/.test(x)) ||
+      new Set(options.map((x) => x.split("=")[0])).size !== 2
+    )
+      throw Error("qualification-execution-options");
+    const { executeQualification } =
+      await import("./qualification/execute.mjs");
+    console.log(
+      JSON.stringify(
+        await executeQualification(
+          required("manifest"),
+          required("authorization"),
+        ),
+      ),
+    );
+    return;
+  }
   if (command === "execute-canary") {
     const options = process.argv.slice(3);
     if (
@@ -48,6 +68,55 @@ export async function run() {
   }
   const restore = prohibitProviderEgress();
   try {
+    if (
+      command === "prepare-qualification" ||
+      command === "verify-qualification"
+    ) {
+      const { prepareQualification, verifyQualification } =
+        await import("./qualification/manifest.mjs");
+      const result =
+        command === "prepare-qualification"
+          ? await prepareQualification({
+              productRoot: required("product"),
+              productSha: option("product-sha"),
+              out: required("out"),
+              availability: await readJSON(required("availability")),
+              development: process.argv.includes("--development"),
+            })
+          : await verifyQualification(required("manifest"), {
+              allowExpired: true,
+            });
+      console.log(
+        JSON.stringify({
+          manifest_sha256: result.manifest_sha256,
+          paid_enabled: false,
+          provider_invocations: 0,
+        }),
+      );
+      return;
+    }
+    if (
+      ["export-qualification-review", "import-qualification-review"].includes(
+        command,
+      )
+    ) {
+      const { reviewQualification } =
+        await import("./qualification/review.mjs");
+      const result = await reviewQualification({
+        manifestPath: required("manifest"),
+        inputPath: required("input"),
+        out: required("out"),
+        development: process.argv.includes("--development"),
+        adjudicationPath:
+          command === "import-qualification-review"
+            ? required("adjudication")
+            : null,
+      });
+      console.log(
+        JSON.stringify({ identity: result.identity, provider_invocations: 0 }),
+      );
+      return;
+    }
     if (command === "prepare-shared-canary") {
       const { prepareSharedExecution } =
         await import("./shared-execution-manifest.mjs");
@@ -120,6 +189,14 @@ export async function run() {
               ? []
               : ["self-test.mjs"]),
             "execution-self-test.mjs",
+            ...[
+              "self-test",
+              "guard-self-test",
+              "execution-self-test",
+              "manifest-self-test",
+              "adjudication-self-test",
+              "report-self-test",
+            ].map((name) => "qualification/" + name + ".mjs"),
           ].map((name) =>
             resolve(evaluatorRoot, "apps/cuelayer-v2/tests/evaluation", name),
           ),

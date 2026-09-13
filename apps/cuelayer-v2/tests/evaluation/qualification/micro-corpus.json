@@ -1,0 +1,1968 @@
+{
+  "identity": "cuelayer-v2-semantic-microcorpus-1",
+  "review_status": "REVIEWED",
+  "source": "New de-identified authored cases; no frozen historical corpus or saved result is modified.",
+  "oracle_policy": {
+    "semantic_equivalence": "Judge meaning, not one JSON spelling. Equivalent paraphrases or canonical encodings are allowed only when subject, role, polarity, direction, quantity, units, scope and explicit reference bindings are preserved. Unrecognized plausible alternatives require recorded adjudication, not an automatic pass.",
+    "dispositions": "Disposition names are semantic outcomes. WAIT or CARRY may both preserve incomplete work where listed; required complete knowledge, invitation and closure must still be established. A syntactically valid APPLY alone is not success.",
+    "scope": "Only request-visible evidence and accepted preconditions are authority. No future case or paired answer is model input. Setup facts are authored mechanical preconditions, not prior model successes.",
+    "failure_denominator": "Every scheduled case/repetition remains a row. Transport/deadline failure has no semantic score when no interpretable answer exists, while counting in reliability and timeout denominators.",
+    "review": "Human-reviewable oracle requirements are frozen before calls. Do not tune prompts or add equivalences after seeing individual candidate failures."
+  },
+  "pairs": [
+    {
+      "pair_id": "completion",
+      "distinction": "A complete proposition establishes meaning; an unfinished predicate must remain recoverable.",
+      "cases": [
+        {
+          "case_id": "unfinished-proposition",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "The membrane allows"
+            }
+          ],
+          "setup": [],
+          "oracle": {
+            "allowed_dispositions": [
+              "WAIT",
+              "CARRY"
+            ],
+            "required": [
+              {
+                "id": "recoverable",
+                "claim": "Preserve the unfinished source for later completion.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-completion",
+                "claim": "Do not invent what the membrane allows.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "identity_rules": [],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        },
+        {
+          "case_id": "complete-proposition",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "The membrane allows water through but blocks sucrose."
+            }
+          ],
+          "setup": [],
+          "oracle": {
+            "allowed_dispositions": [
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "selectivity",
+                "claim": "Establish both water passage and sucrose exclusion with their original polarity.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-reversal",
+                "claim": "Do not claim sucrose passes or water is blocked.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "identity_rules": [],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "pair_id": "administration",
+      "distinction": "An administrative instruction and a promise to teach later both provide no present lesson fact.",
+      "cases": [
+        {
+          "case_id": "ordinary-administration",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "Please turn to page twelve."
+            }
+          ],
+          "setup": [],
+          "oracle": {
+            "allowed_dispositions": [
+              "NO_CHANGE"
+            ],
+            "required": [
+              {
+                "id": "account",
+                "claim": "Account for the instruction without a lesson knowledge mutation.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-teaching",
+                "claim": "Do not create a concept, quantitative assertion or learner problem from page navigation.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "identity_rules": [],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        },
+        {
+          "case_id": "forward-administrative-promise",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "After the break I will explain membrane transport."
+            }
+          ],
+          "setup": [],
+          "oracle": {
+            "allowed_dispositions": [
+              "NO_CHANGE"
+            ],
+            "required": [
+              {
+                "id": "future",
+                "claim": "Treat the promised explanation as future administration.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-premature-fact",
+                "claim": "Do not invent a membrane property, reason or explanation from the future administrative promise.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "identity_rules": [],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "pair_id": "reference",
+      "distinction": "The model must choose a referent from explicit clarification rather than nearest-topic guessing.",
+      "cases": [
+        {
+          "case_id": "reference-ambiguous",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "A pendulum period is the time for one cycle."
+            },
+            {
+              "event_id": "e1",
+              "text": "A pendulum frequency counts cycles per second."
+            },
+            {
+              "event_id": "e2",
+              "text": "One of those two values increases; I have not yet specified which one."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "period",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "A pendulum period is the time for one cycle."
+                  }
+                }
+              ]
+            },
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e1"
+              ],
+              "units": [
+                {
+                  "key": "frequency",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "A pendulum frequency counts cycles per second."
+                  }
+                }
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "CARRY"
+            ],
+            "required": [
+              {
+                "id": "unresolved",
+                "claim": "Keep the increasing-value claim unresolved because the referent is unspecified.",
+                "evidence_refs": [
+                  "e2"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-guessed-referent",
+                "claim": "Do not assign the increase to period or frequency.",
+                "evidence_refs": [
+                  "e0",
+                  "e1",
+                  "e2"
+                ]
+              }
+            ],
+            "identity_rules": [],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "reference_resolution",
+              "false_terminal_no_change"
+            ]
+          }
+        },
+        {
+          "case_id": "reference-clarified",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "A pendulum period is the time for one cycle."
+            },
+            {
+              "event_id": "e1",
+              "text": "A pendulum frequency counts cycles per second."
+            },
+            {
+              "event_id": "e2",
+              "text": "That value increases; by that value I mean the pendulum period."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "period",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "A pendulum period is the time for one cycle."
+                  }
+                }
+              ]
+            },
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e1"
+              ],
+              "units": [
+                {
+                  "key": "frequency",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "A pendulum frequency counts cycles per second."
+                  }
+                }
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "period-increase",
+                "claim": "Bind the increase to period using explicit clarification.",
+                "evidence_refs": [
+                  "e2"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-frequency-change",
+                "claim": "Do not attach the increase to frequency.",
+                "evidence_refs": [
+                  "e2"
+                ]
+              }
+            ],
+            "identity_rules": [
+              "Preserve the existing period and frequency identities."
+            ],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "reference_resolution",
+              "false_terminal_no_change"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "pair_id": "correction-identity",
+      "distinction": "A correction revises the existing quantity; a different sample adds a distinct quantity.",
+      "cases": [
+        {
+          "case_id": "quantity-correction",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "The pressure of sample A is 90 kPa in the sealed vessel."
+            },
+            {
+              "event_id": "e1",
+              "text": "Correction: sample A pressure is 95 kPa, not 90 kPa."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "pressure",
+                  "meaning": {
+                    "kind": "quantity",
+                    "expression": [
+                      "Equal",
+                      "P",
+                      90
+                    ],
+                    "symbols": {
+                      "P": {
+                        "label": "sample A pressure",
+                        "unit": "kPa"
+                      }
+                    },
+                    "conditions": [
+                      "sealed vessel"
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "correct",
+                "claim": "Revise sample A pressure to 95 kPa.",
+                "evidence_refs": [
+                  "e1"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-duplicate",
+                "claim": "Do not add a second current sample A pressure or keep 90 as current.",
+                "evidence_refs": [
+                  "e0",
+                  "e1"
+                ]
+              }
+            ],
+            "identity_rules": [
+              "Revise pressure in place; retain its identity and sealed-vessel condition."
+            ],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        },
+        {
+          "case_id": "different-sample",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "The pressure of sample A is 90 kPa in the sealed vessel."
+            },
+            {
+              "event_id": "e1",
+              "text": "The pressure of sample B is 95 kPa."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "pressure",
+                  "meaning": {
+                    "kind": "quantity",
+                    "expression": [
+                      "Equal",
+                      "P",
+                      90
+                    ],
+                    "symbols": {
+                      "P": {
+                        "label": "sample A pressure",
+                        "unit": "kPa"
+                      }
+                    },
+                    "conditions": [
+                      "sealed vessel"
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "separate",
+                "claim": "Establish sample B pressure 95 kPa as a distinct identity.",
+                "evidence_refs": [
+                  "e1"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-overwrite",
+                "claim": "Do not change sample A pressure, value or vessel condition.",
+                "evidence_refs": [
+                  "e0",
+                  "e1"
+                ]
+              }
+            ],
+            "identity_rules": [
+              "Keep sample A pressure identity/value; allocate a new sample B quantity."
+            ],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "pair_id": "speech-act",
+      "distinction": "An invitation preserves productive work; a taught comparison establishes the answer.",
+      "cases": [
+        {
+          "case_id": "learner-invitation",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "Sample A has pressure 90 kPa and sample B has pressure 95 kPa."
+            },
+            {
+              "event_id": "e1",
+              "text": "With your partner, decide which sample has higher pressure and explain your choice."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "A",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "Sample A has pressure 90 kPa."
+                  }
+                },
+                {
+                  "key": "B",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "Sample B has pressure 95 kPa."
+                  }
+                }
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "invitation",
+                "claim": "Retain the teacher-origin invitation to compare the captured samples.",
+                "evidence_refs": [
+                  "e1"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-answer-leak",
+                "claim": "Do not establish or reveal the comparison answer on behalf of the learners.",
+                "evidence_refs": [
+                  "e1"
+                ]
+              }
+            ],
+            "identity_rules": [],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        },
+        {
+          "case_id": "taught-comparison",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "Sample A has pressure 90 kPa and sample B has pressure 95 kPa."
+            },
+            {
+              "event_id": "e1",
+              "text": "Sample B has higher pressure than sample A."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "A",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "Sample A has pressure 90 kPa."
+                  }
+                },
+                {
+                  "key": "B",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "Sample B has pressure 95 kPa."
+                  }
+                }
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "comparison",
+                "claim": "Establish B pressure greater than A pressure with that direction.",
+                "evidence_refs": [
+                  "e1"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-task",
+                "claim": "Do not replace the taught fact with an unanswered learner invitation.",
+                "evidence_refs": [
+                  "e1"
+                ]
+              }
+            ],
+            "identity_rules": [],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "pair_id": "quantity-scope",
+      "distinction": "Quantity units and truth-critical conditions must be grounded; missing units cannot be supplied by convention.",
+      "cases": [
+        {
+          "case_id": "quantity-explicit-fields",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "For the sealed vessel, pressure P is 90."
+            },
+            {
+              "event_id": "e1",
+              "text": "The pressure P is measured in kPa."
+            }
+          ],
+          "setup": [],
+          "oracle": {
+            "allowed_dispositions": [
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "quantity",
+                "claim": "Establish P=90, pressure in kPa, scoped to the sealed vessel.",
+                "evidence_refs": [
+                  "e0",
+                  "e1"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-loss",
+                "claim": "Do not omit the unit/condition or introduce temperature assumptions.",
+                "evidence_refs": [
+                  "e0",
+                  "e1"
+                ]
+              }
+            ],
+            "identity_rules": [],
+            "field_grounding": [
+              {
+                "unit_key": "new-pressure",
+                "field": "expression",
+                "required_evidence": [
+                  "e0"
+                ],
+                "forbidden_evidence": []
+              },
+              {
+                "unit_key": "new-pressure",
+                "field": "symbols",
+                "required_evidence": [
+                  "e1"
+                ],
+                "forbidden_evidence": []
+              },
+              {
+                "unit_key": "new-pressure",
+                "field": "conditions",
+                "required_evidence": [
+                  "e0"
+                ],
+                "forbidden_evidence": []
+              }
+            ],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "provenance",
+              "false_terminal_no_change"
+            ]
+          }
+        },
+        {
+          "case_id": "quantity-unit-absent",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "The pressure reading rises to ninety."
+            }
+          ],
+          "setup": [],
+          "oracle": {
+            "allowed_dispositions": [
+              "CARRY",
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "preserve-limits",
+                "claim": "Preserve the reading/increase only at the stated level; keep any unit-dependent quantitative commitment unresolved.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-inferred-unit",
+                "claim": "Do not assign Pa, kPa, bar, psi, a dimensionless/unit-one role, or any other unit not provided. An APPLY may retain only the explicit reading/increase in prose; it cannot invent a complete typed quantity.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "identity_rules": [],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "pair_id": "relation-direction",
+      "distinction": "Changing the stated direction must change the semantic relation, never just its visual order.",
+      "cases": [
+        {
+          "case_id": "relation-accelerates",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "An enzyme is a biological catalyst and a reaction converts reactants into products."
+            },
+            {
+              "event_id": "e1",
+              "text": "This enzyme accelerates that reaction."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "enzyme",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "An enzyme is a biological catalyst."
+                  }
+                },
+                {
+                  "key": "reaction",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "A reaction converts reactants into products."
+                  }
+                }
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "direction",
+                "claim": "Establish enzyme acts on reaction, with acceleration meaning.",
+                "evidence_refs": [
+                  "e1"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-reverse",
+                "claim": "Do not claim that reaction accelerates enzyme.",
+                "evidence_refs": [
+                  "e1"
+                ]
+              }
+            ],
+            "identity_rules": [],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "reference_resolution",
+              "false_terminal_no_change"
+            ]
+          }
+        },
+        {
+          "case_id": "relation-inhibited",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "An enzyme is a biological catalyst and a reaction converts reactants into products."
+            },
+            {
+              "event_id": "e1",
+              "text": "A product of that reaction inhibits this enzyme."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "enzyme",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "An enzyme is a biological catalyst."
+                  }
+                },
+                {
+                  "key": "reaction",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "A reaction converts reactants into products."
+                  }
+                }
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "direction",
+                "claim": "Establish reaction product inhibits enzyme; preserve the product qualification.",
+                "evidence_refs": [
+                  "e1"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-reverse",
+                "claim": "Do not claim the enzyme inhibits the reaction product or that the reaction itself is the inhibitor.",
+                "evidence_refs": [
+                  "e1"
+                ]
+              }
+            ],
+            "identity_rules": [],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "reference_resolution",
+              "false_terminal_no_change"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "pair_id": "completion-binding",
+      "distinction": "A standalone completion may declare no referent; a dependent claim must be bound to the selected existing identity.",
+      "cases": [
+        {
+          "case_id": "stage-standalone",
+          "lane": "Stage",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "A pendulum period is the time for one cycle."
+            },
+            {
+              "event_id": "e1",
+              "text": "A separate property:"
+            },
+            {
+              "event_id": "e2",
+              "text": "The membrane blocks sucrose."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "period",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "A pendulum period is the time for one cycle."
+                  }
+                }
+              ]
+            },
+            {
+              "action": "CARRY",
+              "evidence_refs": [
+                "e1"
+              ],
+              "kind": "INCOMPLETE_PROPOSITION",
+              "core": "lesson"
+            },
+            {
+              "action": "NO_CHANGE",
+              "evidence_refs": [
+                "e2"
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "RESOLVED"
+            ],
+            "required": [
+              {
+                "id": "standalone",
+                "claim": "Resolve the carried thought by establishing that the membrane blocks sucrose, with an explicit empty referent list.",
+                "evidence_refs": [
+                  "e1",
+                  "e2"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-period-link",
+                "claim": "Do not attach the membrane property to the pendulum period.",
+                "evidence_refs": [
+                  "e0",
+                  "e1",
+                  "e2"
+                ]
+              }
+            ],
+            "identity_rules": [],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "reference_resolution"
+            ]
+          }
+        },
+        {
+          "case_id": "stage-referent-bound",
+          "lane": "Stage",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "A pendulum period is the time for one cycle."
+            },
+            {
+              "event_id": "e1",
+              "text": "That interval grows."
+            },
+            {
+              "event_id": "e2",
+              "text": "By that interval I mean the pendulum period."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "period",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "A pendulum period is the time for one cycle."
+                  }
+                }
+              ]
+            },
+            {
+              "action": "CARRY",
+              "evidence_refs": [
+                "e1"
+              ],
+              "kind": "UNRESOLVED_REFERENCE",
+              "core": "lesson"
+            },
+            {
+              "action": "NO_CHANGE",
+              "evidence_refs": [
+                "e2"
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "RESOLVED"
+            ],
+            "required": [
+              {
+                "id": "bound",
+                "claim": "Resolve the original claim with period as an explicit referent and a connected period-increase target.",
+                "evidence_refs": [
+                  "e1",
+                  "e2"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-disconnected",
+                "claim": "Do not close with a disconnected new fact or an empty referent list.",
+                "evidence_refs": [
+                  "e1",
+                  "e2"
+                ]
+              }
+            ],
+            "identity_rules": [
+              "Keep the captured period identity."
+            ],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "reference_resolution"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "pair_id": "stage-context",
+      "distinction": "Stage must leave ambiguous context open and use actual clarification when it exists.",
+      "cases": [
+        {
+          "case_id": "stage-insufficient",
+          "lane": "Stage",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "A pendulum period is the interval for one cycle. A sensor delay is the interval between an event and its detection."
+            },
+            {
+              "event_id": "e1",
+              "text": "One of those two intervals grows; I have not yet specified which one."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "period",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "A pendulum period is the interval for one cycle."
+                  }
+                },
+                {
+                  "key": "delay",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "A sensor delay is the interval between an event and its detection."
+                  }
+                }
+              ]
+            },
+            {
+              "action": "CARRY",
+              "evidence_refs": [
+                "e1"
+              ],
+              "kind": "UNRESOLVED_REFERENCE",
+              "core": "lesson"
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "STILL_OPEN"
+            ],
+            "required": [
+              {
+                "id": "open",
+                "claim": "Keep the obligation unresolved because the source explicitly leaves period versus sensor delay undecided.",
+                "evidence_refs": [
+                  "e1"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-assumed-binding",
+                "claim": "Do not bind the increase to either period or sensor delay, or discard the ambiguous source.",
+                "evidence_refs": [
+                  "e0",
+                  "e1"
+                ]
+              }
+            ],
+            "identity_rules": [],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "reference_resolution"
+            ]
+          }
+        },
+        {
+          "case_id": "stage-sufficient",
+          "lane": "Stage",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "A pendulum period is the interval for one cycle. A sensor delay is the interval between an event and its detection."
+            },
+            {
+              "event_id": "e1",
+              "text": "One of those two intervals grows; I have not yet specified which one."
+            },
+            {
+              "event_id": "e2",
+              "text": "The interval I referred to is the pendulum period, and it becomes longer."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "period",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "A pendulum period is the interval for one cycle."
+                  }
+                },
+                {
+                  "key": "delay",
+                  "meaning": {
+                    "kind": "statement",
+                    "text": "A sensor delay is the interval between an event and its detection."
+                  }
+                }
+              ]
+            },
+            {
+              "action": "CARRY",
+              "evidence_refs": [
+                "e1"
+              ],
+              "kind": "UNRESOLVED_REFERENCE",
+              "core": "lesson"
+            },
+            {
+              "action": "NO_CHANGE",
+              "evidence_refs": [
+                "e2"
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "RESOLVED"
+            ],
+            "required": [
+              {
+                "id": "close",
+                "claim": "Bind to period, establish its increase, and close the obligation with original and clarification evidence.",
+                "evidence_refs": [
+                  "e1",
+                  "e2"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-reconsume",
+                "claim": "Do not advance Live accounting or create a replacement period identity.",
+                "evidence_refs": [
+                  "e0",
+                  "e1",
+                  "e2"
+                ]
+              }
+            ],
+            "identity_rules": [
+              "Preserve period identity and Live cursor."
+            ],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "reference_resolution"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "pair_id": "field-provenance",
+      "distinction": "A value-only correction and a unit-only correction replace only their corresponding current evidence.",
+      "cases": [
+        {
+          "case_id": "value-field-correction",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "For sample A, P equals 90."
+            },
+            {
+              "event_id": "e1",
+              "text": "P is sample A pressure, measured in kPa."
+            },
+            {
+              "event_id": "e2",
+              "text": "This statement concerns the sealed vessel."
+            },
+            {
+              "event_id": "e3",
+              "text": "Correction: P equals 95."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0",
+                "e1",
+                "e2"
+              ],
+              "units": [
+                {
+                  "key": "pressure",
+                  "meaning": {
+                    "kind": "quantity",
+                    "expression": [
+                      "Equal",
+                      "P",
+                      90
+                    ],
+                    "symbols": {
+                      "P": {
+                        "label": "sample A pressure",
+                        "unit": "kPa"
+                      }
+                    },
+                    "conditions": [
+                      "sealed vessel"
+                    ]
+                  }
+                }
+              ],
+              "field_sources": {
+                "pressure": {
+                  "expression": [
+                    "e0"
+                  ],
+                  "symbols": [
+                    "e1"
+                  ],
+                  "conditions": [
+                    "e2"
+                  ]
+                }
+              }
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "new-value",
+                "claim": "Change expression to P=95; keep kPa and sealed-vessel scope.",
+                "evidence_refs": [
+                  "e3"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-old-value-evidence",
+                "claim": "Do not use e0 as current expression evidence after correction.",
+                "evidence_refs": [
+                  "e0",
+                  "e3"
+                ]
+              }
+            ],
+            "identity_rules": [
+              "Preserve pressure identity and unchanged field values."
+            ],
+            "field_grounding": [
+              {
+                "unit_key": "pressure",
+                "field": "expression",
+                "required_evidence": [
+                  "e3"
+                ],
+                "forbidden_evidence": [
+                  "e0"
+                ]
+              },
+              {
+                "unit_key": "pressure",
+                "field": "symbols",
+                "required_evidence": [
+                  "e1"
+                ],
+                "forbidden_evidence": [
+                  "e3"
+                ]
+              },
+              {
+                "unit_key": "pressure",
+                "field": "conditions",
+                "required_evidence": [
+                  "e2"
+                ],
+                "forbidden_evidence": [
+                  "e3"
+                ]
+              }
+            ],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "provenance",
+              "false_terminal_no_change"
+            ]
+          }
+        },
+        {
+          "case_id": "unit-field-correction",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "For sample A, P equals 90."
+            },
+            {
+              "event_id": "e1",
+              "text": "P is sample A pressure, measured in kPa."
+            },
+            {
+              "event_id": "e2",
+              "text": "This statement concerns the sealed vessel."
+            },
+            {
+              "event_id": "e3",
+              "text": "Correction: P still denotes sample A pressure, but its unit is Pa, not kPa; the numerical reading remains 90."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0",
+                "e1",
+                "e2"
+              ],
+              "units": [
+                {
+                  "key": "pressure",
+                  "meaning": {
+                    "kind": "quantity",
+                    "expression": [
+                      "Equal",
+                      "P",
+                      90
+                    ],
+                    "symbols": {
+                      "P": {
+                        "label": "sample A pressure",
+                        "unit": "kPa"
+                      }
+                    },
+                    "conditions": [
+                      "sealed vessel"
+                    ]
+                  }
+                }
+              ],
+              "field_sources": {
+                "pressure": {
+                  "expression": [
+                    "e0"
+                  ],
+                  "symbols": [
+                    "e1"
+                  ],
+                  "conditions": [
+                    "e2"
+                  ]
+                }
+              }
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "new-unit",
+                "claim": "Change the unit to Pa while retaining numerical reading 90 and sealed-vessel condition.",
+                "evidence_refs": [
+                  "e3"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-rescale",
+                "claim": "Do not convert the explicitly retained numerical reading to 90000 or retain kPa.",
+                "evidence_refs": [
+                  "e3"
+                ]
+              }
+            ],
+            "identity_rules": [
+              "Preserve pressure identity and conditions."
+            ],
+            "field_grounding": [
+              {
+                "unit_key": "pressure",
+                "field": "symbols",
+                "required_evidence": [
+                  "e3"
+                ],
+                "forbidden_evidence": [
+                  "e1"
+                ]
+              },
+              {
+                "unit_key": "pressure",
+                "field": "conditions",
+                "required_evidence": [
+                  "e2"
+                ],
+                "forbidden_evidence": [
+                  "e3"
+                ]
+              },
+              {
+                "unit_key": "pressure",
+                "field": "expression",
+                "required_evidence": [
+                  "e0"
+                ],
+                "forbidden_evidence": [
+                  "e3"
+                ]
+              }
+            ],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "provenance",
+              "false_terminal_no_change"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "pair_id": "correction-authority",
+      "distinction": "A quoted hypothetical correction does not override accepted teacher meaning; a direct correction does.",
+      "cases": [
+        {
+          "case_id": "hypothetical-correction",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "The pressure of sample A is 90 kPa in the sealed vessel."
+            },
+            {
+              "event_id": "e1",
+              "text": "If someone were to say \"the pressure is 95 kPa,\" that would be a hypothetical, not a correction to our measurement."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "pressure",
+                  "meaning": {
+                    "kind": "quantity",
+                    "expression": [
+                      "Equal",
+                      "P",
+                      90
+                    ],
+                    "symbols": {
+                      "P": {
+                        "label": "sample A pressure",
+                        "unit": "kPa"
+                      }
+                    },
+                    "conditions": [
+                      "sealed vessel"
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "NO_CHANGE",
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "retain",
+                "claim": "Keep measured pressure 90 kPa current; any added note must remain explicitly hypothetical.",
+                "evidence_refs": [
+                  "e1"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-promote-quote",
+                "claim": "Do not revise the measurement to 95 kPa from quoted hypothetical speech.",
+                "evidence_refs": [
+                  "e0",
+                  "e1"
+                ]
+              }
+            ],
+            "identity_rules": [
+              "Keep existing pressure identity and value."
+            ],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        },
+        {
+          "case_id": "direct-correction",
+          "lane": "Live",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "The pressure of sample A is 90 kPa in the sealed vessel."
+            },
+            {
+              "event_id": "e1",
+              "text": "I am correcting our measurement: the pressure of sample A is 95 kPa."
+            }
+          ],
+          "setup": [
+            {
+              "action": "ESTABLISH",
+              "evidence_refs": [
+                "e0"
+              ],
+              "units": [
+                {
+                  "key": "pressure",
+                  "meaning": {
+                    "kind": "quantity",
+                    "expression": [
+                      "Equal",
+                      "P",
+                      90
+                    ],
+                    "symbols": {
+                      "P": {
+                        "label": "sample A pressure",
+                        "unit": "kPa"
+                      }
+                    },
+                    "conditions": [
+                      "sealed vessel"
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "APPLY"
+            ],
+            "required": [
+              {
+                "id": "replace",
+                "claim": "Revise the existing measurement to 95 kPa as teacher-authorized correction.",
+                "evidence_refs": [
+                  "e1"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-retain-old",
+                "claim": "Do not leave 90 kPa current or invent a second sample.",
+                "evidence_refs": [
+                  "e0",
+                  "e1"
+                ]
+              }
+            ],
+            "identity_rules": [
+              "Keep existing pressure identity."
+            ],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "pair_id": "terminal-source-review",
+      "distinction": "A source-only review must recover unfinished meaning while confirming genuinely terminal administration.",
+      "cases": [
+        {
+          "case_id": "false-terminal-recovery",
+          "lane": "Stage",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "The membrane allows..."
+            }
+          ],
+          "setup": [
+            {
+              "action": "NO_CHANGE",
+              "evidence_refs": [
+                "e0"
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "CARRY"
+            ],
+            "required": [
+              {
+                "id": "reopen",
+                "claim": "Classify the original source as incomplete and durably reopen its obligation, without creating a Core or knowledge in Stage.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-confirm",
+                "claim": "Do not confirm terminal no-change or guess the missing complement.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "identity_rules": [
+              "Preserve the already-accounted cursor; new obligation points to the original evidence."
+            ],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        },
+        {
+          "case_id": "true-terminal-confirmation",
+          "lane": "Stage",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "Please turn to page twelve..."
+            }
+          ],
+          "setup": [
+            {
+              "action": "NO_CHANGE",
+              "evidence_refs": [
+                "e0"
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "CONFIRMED_NO_CHANGE"
+            ],
+            "required": [
+              {
+                "id": "confirm",
+                "claim": "Confirm terminal administration with the original source evidence.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-reopen",
+                "claim": "Do not fabricate unfinished meaning, a Core or a knowledge unit.",
+                "evidence_refs": [
+                  "e0"
+                ]
+              }
+            ],
+            "identity_rules": [
+              "Preserve the already-accounted cursor and knowledge state."
+            ],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "pair_id": "source-review-followup",
+      "distinction": "A future promise supplies no completion; an explicit complete assertion can hand source-only recovery to Live.",
+      "cases": [
+        {
+          "case_id": "source-review-future-promise",
+          "lane": "Stage",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "The ratio is..."
+            },
+            {
+              "event_id": "e1",
+              "text": "After the break I will explain the ratio."
+            }
+          ],
+          "setup": [
+            {
+              "action": "NO_CHANGE",
+              "evidence_refs": [
+                "e0"
+              ]
+            },
+            {
+              "action": "NO_CHANGE",
+              "evidence_refs": [
+                "e1"
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "CARRY",
+              "STILL_OPEN"
+            ],
+            "required": [
+              {
+                "id": "classify",
+                "claim": "Keep the original unfinished ratio recoverable; the promise does not supply an expression, operands or units.",
+                "evidence_refs": [
+                  "e0",
+                  "e1"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-invention",
+                "claim": "Do not mark READY_FOR_LIVE or CONFIRMED_NO_CHANGE from administrative follow-up, and do not invent the ratio.",
+                "evidence_refs": [
+                  "e0",
+                  "e1"
+                ]
+              }
+            ],
+            "identity_rules": [
+              "Preserve the accounted cursor. Stage may classify and hand off original evidence but may not create a Core or knowledge."
+            ],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        },
+        {
+          "case_id": "source-review-complete-assertion",
+          "lane": "Stage",
+          "evidence": [
+            {
+              "event_id": "e0",
+              "text": "The ratio is..."
+            },
+            {
+              "event_id": "e1",
+              "text": "The ratio r is the dimensionless number of red beads divided by the total number of beads."
+            }
+          ],
+          "setup": [
+            {
+              "action": "NO_CHANGE",
+              "evidence_refs": [
+                "e0"
+              ]
+            },
+            {
+              "action": "NO_CHANGE",
+              "evidence_refs": [
+                "e1"
+              ]
+            }
+          ],
+          "oracle": {
+            "allowed_dispositions": [
+              "READY_FOR_LIVE"
+            ],
+            "required": [
+              {
+                "id": "classify",
+                "claim": "Classify the original plus follow-up as ready for Live semantic interpretation; preserve the explicit operand roles and dimensionless scope in the handoff evidence.",
+                "evidence_refs": [
+                  "e0",
+                  "e1"
+                ]
+              }
+            ],
+            "forbidden": [
+              {
+                "id": "no-invention",
+                "claim": "Do not create the ratio or a Core in Stage, drop original evidence, or accept an inverted total-to-red ratio.",
+                "evidence_refs": [
+                  "e0",
+                  "e1"
+                ]
+              }
+            ],
+            "identity_rules": [
+              "Preserve the accounted cursor. Stage may classify and hand off original evidence but may not create a Core or knowledge."
+            ],
+            "field_grounding": [],
+            "applicable_metrics": [
+              "disposition",
+              "knowledge_mutation",
+              "end_state",
+              "false_terminal_no_change"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

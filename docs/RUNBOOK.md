@@ -351,3 +351,32 @@ Use the canonical `prepare-canary --previous-execution=/path/to/historical/execu
 The repair profile lowers the additional ceiling to US$1 and 12 actual attempts. Provider/host deadlines, model, reasoning, token limit, retry behavior, per-attempt reservation and stop rules remain unchanged. Missing usage retains the original US$0.54 reservation, so a timeout may exhaust the available capacity to reserve another request even before the numerical request cap. The original Gate 3b-1 verdict is never reused.
 
 Stage clarification uses the versioned proposition-v2 oracle. The historical v1 file is retained under canaries/history and excluded from current asset selection. V2 accepts statement or annotation but checks the entire declared subject/relation/object, prior identity, original and clarifying sources and obligation closure. Unrecognized paraphrases require the fixed rubric; no automatic oracle rewrite or best-of rerun is allowed. Saved real response/counterexample replay: `node --test apps/cuelayer-v2/tests/evaluation/stage-oracle-v2-replay.mjs`, with GATE3B_SAVED_RUN and GATE3B_REPAIR_PRODUCT_ROOT pointing to the recorded run and repaired product when needed.
+
+### OpenAI micro-corpus preparation and execution
+
+Use the existing `apps/cuelayer-v2/scripts/evaluate-frontier.mjs` CLI from the evaluator checkout. Keep the product checkout separate and clean; the initial qualification product is `f82a97a987a71f0a4ef165827bf2870bef10dcca`. Commit the reviewed evaluator before freezing. The availability JSON must retain real read-only account metadata for every included model (`requested`, `status: 200`, `returned_model`); test fixtures are development-only. Preparation never loads credentials or calls a provider.
+
+```sh
+mkdir -p .cuelayer/v2/qualification
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs prepare-qualification --product=/absolute/path/to/product --product-sha=f82a97a987a71f0a4ef165827bf2870bef10dcca --availability=/absolute/path/to/model-availability.json --out=.cuelayer/v2/qualification/openai-phase1
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs verify-qualification --manifest=.cuelayer/v2/qualification/openai-phase1/qualification-manifest.json
+```
+
+The output contains 26 snapshots, the exact 312-trial manifest and its seal. `paid_enabled` stays false. The manifest expires after 24 hours for execution. `--development` permits a dirty evaluator for local investigation but produces an ineligible manifest. Changes to code, corpus, configuration, prices or request bytes require a fresh freeze and authorization.
+
+Paid execution requires explicit owner approval of this exact manifest and its limits. Only then create a separate `cuelayer-v2-semantic-qualification-authorization-1` artifact with `approved: true`, the approved `manifest_sha256` and `limits_sha256`. No preparation command creates approval. The execution command reads `OPENAI_API_KEY` from the authorized environment; it does not load `.env` files and rejects an alternate provider origin.
+
+```sh
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs execute-qualification --manifest=/absolute/path/to/qualification-manifest.json --authorization=/absolute/path/to/approved-authorization.json
+```
+
+Execution exclusively creates an `execution/` directory. Retain its start/approval record, planned trials, per-attempt raw bytes and diagnostics, immutable `qualification-results.json` and `review-packet.json`. An interrupted or incomplete cohort must not be silently rerun into the same manifest; inspect preserved evidence and obtain a new authorized plan if more calls are required. Stop at the configured scope; preparation or micro-corpus success authorizes no full semantic cohort, sustained workload, audio run, merge or deployment.
+
+Semantic review is offline and remains available after execution authorization expires. Export a packet or import hash-bound judgments into a new artifact:
+
+```sh
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs export-qualification-review --manifest=/absolute/path/to/qualification-manifest.json --input=/absolute/path/to/execution/qualification-results.json --out=/absolute/path/to/new-review-packet.json
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs import-qualification-review --manifest=/absolute/path/to/qualification-manifest.json --input=/absolute/path/to/execution/qualification-results.json --adjudication=/absolute/path/to/review.json --out=/absolute/path/to/new-reviewed-results.json
+```
+
+Apply every frozen required decision with original evidence and resolvable output pointers. Uncertain judgments remain `UNRESOLVED`; absent reviews remain pending. A manual role binding for a new quantity enables exact field-citation checks but does not itself certify the quantity's meaning. Preserve the raw result and report all failures/unavailable/unrun cases alongside observed latencies. Run the canonical `self-test` command to exercise both historical evaluators and the new qualification modules without provider access.
