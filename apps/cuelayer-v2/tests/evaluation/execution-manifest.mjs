@@ -13,6 +13,11 @@ import { PRODUCT_SHA, profile } from "./contract.mjs";
 import { evaluatorRoot, fingerprintFiles } from "./manifest.mjs";
 import { Provenance, loadProduct, git } from "./provenance.mjs";
 import { loadScenarios, loadCanaryContracts } from "./assets.mjs";
+import {
+  SHARED_EXECUTION_IDENTITY,
+  assertSharedPolicy,
+  verifySharedExecution,
+} from "./shared-execution-manifest.mjs";
 
 export const PREVIOUS_EVALUATOR = "f6c48097470437fbbce86767fb3e7cbcbb847148";
 export const BASELINE_MANIFEST =
@@ -199,6 +204,8 @@ export async function prepareExecution(baselinePath, out) {
 }
 
 export async function verifyExecution(path) {
+  if ((await readJSON(path)).identity === SHARED_EXECUTION_IDENTITY)
+    return verifySharedExecution(path);
   if ((await readJSON(path)).identity === REPAIR_IDENTITY)
     return verifyRepairExecution(path);
   const manifest = await readJSON(path),
@@ -295,15 +302,19 @@ export function validateAuthorization(
     Date.parse(authorization.expires_at) <= now
   )
     throw Error("authorization-expired-or-not-yet-valid");
-  if (manifest.continuation && (
-    authorization.allow_budget_cap_removal !== true ||
-    authorization.allow_remaining_evidence_collection !== true ||
-    authorization.continuation_sha256 !== sha256(manifest.continuation)
-  )) throw Error("continuation-authorization-required");
+  if (
+    manifest.continuation &&
+    (authorization.allow_budget_cap_removal !== true ||
+      authorization.allow_remaining_evidence_collection !== true ||
+      authorization.continuation_sha256 !== sha256(manifest.continuation))
+  )
+    throw Error("continuation-authorization-required");
   return true;
 }
 
 export function assertExecutionPolicy(manifest) {
+  if (manifest.identity === SHARED_EXECUTION_IDENTITY)
+    return assertSharedPolicy(manifest);
   const repair = manifest.identity === REPAIR_IDENTITY;
   const expectedProfile = repair ? REPAIR_PROFILE : profile;
   const expectedProduct = repair ? REPAIR_PRODUCT_SHA : PRODUCT_SHA;

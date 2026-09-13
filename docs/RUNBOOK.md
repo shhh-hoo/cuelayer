@@ -290,12 +290,12 @@ node scripts/analyze-run.mjs /absolute/path/to/.cuelayer/v2/frontier/paired-run/
 
 ## Gate 3b unpaid evaluator
 
-Use an independent evaluator feature branch based on frozen product `1a796e8c713b6f00ef9beb72004b456833a82ff5`. Keep the original product checkout clean and read-only. Install each checkout's own locked dependencies. Node 26 is used by the evaluator's module-resolution hooks. The canonical entry point remains `apps/cuelayer-v2/scripts/evaluate-frontier.mjs`.
+The historical preflight/replay contract uses frozen product `1a796e8c713b6f00ef9beb72004b456833a82ff5`. Keep that checkout clean and read-only. The shared execution contract below selects a separate explicit product SHA. Install each checkout's own locked dependencies. Node 26 is used by the evaluator's module-resolution hooks. The canonical entry point remains `apps/cuelayer-v2/scripts/evaluate-frontier.mjs`.
 
 From the evaluator root, with absolute paths substituted:
 
 ```sh
-node apps/cuelayer-v2/scripts/evaluate-frontier.mjs self-test
+GATE3B_PRODUCT_ROOT=/path/to/frozen-product GATE3B_SHARED_PRODUCT_ROOT=/path/to/shared-product node apps/cuelayer-v2/scripts/evaluate-frontier.mjs self-test
 node apps/cuelayer-v2/scripts/evaluate-frontier.mjs prepare --product=/path/to/frozen-product --out=/path/to/ignored/run-directory
 node apps/cuelayer-v2/scripts/evaluate-frontier.mjs verify --manifest=/path/to/run-directory/manifest.json
 node apps/cuelayer-v2/scripts/evaluate-frontier.mjs preflight --manifest=/path/to/run-directory/manifest.json
@@ -308,37 +308,45 @@ Every output path must be new. `prepare --development` permits a dirty evaluator
 
 Preflight takes at least 600 seconds. It runs the full empty-receiver driver baseline, evaluator counterexamples, six production-generated canary snapshots, real-browser joint capture with a local sample responder, display isolation, durable-event recovery replay and controlled timing faults. Recovery also restores the original preacceptance event prefix and observes the frozen scheduler's production request, without returning a model response or rebinding historical aliases. Deliberate evaluator fault injection starts only after the empty-receiver baseline completes. It loads no real credentials or `.env`; model sockets/fetch and microphone endpoints are blocked. Public versioned renderer assets are recorded separately. A local browser/listening-port permission may be needed in sandboxed environments.
 
-`preflight-result.json` is 3b-0 only. Inspect its individual checks and dependency labels; preserve Gate 3a FAILED. Every future paid run remains NOT_RUN. The old `--live` frontier entry is disabled on the evaluator branch. Do not infer paid authorization from preflight PASS, a prior estimate or an old experiment approval. Request a new authorization tied to the final manifest before adding/enabling provider execution. Future limits are US$10 and 400 requests including canary, Stage and retries.
+`preflight-result.json` is 3b-0 only. Inspect its individual checks and dependency labels; preserve Gate 3a FAILED. Every future paid run remains NOT_RUN. The old `--live` frontier entry is disabled on the evaluator branch. Do not infer paid authorization from preflight PASS, a prior estimate or an old experiment approval. Request a new authorization tied to the final manifest before adding/enabling provider execution. The historical profile recorded US$10 and 400 requests including canary, Stage and retries. Those values do not authorize or configure the new shared execution contract.
 
 The raw `joint.json`, request/response/task/prestate data, event log, clock probes, browser graph, DOM samples and screenshot support offline diagnosis. `assess` does not call a provider. Display isolation preserves event/semantic IDs and only claims the lifecycle context actually replayed; it does not restore expired attention or manufacture a Cue. Generated manifests, traces, test results and screenshots belong in ignored `.cuelayer/` or an explicit external evidence archive, never tracked source.
 
-### Authorized canary entry
+### Shared captured-request canary entry
 
-The evaluator now contains a paid capability; authorization controls access to it. `prepare-canary` and `verify-canary` remain unpaid, credential-free commands protected by the existing egress guard. They reference the accepted `f6c48097470437fbbce86767fb3e7cbcbb847148` preflight manifest, verify its immutable snapshots and protected evaluator files, and bind a new execution manifest to the current clean evaluator SHA and output directory. They do not regenerate the six snapshots or rerun 3b-0.
+`cuelayer-v2-shared-execution-1` uses the selected product's shared execution, provider adapter, parser and public Live/Stage validation. The evaluator owns captured input restoration, exact-request authorization, bounded evidence, the frozen retry/deadline policy and assessment. It does not mutate global fetch, hydrate private Session fields or intercept queue captures. The product's `decisionEventPayload` creates the same accepted/inspected payload used by Session; the evaluator persists that decision over the exact captured precondition log.
+
+Preparation and verification are unpaid and credential-free. Use a clean evaluator and a separate clean product checkout at the full 40-character SHA containing the shared APIs. Every output path must be new.
 
 ```sh
-node apps/cuelayer-v2/scripts/evaluate-frontier.mjs self-test --execution-only
-node apps/cuelayer-v2/scripts/evaluate-frontier.mjs prepare-canary --baseline-manifest=/path/to/accepted-3b0/manifest.json --out=/path/to/new-execution-directory
+GATE3B_SHARED_PRODUCT_ROOT=/path/to/shared-product node apps/cuelayer-v2/scripts/evaluate-frontier.mjs self-test --execution-only
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs prepare-shared-canary --product=/path/to/shared-product --product-sha=FULL_40_CHARACTER_SHA --out=/path/to/new-execution-directory
 node apps/cuelayer-v2/scripts/evaluate-frontier.mjs verify-canary --manifest=/path/to/new-execution-directory/execution-manifest.json
 ```
 
-After separate explicit user authorization for that new evaluator/manifest, the operator supplies an authorization JSON file with `identity: "gate3b-execution-authorization-1"`, a nonempty `authorization_id`, `allow_real_provider: true`, exact `manifest_sha256` (object hash returned by prepare), `product_sha`, `evaluator_sha`, `profile_sha256`, `model`, ordered `canaries`, and valid ISO `issued_at` / `expires_at`. No evaluator command creates authorization. Only then may the configured `OPENAI_API_KEY` be read and this command run:
+Preparation always records `paid_enabled: false`. Without `--budget=/path/to/budget.json`, request/cost limits and prices remain null and paid execution is rejected. A proposed paid run must supply explicit `max_requests`, `max_cost_usd`, `reservation_per_request_usd`, `prices_per_million` (`input`, `output`, `cached_input`) and current `pricing_evidence`. Historical prices and the synthetic test budget are not current pricing or authorization. Prepare a new directory to bind that proposed budget; never edit a sealed manifest.
+
+The manifest binds product/evaluator SHAs, loaded Git blobs and dependencies, prompt/schema/request/input/oracle hashes, six freshly captured requests, provider configuration, budget and directory. It preserves the 6000ms provider and 8000ms host deadline, no SDK retries, and two transport retries with 20ms minimum and factor 2. Snapshot restoration finishes before the host interpretation deadline starts. Only transient transport failures retry; each retry uses the same captured bytes and remaining host deadline.
+
+After separate explicit user authorization for the complete new manifest, the operator supplies an authorization JSON with `identity: "gate3b-execution-authorization-1"`, a nonempty `authorization_id`, `allow_real_provider: true`, exact `manifest_sha256` (object hash returned by prepare), `product_sha`, `evaluator_sha`, `profile_sha256`, `model`, ordered `canaries`, and valid ISO `issued_at` / `expires_at`. No command creates that authorization. Only then may `OPENAI_API_KEY` be read and this command run:
 
 ```sh
 node apps/cuelayer-v2/scripts/evaluate-frontier.mjs execute-canary --manifest=/path/to/new-execution-directory/execution-manifest.json --authorization=/path/to/explicit-authorization.json
 ```
 
-The paid entry accepts only those two options. It rejects model, endpoint, cohort, profile, identity or expiry drift; it cannot dispatch later phases. An exclusive execution-start record prevents concurrent owners or replacement runs, and the manifest binds its output directory. The legacy mixed `--live` command remains disabled. Never infer permission from a prepared manifest or qualification record.
+The paid entry accepts only these two options, checks the exact official Responses URL and request bytes at dispatch, and rejects model, endpoint, cohort, profile, identity or expiry drift. Each actual attempt reserves budget synchronously and durably records the reservation before network dispatch. Known usage settles before the next reservation; missing usage keeps its full reservation. An exclusive start record prevents concurrent owners or replacement runs. Preparation or preflight PASS never authorizes later phases.
 
-Only the original six payloads may reach the production OpenAI SDK. The request body is byte-checked at the network boundary; every SDK attempt reserves the frozen budget and persists its reservation before dispatch. The transport endpoint is fixed to the official Responses endpoint, with redirects/fallback endpoints prohibited. The existing SDK retry count remains zero; the frozen Session queue provides its original transport retries and host deadline, while the production provider timeout remains unchanged.
+Raw provider forwarding buffers at most 2 MiB per attempt. Parser, raw and attempt diagnostics persist after the interpretation/acceptance path finishes, before the next canary. Diagnostic writes do not consume retry time or delay host acceptance. Evidence records truncation, stream failure/cancellation, observed/retained bytes and persistence status. Incomplete evidence cannot silently qualify a run. The counters `attempt_finished`, `provider_completed`, `parser_succeeded` and `host_accepted` describe separate boundaries; timeout before text has no semantic score. Hard semantic failure, INVALID or required adjudication stops progression with its unchanged assessment and an immutable adjudication package when required.
 
-For isolated T1 execution, the harness pauses a frozen Session before folding the exact accepted-event prefix and restoring its one captured task. This prevents automatic recovery from issuing unrelated Live/Stage work. The original queue, stream parser, writer and acceptance methods execute that task; the actual acceptance prestate includes the writer's intervening attempt events. No request aliases, accepted gold or product implementation are rewritten.
+CI supplies `GATE3B_PRODUCT_ROOT` for the historical tests and `GATE3B_SHARED_PRODUCT_ROOT` for shared execution tests, each from an explicit checkout SHA. Tests inject an unpaid transport into the same product SDK/executor/parser/acceptance path, label all evidence STUB, and report zero real-provider attempts. Automatic deployment is disabled for `feat/v2-evaluation-execution-53`.
 
-Per-attempt raw provider bytes, response headers/identity, usage/cache, latency, parser results, actual accepted events/state and the unchanged semantic assessment are written before the next attempt or canary. Missing usage retains the full cost reservation. Hard semantic failure, INVALID or required adjudication stops progression. A frozen adjudication package is saved without converting pending results to PASS. Unpaid execution tests use an injected transport through the same SDK/parser/Session path, mark evidence STUB, and have zero real-provider attempts.
+### Historical canary replay
+
+The historical `prepare-canary`/repair identities still reference `1a796e8` and `2957c33` and their original oracle/profile records. Historical manifests, results and snapshot IDs are unchanged. Execute or reproduce their original runtime only from the evaluator SHA recorded by that manifest; the current paid entry rejects historical identities rather than running them through the new executor. Use the current `prepare-shared-canary` command for a newly bound run.
 
 ### Six-canary product repair cohort
 
-Use the canonical `prepare-canary --previous-execution=/path/to/historical/execution-manifest.json --product=/path/to/frozen-repair-checkout --out=/new/directory` to recapture the same six logical canaries from the unchanged historical accepted-event prefixes. The product SHA is pinned by the repair manifest module. This does not rerun 3b-0 or alter the historical oracle, requests, evidence or verdict. It records complete old/new payloads and hashes in request-diffs.json. Verify with `verify-canary`; execute through the existing manifest-bound `execute-canary` authorization gate.
+Use the canonical `prepare-canary --previous-execution=/path/to/historical/execution-manifest.json --product=/path/to/frozen-repair-checkout --out=/new/directory` to recapture the same six logical canaries from the unchanged historical accepted-event prefixes. The product SHA is pinned by the repair manifest module. This does not rerun 3b-0 or alter the historical oracle, requests, evidence or verdict. It records complete old/new payloads and hashes in request-diffs.json. Verify with `verify-canary`; historical execution uses the original manifest-bound evaluator SHA and its authorization gate.
 
 The repair profile lowers the additional ceiling to US$1 and 12 actual attempts. Provider/host deadlines, model, reasoning, token limit, retry behavior, per-attempt reservation and stop rules remain unchanged. Missing usage retains the original US$0.54 reservation, so a timeout may exhaust the available capacity to reserve another request even before the numerical request cap. The original Gate 3b-1 verdict is never reused.
 

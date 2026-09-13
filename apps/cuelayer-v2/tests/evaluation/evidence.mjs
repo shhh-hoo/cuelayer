@@ -37,6 +37,125 @@ export class EvidenceWriter {
     return this.pending;
   }
 }
+
+// Raw recording copies into a bounded buffer; forwarding never waits for disk.
+// Persist after the measured attempt and report any truncation/cancellation.
+export function recordResponse(
+  response,
+  { maxBytes = 2 * 1024 * 1024, now = () => performance.now() } = {},
+) {
+  const chunks = [];
+  const evidence = {
+    observed_bytes: 0,
+    retained_bytes: 0,
+    limit_bytes: maxBytes,
+    complete: false,
+    truncated: false,
+    cancelled: false,
+    stream_error: null,
+    first_byte_at: null,
+    stream_finished_at: null,
+    copy_ms: 0,
+  };
+  if (!response.body)
+    return { response, evidence, bytes: () => Buffer.alloc(0) };
+  const reader = response.body.getReader();
+  const body = new ReadableStream({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          evidence.stream_finished_at = now();
+          evidence.complete = !evidence.truncated;
+          controller.close();
+          return;
+        }
+        const copyStart = now();
+        evidence.first_byte_at ??= copyStart;
+        evidence.observed_bytes += value.byteLength;
+        const retain = Math.min(
+          value.byteLength,
+          maxBytes - evidence.retained_bytes,
+        );
+        if (retain > 0) chunks.push(Buffer.from(value.subarray(0, retain)));
+        evidence.retained_bytes += retain;
+        evidence.truncated ||= retain < value.byteLength;
+        evidence.copy_ms += Math.max(0, now() - copyStart);
+        controller.enqueue(value);
+      } catch (error) {
+        evidence.stream_error = error?.name ?? "Error";
+        evidence.stream_finished_at = now();
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      evidence.cancelled = true;
+      evidence.stream_finished_at = now();
+      await reader.cancel(reason).catch(() => {});
+    },
+  });
+  return {
+    response: new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    }),
+    evidence,
+    bytes: () => Buffer.concat(chunks),
+  };
+}
+
+export function executionCounts(results) {
+  const attempts = results.flatMap((result) => result.attempts ?? []);
+  return {
+    attempts_started: attempts.length,
+    attempts_finished: attempts.filter((a) => a.attempt_finished).length,
+    provider_completed: attempts.filter((a) => a.provider_completed).length,
+    parser_succeeded: attempts.filter((a) => a.parser_succeeded).length,
+    host_accepted: attempts.filter((a) => a.host_accepted).length,
+    terminal_failures: attempts.filter(
+      (a) => a.attempt_finished && !a.provider_completed,
+    ).length,
+    semantic_score_unavailable: results.filter(
+      (r) => r.semantic_score_available === false,
+    ).length,
+  };
+}
+
+export function executionPhaseDurations(phases) {
+  const elapsed = (start, end) => {
+    const a = phases.find((p) => p.phase === start),
+      b = phases.find((p) => p.phase === end);
+    return a && b && a.clockId === b.clockId && b.at >= a.at
+      ? b.at - a.at
+      : null;
+  };
+  return {
+    request_build_ms: elapsed("request-dispatch", "provider-dispatch"),
+    provider_headers_ms: elapsed("network-dispatch", "provider-headers"),
+    provider_first_byte_ms: elapsed("network-dispatch", "first-upstream-byte"),
+    provider_first_answer_ms: elapsed(
+      "network-dispatch",
+      "first-upstream-answer-text",
+    ),
+    provider_terminal_ms: elapsed("network-dispatch", "upstream-terminal"),
+    provider_completion_ms: phases.some(
+      (p) => p.phase === "upstream-terminal" && p.details.completed === true,
+    )
+      ? elapsed("network-dispatch", "upstream-terminal")
+      : null,
+    terminal_forwarding_ms: elapsed("upstream-terminal", "provider-terminal"),
+    terminal_to_parser_ms: elapsed("provider-terminal", "parser-complete"),
+    parse_ms: elapsed("parser-start", "parser-complete"),
+    host_validation_ms: elapsed(
+      "host-validation-start",
+      "host-validation-complete",
+    ),
+    host_rejection_ms: elapsed("host-validation-start", "host-rejected"),
+    persistence_ms: elapsed("persistence-start", "persistence-complete"),
+    attempt_ms: elapsed("request-dispatch", "attempt-finished"),
+  };
+}
 export function assertInside(root, path) {
   const r = relative(root, path);
   if (!r || r.startsWith("..") || r.startsWith("/"))
