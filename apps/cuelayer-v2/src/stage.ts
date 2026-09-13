@@ -40,6 +40,7 @@ import {
 import {
   requireThat,
   expandOperations,
+  expandGrounding,
   validateOperations,
   validateResolution,
   affectedReviews,
@@ -86,6 +87,7 @@ export const stageReviewSchema = z
               item: z.string(),
               outcome: z.literal("RESOLVED"),
               operations: z.array(stageOperationSchema).max(24),
+              reviewBasis: z.array(wireBasisSchema).min(1).max(24).optional(),
               resolution: z
                 .object({
                   targets: z.array(z.string()).min(1).max(8),
@@ -111,7 +113,7 @@ export const stageReviewSchema = z
   .strict();
 export type StageReview = z.infer<typeof stageReviewSchema>;
 export type StageRequest = {
-  version: "v2-stage-request-4";
+  version: "v2-stage-request-5";
   scope: string;
   items: {
     id: string;
@@ -302,7 +304,7 @@ export function captureStage(
     if (replay.reviewInspections[key]) continue;
     const id = `r0`;
     const request: StageRequest = {
-      version: "v2-stage-request-4",
+      version: "v2-stage-request-5",
       scope: nonce,
       items: [
         {
@@ -454,6 +456,10 @@ export function validateStage(replay: Replay, task: Task, raw: unknown) {
         ? (result.operations as WireOperation[])
         : [],
     );
+    const reviewBasis =
+      result.outcome === "RESOLVED" && result.reviewBasis
+        ? expandGrounding(replay, task, result.reviewBasis)
+        : undefined;
     const next = validateOperations(state, task, ops);
     requireThat(
       !ops.length || !semanticEqual(semanticValue(state), semanticValue(next)),
@@ -583,6 +589,7 @@ export function validateStage(replay: Replay, task: Task, raw: unknown) {
       range: item!.range,
       purpose: item!.purpose,
       outcome: result.outcome,
+      ...(reviewBasis ? { basis: reviewBasis } : {}),
     });
   }
   const accepted: Accepted = {

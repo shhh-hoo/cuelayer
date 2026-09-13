@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Meaning, Expression } from "./contract";
-export const LIVE_WIRE_VERSION = "v2-live-decision-3";
+export const LIVE_WIRE_VERSION = "v2-live-decision-4";
 export const carryKindSchema = z.enum([
   "INCOMPLETE_PROPOSITION",
   "UNRESOLVED_REFERENCE",
@@ -13,6 +13,25 @@ export const wireBasisSchema = z
   .object({ source: alias, start: alias, end: alias })
   .strict();
 export const basis = z.array(wireBasisSchema).min(1).max(24);
+export const wireFieldBasisSchema = z
+  .object({
+    field: z.enum([
+      "text",
+      "expression",
+      "symbols",
+      "conditions",
+      "independent",
+      "domain",
+      "notation",
+      "targets",
+      "relation",
+      "target",
+    ]),
+    basis,
+  })
+  .strict();
+export type WireFieldBasis = z.infer<typeof wireFieldBasisSchema>;
+const fieldBasis = z.array(wireFieldBasisSchema).min(1).max(8);
 export const wireDependencySchema = z
   .object({ target: alias, kind: z.enum(["IDENTITY", "VALUE"]) })
   .strict();
@@ -118,6 +137,9 @@ export const wireOperationSchema = z.discriminatedUnion("type", [
       meaning: wireMeaningSchema,
       dependencies: z.array(wireDependencySchema).max(24),
       basis,
+      // Historical/internal proposals remain readable. New quantity creation
+      // requires these declarations at the provider and acceptance boundaries.
+      fieldBasis: fieldBasis.optional(),
     })
     .strict(),
   z
@@ -142,6 +164,22 @@ export const wireOperationSchema = z.discriminatedUnion("type", [
       basis,
     })
     .strict(),
+]);
+const operationOptions = wireOperationSchema.options;
+const meaningOptions = wireMeaningSchema.options;
+const providerPut = operationOptions[1].omit({ fieldBasis: true });
+const providerOperationSchema = z.union([
+  operationOptions[0],
+  providerPut.extend({ meaning: meaningOptions[1], fieldBasis }),
+  providerPut.extend({
+    meaning: z.union([
+      meaningOptions[0],
+      meaningOptions[2],
+      meaningOptions[3],
+      meaningOptions[4],
+    ]),
+  }),
+  ...operationOptions.slice(2),
 ]);
 export const wireResolutionSchema = z
   .object({ obligation: alias, targets: z.array(alias).min(1).max(8), basis })
@@ -210,6 +248,17 @@ export const liveDecisionSchema = liveDecisionShape.refine(
 export const liveProviderDecisionSchema = liveDecisionShape
   .omit({ suffixStatus: true, contextRequest: true })
   .extend({
+    groups: z
+      .array(
+        z.discriminatedUnion("outcome", [
+          liveGroupSchema.options[0].extend({
+            operations: z.array(providerOperationSchema).max(24),
+          }),
+          liveGroupSchema.options[1],
+          liveGroupSchema.options[2],
+        ]),
+      )
+      .max(24),
     continuation: z.union([
       z.enum(["NONE", "WAIT_MORE_INPUT", "OUTPUT_CAPACITY"]),
       contextRequestSchema,

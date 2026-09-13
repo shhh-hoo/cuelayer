@@ -13,6 +13,7 @@ import {
   waitDecision,
   fullGroup,
   fixtureBasis,
+  authoredPut,
   establish,
   type ApplyDecision,
 } from "./frontier-fixtures";
@@ -78,21 +79,20 @@ async function seed(s: Session) {
           text: "R identifies pressure.",
         } as Meaning,
         quantity("D", 800),
-      ].map(
-        (m, i) =>
-          ({
-            type: "put",
-            id: r.newUnits[i],
-            coreId: c,
-            meaning: projectMeaning(m, (x) => x),
-            dependencies:
-              i === 1
-                ? [{ target: r.newUnits[0], kind: "VALUE" }]
-                : i === 3
-                  ? [{ target: r.newUnits[1], kind: "VALUE" }]
-                  : [],
-            basis: b,
-          }) as WireOperation,
+      ].map((m, i) =>
+        authoredPut({
+          type: "put",
+          id: r.newUnits[i],
+          coreId: c,
+          meaning: projectMeaning(m, (x) => x),
+          dependencies:
+            i === 1
+              ? [{ target: r.newUnits[0], kind: "VALUE" }]
+              : i === 3
+                ? [{ target: r.newUnits[1], kind: "VALUE" }]
+                : [],
+          basis: b,
+        }),
       ),
     ]),
   );

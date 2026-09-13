@@ -1,13 +1,14 @@
 /** Bounded synthetic interpreter. Its only input is the actual provider request. No script, clock, full host state or cross-page memory. */
 import type { LiveRequest } from "../src/projection";
-import type { StageRequest, StageReview } from "../src/stage";
+import type { StageRequest } from "../src/stage";
+import type { StageDeclarationReview } from "../src/stage-wire";
 import type {
   LiveDecision,
   WireOperation,
   WireBasis,
   WireMeaning,
 } from "../src/live-wire";
-import { authoredRange } from "../src/fixture-author";
+import { authoredPut, authoredRange } from "../src/fixture-author";
 const plain = (text: string) => text.replace(/<b\d+>/g, "");
 const whole = (s: { source: string; text: string }): WireBasis => ({
   source: s.source,
@@ -30,8 +31,8 @@ function known(units: LiveRequest["units"]) {
 }
 export function interpretWorkload(
   request: LiveRequest | StageRequest,
-): LiveDecision | StageReview {
-  if (request.version === "v2-stage-request-4") {
+): LiveDecision | StageDeclarationReview {
+  if (request.version === "v2-stage-request-5") {
     const samples = known(request.units);
     return {
       scope: request.scope,
@@ -62,29 +63,27 @@ export function interpretWorkload(
         )
           return { item: item.id, outcome: "STILL_OPEN" as const };
         const basis = [
-            whole(original),
-            authoredRange(clue.source, clue.match[0]),
-          ],
-          id = request.newUnits[0];
+          whole(original),
+          authoredRange(clue.source, clue.match[0]),
+        ];
         return {
           item: item.id,
           outcome: "RESOLVED" as const,
-          operations: [
+          referents: [target],
+          declarations: [
             {
-              type: "put" as const,
-              id,
-              coreId: item.core,
+              action: "ADD" as const,
               meaning: {
                 kind: "relation" as const,
                 relation: "dependency" as const,
                 targets: [target, prior],
                 text: `Sample ${clue.match[1]} follows sample ${match[2]}.`,
               },
-              dependencies: [],
+              about: [],
+              usesValue: [],
               basis,
             },
           ],
-          resolution: { targets: [id], referents: [target], basis },
         };
       }),
     };
@@ -135,11 +134,7 @@ export function interpretWorkload(
           id,
           change: {
             field: "expression",
-            value: [
-              m[3],
-              value,
-              { operator: "Equal", operands: [0, 1] },
-            ],
+            value: [m[3], value, { operator: "Equal", operands: [0, 1] }],
           },
           basis,
         });
@@ -153,27 +148,25 @@ export function interpretWorkload(
         }
         const id = r.newUnits[slot++];
         samples.set(sample, id);
-        operations.push({
-          type: "put",
-          id,
-          coreId: core,
-          meaning: {
-            kind: "quantity",
-            nodes: [
-              m[3],
-              value,
-              { operator: "Equal", operands: [0, 1] },
-            ],
-            symbols: [
-              { symbol: m[3], label: `Sample ${m[2]} pressure`, unit: "kPa" },
-            ],
-            conditions: ["at fixed temperature"],
-            independent: null,
-            domain: null,
-          },
-          dependencies: [],
-          basis,
-        });
+        operations.push(
+          authoredPut({
+            type: "put",
+            id,
+            coreId: core,
+            meaning: {
+              kind: "quantity",
+              nodes: [m[3], value, { operator: "Equal", operands: [0, 1] }],
+              symbols: [
+                { symbol: m[3], label: `Sample ${m[2]} pressure`, unit: "kPa" },
+              ],
+              conditions: ["at fixed temperature"],
+              independent: null,
+              domain: null,
+            },
+            dependencies: [],
+            basis,
+          }),
+        );
       }
     } else if ((m = sentence.match(/^(Carry|Review) (\d+):/))) {
       const alreadyBound =

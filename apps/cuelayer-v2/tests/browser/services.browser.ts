@@ -8,6 +8,7 @@ import {
   type LiveDecision,
   type WireOperation,
 } from "../../src/live-wire";
+import { authoredPut } from "../../src/fixture-author";
 
 test.use({
   launchOptions: {
@@ -31,7 +32,7 @@ async function proposed(task: LiveRequest): Promise<LiveDecision> {
     ? []
     : [
         { type: "core", id: task.newCores[0], label: "Gas mixture", basis },
-        {
+        authoredPut({
           type: "put",
           id: task.newUnits[0],
           coreId: task.newCores[0],
@@ -50,7 +51,7 @@ async function proposed(task: LiveRequest): Promise<LiveDecision> {
             },
             (x) => x,
           ),
-        },
+        }),
         { type: "mainline", coreId: task.newCores[0], basis },
       ];
   return {
@@ -408,7 +409,7 @@ test("Teaching Representation: new relationship is dominant, required earlier eq
       ];
       const id = prior.length === 1 ? task.newUnits[0] : prior[1].id;
       const operations: WireOperation[] = [
-        {
+        authoredPut({
           type: "put",
           id,
           coreId: prior[0].core,
@@ -433,7 +434,7 @@ test("Teaching Representation: new relationship is dominant, required earlier eq
             },
             (x) => x,
           ),
-        },
+        }),
       ];
       if (prior.length > 1) {
         const put = operations[0];

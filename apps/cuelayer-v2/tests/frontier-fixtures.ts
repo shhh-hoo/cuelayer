@@ -7,8 +7,16 @@ import {
   type LiveDecision,
   type WireOperation,
 } from "../src/live-wire";
-import { fixtureBasis, authoredRevisions } from "../src/fixture-author";
-export { fixtureBasis, authoredRange } from "../src/fixture-author";
+import {
+  fixtureBasis,
+  authoredPut,
+  authoredRevisions,
+} from "../src/fixture-author";
+export {
+  fixtureBasis,
+  authoredPut,
+  authoredRange,
+} from "../src/fixture-author";
 export type ApplyDecision = Omit<LiveDecision, "groups"> & {
   groups: Extract<LiveDecision["groups"][number], { outcome: "APPLY" }>[];
 };
@@ -109,16 +117,18 @@ export function establish(
         : [{ type: "revalidate" as const, id, basis }]),
     );
   } else
-    operations.push({
-      type: "put",
-      id,
-      coreId: core,
-      meaning: projectMeaning(meaning, (a) =>
-        Object.keys(c.units).find((k) => c.units[k] === a)!,
-      ),
-      dependencies: [],
-      basis,
-    });
+    operations.push(
+      authoredPut({
+        type: "put",
+        id,
+        coreId: core,
+        meaning: projectMeaning(meaning, (a) =>
+          Object.keys(c.units).find((k) => c.units[k] === a)!,
+        ),
+        dependencies: [],
+        basis,
+      }),
+    );
   return {
     ...fullGroup(task),
     groups: [

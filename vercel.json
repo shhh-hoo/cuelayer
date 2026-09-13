@@ -6,7 +6,8 @@
       "fix/cuelayer-v2-real-model-contract": false,
       "fix/cuelayer-v2-text-delivery": false,
       "feat/cuelayer-v2-phase-reporting-54": false,
-      "fix/cuelayer-v2-stage-graph-55": false
+      "fix/cuelayer-v2-stage-graph-55": false,
+      "feat/cuelayer-v2-declarative-stage-56": false
     }
   },
   "functions": {
