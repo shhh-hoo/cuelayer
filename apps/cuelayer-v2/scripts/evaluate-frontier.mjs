@@ -13,6 +13,7 @@ if (
     "replay-display",
     "replay-events",
     "prepare-canary",
+    "prepare-shared-canary",
     "verify-canary",
     "execute-canary",
   ].includes(process.argv[2])

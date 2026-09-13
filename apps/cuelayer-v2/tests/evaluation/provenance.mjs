@@ -123,10 +123,16 @@ export class Provenance {
         .filter(existsSync)
         .map((x) => realpathSync(x));
       const fromProduct = roots.some((root) => actual.startsWith(root + "/"));
+      const evaluatorRoots = [
+        resolve(this.evaluator, "node_modules"),
+        resolve(this.evaluator, "apps/cuelayer-v2/node_modules"),
+      ]
+        .filter(existsSync)
+        .map((root) => realpathSync(root));
       const tooling =
         (pkg.name === "vite" && actual.includes("/vite/dist/client/")) ||
         (surface === "node" &&
-          actual.startsWith(this.evaluator + "/") &&
+          evaluatorRoots.some((root) => actual.startsWith(root + "/")) &&
           parent &&
           !parent.startsWith(pathToFileURL(this.product).href + "/"));
       if (!fromProduct && !tooling)

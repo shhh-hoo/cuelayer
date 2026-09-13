@@ -4,7 +4,8 @@
     "deploymentEnabled": {
       "fix/cuelayer-v2-incremental-semantic-frontier": false,
       "chore/cuelayer-v2-evaluation-design": false,
-      "fix/cuelayer-v2-stage-oracle-v2": false
+      "fix/cuelayer-v2-stage-oracle-v2": false,
+      "feat/v2-evaluation-execution-53": false
     }
   },
   "functions": {

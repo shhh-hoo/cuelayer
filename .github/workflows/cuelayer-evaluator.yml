@@ -18,16 +18,23 @@ jobs:
         with:
           path: frozen-product
           ref: 1a796e8c713b6f00ef9beb72004b456833a82ff5
+      - uses: actions/checkout@v4
+        with:
+          path: shared-product
+          ref: f6c3cbabf00251ccefd4e4217c424fdaf4b76daf
       - uses: actions/setup-node@v4
         with:
           node-version: 26
       - run: npm ci
         working-directory: frozen-product/apps/cuelayer-v2
       - run: npm ci
+        working-directory: shared-product/apps/cuelayer-v2
+      - run: npm ci
         working-directory: evaluator/apps/cuelayer-v2
       - run: node apps/cuelayer-v2/scripts/evaluate-frontier.mjs self-test
         working-directory: evaluator
         env:
           GATE3B_PRODUCT_ROOT: ${{ github.workspace }}/frozen-product
+          GATE3B_SHARED_PRODUCT_ROOT: ${{ github.workspace }}/shared-product
       # CI self-tests are not the full 600-second/browser 3b-0 gate.
       # No provider credentials, paid jobs, deployment or automatic gate promotion.

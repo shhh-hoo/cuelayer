@@ -48,6 +48,24 @@ export async function run() {
   }
   const restore = prohibitProviderEgress();
   try {
+    if (command === "prepare-shared-canary") {
+      const { prepareSharedExecution } =
+        await import("./shared-execution-manifest.mjs");
+      const result = await prepareSharedExecution({
+        productRoot: required("product"),
+        productSha: option("product-sha"),
+        out: required("out"),
+        budget: option("budget") ? await readJSON(required("budget")) : null,
+      });
+      console.log(
+        JSON.stringify({
+          manifest_sha256: result.manifest_sha256,
+          paid_enabled: false,
+          provider_invocations: 0,
+        }),
+      );
+      return;
+    }
     if (["prepare-canary", "verify-canary"].includes(command)) {
       const { prepareExecution, verifyExecution } =
         await import("./execution-manifest.mjs");

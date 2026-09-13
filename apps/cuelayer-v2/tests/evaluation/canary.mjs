@@ -110,7 +110,11 @@ const area = {
 };
 export { area, pressure };
 
-export async function generateCanaries(product, root) {
+export async function generateCanaries(
+  product,
+  root,
+  { generationContract = null } = {},
+) {
   await import("fake-indexeddb/auto");
   const snapshots = [],
     scenarios = await loadScenarios(),
@@ -248,7 +252,13 @@ export async function generateCanaries(product, root) {
                 basis,
               },
             ],
-            resolution: { targets: [id], basis },
+            resolution: {
+              targets: [id],
+              ...(generationContract === "cuelayer-v2-shared-execution-1"
+                ? { referents: [target] }
+                : {}),
+              basis,
+            },
           };
         }
       }
@@ -308,6 +318,7 @@ export async function generateCanaries(product, root) {
                 ),
               },
         generation: {
+          ...(generationContract ? { contract: generationContract } : {}),
           recipe,
           precondition_events,
           production_capture: true,

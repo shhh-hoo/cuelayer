@@ -5,16 +5,15 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { profile, PRODUCT_SHA } from "./contract.mjs";
+import { profile as historicalProfile } from "./contract.mjs";
 import { evaluatorRoot } from "./manifest.mjs";
-import { Provenance } from "./provenance.mjs";
+import { Provenance, git } from "./provenance.mjs";
 import { loadScenarios, loadCanaryContracts } from "./assets.mjs";
 import { generateCanaries } from "./canary.mjs";
-import { sha256, ExecutionDiscipline } from "./evidence.mjs";
+import { sha256, exclusive, ExecutionDiscipline } from "./evidence.mjs";
 import {
   CANARIES,
   PROVIDER_URL,
-  loadExecutionProduct,
   validateAuthorization,
 } from "./execution-manifest.mjs";
 import {
@@ -22,14 +21,37 @@ import {
   reserveApprovedAttempt,
 } from "./execute-canary.mjs";
 import { prohibitProviderEgress } from "./browser.mjs";
+import {
+  loadSharedExecutionProduct,
+  sharedProfile,
+  SHARED_EXECUTION_IDENTITY,
+  assertSharedPolicy,
+} from "./shared-execution-manifest.mjs";
+import {
+  recordResponse,
+  executionCounts,
+  executionPhaseDurations,
+} from "./evidence.mjs";
 const productRoot =
-  process.env.GATE3B_PRODUCT_ROOT ??
-  resolve(evaluatorRoot, "../cuelayer-v2-frontier");
+  process.env.GATE3B_SHARED_PRODUCT_ROOT ??
+  resolve(evaluatorRoot, "../cuelayer-v2-execution-contract53");
+const PRODUCT_SHA = git(productRoot, "rev-parse", "HEAD");
 const provenance = new Provenance(productRoot, evaluatorRoot, {
+  productSha: PRODUCT_SHA,
   allowDirtyEvaluator: true,
 });
-const product = await loadExecutionProduct(provenance),
-  snapshots = await generateCanaries(product);
+const product = await loadSharedExecutionProduct(provenance),
+  snapshots = await generateCanaries(product, undefined, {
+    generationContract: SHARED_EXECUTION_IDENTITY,
+  });
+// Synthetic rates exercise reservation arithmetic; they are never current pricing evidence.
+const profile = sharedProfile(product.provider.modelProfile, {
+  max_requests: historicalProfile.max_requests,
+  max_cost_usd: historicalProfile.max_cost_usd,
+  reservation_per_request_usd: historicalProfile.reservation_per_request_usd,
+  prices_per_million: historicalProfile.prices_per_million,
+  pricing_evidence: "unpaid synthetic fixture only",
+});
 const scenarios = [
   ...(await loadScenarios()),
   ...(await loadCanaryContracts()),
@@ -37,7 +59,9 @@ const scenarios = [
 const clone = (x) => structuredClone(x);
 function manifest() {
   return {
-    identity: "gate3b-1-authorized-execution-1",
+    identity: SHARED_EXECUTION_IDENTITY,
+    paid_enabled: false,
+    provider_profile: product.provider.modelProfile,
     product_sha: PRODUCT_SHA,
     evaluator_sha: provenance.snapshot().evaluator_sha,
     profile,
@@ -283,13 +307,15 @@ test("request and US$ caps reserve synchronously before dispatch; body/model/fal
       /unapproved-provider-request/,
     );
 });
-test("authorized paid path reaches real frozen SDK/parser/Session using only injected unpaid transport and persists success", async () => {
+test("authorized paid path reaches shared product SDK/parser/acceptance using only injected unpaid transport and persists success", async () => {
   const v = await context();
+  const originalFetch = globalThis.fetch;
   let calls = 0;
   const result = await exerciseExecution(
     v,
     authorization(v.manifest),
     async (url, init) => {
+      assert.equal(globalThis.fetch, originalFetch);
       const snapshot = snapshots[calls++];
       assert.equal(url, PROVIDER_URL);
       assert.equal(init.body, JSON.stringify(snapshot.payload));
@@ -314,6 +340,27 @@ test("authorized paid path reaches real frozen SDK/parser/Session using only inj
   assert.equal(r.attempts[0].cached_input_tokens, 20);
   assert.equal(r.attempts[0].cache_state, "cached");
   assert(r.attempts[0].latency_ms >= 0);
+  assert.deepEqual(
+    [
+      r.attempts[0].attempt_finished,
+      r.attempts[0].provider_completed,
+      r.attempts[0].parser_succeeded,
+      r.attempts[0].host_accepted,
+    ],
+    [true, true, true, true],
+  );
+  assert.equal(r.semantic_score_available, true);
+  assert.equal(result.execution_counts.attempts_started, 6);
+  assert.equal(result.execution_counts.provider_completed, 6);
+  assert.equal(globalThis.fetch, originalFetch);
+  const phases = r.attempts[0].phases;
+  assert(phases.some((p) => p.phase === "first-upstream-byte"));
+  assert(phases.some((p) => p.phase === "parser-complete"));
+  assert(phases.some((p) => p.phase === "persistence-complete"));
+  for (let i = 1; i < phases.length; i++) {
+    assert.equal(phases[i].clockId, phases[0].clockId);
+    assert(phases[i].at >= phases[i - 1].at);
+  }
   assert(
     r.events.some(
       (e) =>
@@ -354,6 +401,16 @@ test("provider error preserves raw body and attempt before stop; missing usage r
   );
   assert.equal(r.attempts[0].reserved_cost_usd, 0.54);
   assert.equal(r.attempts[0].usage, null);
+  assert.deepEqual(
+    [
+      r.attempts[0].attempt_finished,
+      r.attempts[0].provider_completed,
+      r.attempts[0].parser_succeeded,
+      r.attempts[0].host_accepted,
+    ],
+    [true, false, false, false],
+  );
+  assert.equal(r.semantic_score_available, false);
   assert(
     (
       await readFile(
@@ -429,9 +486,11 @@ test("only frozen product transport retries occur, every attempt is reserved and
   await exerciseExecution(v, authorization(v.manifest), async (url, init) => {
     bodies.push(init.body);
     calls++;
-    if (calls === 2) await access(resolve(v.out, "quantitative/parser-1.json"));
-    if (calls === 3)
-      await access(resolve(v.out, "quantitative/attempt-2.json"));
+    // Diagnostic files are deferred, while each guard reservation is durable before dispatch.
+    if (calls <= 3)
+      await assert.rejects(
+        access(resolve(v.out, "quantitative/parser-1.json")),
+      );
     return calls <= 2
       ? httpError(500, "server_error")
       : calls === 3
@@ -499,4 +558,347 @@ test("pending semantic adjudication persists the unchanged rubric and stops subs
     scenarios.find((s) => s.scenario_id === "correction").adjudication_rules,
   );
   assert(report.canaries.slice(3).every((r) => r.status === "NOT_RUN"));
+});
+
+test("new preparation policy has no inherited paid budget or historical pricing", () => {
+  const m = manifest();
+  m.profile = sharedProfile(product.provider.modelProfile);
+  m.profile_sha256 = sha256(m.profile);
+  assert.equal(m.profile.max_cost_usd, null);
+  assert.equal(m.profile.prices_per_million, null);
+  assert.doesNotThrow(() => assertSharedPolicy(m, { requireBudget: false }));
+  assert.throws(
+    () => validateAuthorization(m, authorization(m)),
+    /budget-and-current-pricing-required/,
+  );
+});
+
+test("canonical shared preparation entry requires an explicit full product SHA before loading product code", async () => {
+  await assert.rejects(
+    promisify(execFile)(
+      process.execPath,
+      [
+        "apps/cuelayer-v2/scripts/evaluate-frontier.mjs",
+        "prepare-shared-canary",
+        `--product=${productRoot}`,
+        "--product-sha=bad",
+        "--out=/private/tmp/uncreated-shared-canary",
+      ],
+      { cwd: evaluatorRoot },
+    ),
+    /explicit-full-product-sha-required/,
+  );
+});
+
+test("bounded raw recording preserves forwarded bytes and reports discarded evidence", async () => {
+  const bytes = new TextEncoder().encode("abcdefghijklmnop");
+  const recording = recordResponse(new Response(bytes), { maxBytes: 5 });
+  assert.equal(await recording.response.text(), "abcdefghijklmnop");
+  assert.equal(recording.bytes().toString(), "abcde");
+  assert.equal(recording.evidence.observed_bytes, 16);
+  assert.equal(recording.evidence.retained_bytes, 5);
+  assert.equal(recording.evidence.truncated, true);
+  assert.equal(recording.evidence.complete, false);
+});
+
+test("missing terminal event finishes an attempt without provider completion or semantic scoring", async () => {
+  const v = await context();
+  await exerciseExecution(
+    v,
+    authorization(v.manifest),
+    firstThenAuthError(
+      () =>
+        new Response(
+          'data: {"type":"response.output_text.delta","delta":"{}"}\n\ndata: [DONE]\n\n',
+          { headers: { "Content-Type": "text/event-stream" } },
+        ),
+    ),
+  );
+  const r = await read(v, "quantitative/result.json");
+  assert.equal(r.attempts.length, 1);
+  assert.deepEqual(
+    [
+      r.attempts[0].attempt_finished,
+      r.attempts[0].provider_completed,
+      r.attempts[0].parser_succeeded,
+      r.attempts[0].host_accepted,
+    ],
+    [true, false, false, false],
+  );
+  assert.equal(r.semantic_score_available, false);
+  assert.equal(r.execution_counts.terminal_failures, 1);
+  assert.equal(r.parser.error, "model-disconnected-before-complete");
+});
+
+test("provider deadline before first answer retains failure denominator without a fabricated semantic score", async () => {
+  const v = await context();
+  await exerciseExecution(
+    v,
+    authorization(v.manifest),
+    firstThenAuthError(
+      (url, init) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              init.signal.addEventListener(
+                "abort",
+                () =>
+                  controller.error(new DOMException("aborted", "AbortError")),
+                { once: true },
+              );
+            },
+          }),
+          { headers: { "Content-Type": "text/event-stream" } },
+        ),
+    ),
+  );
+  const r = await read(v, "quantitative/result.json");
+  assert.equal(r.attempts.length, 1);
+  assert.equal(r.attempts[0].attempt_finished, true);
+  assert.equal(r.attempts[0].provider_completed, false);
+  assert.equal(r.attempts[0].parser_succeeded, false);
+  assert.equal(r.parser.output_text, null);
+  assert.deepEqual(r.execution_failure, {
+    category: "deadline",
+    reason: "model-timeout",
+  });
+  assert.deepEqual(r.attempts[0].execution_failure, r.execution_failure);
+  assert.equal(r.operational.reason, "model-timeout");
+  assert.equal(r.semantic_score_available, false);
+  assert.equal(r.execution_counts.attempts_started, 1);
+  assert.equal(r.execution_counts.provider_completed, 0);
+  assert.equal(r.execution_counts.terminal_failures, 1);
+  assert(!r.attempts[0].phases.some((p) => p.phase === "parser-complete"));
+  assert(r.attempts[0].latency_ms >= 5900);
+});
+
+test("empty-group WAIT persists the shared inspected payload without an accepted semantic event", async () => {
+  const v = await context(),
+    snapshot = snapshots[0];
+  const response = {
+    scope: snapshot.task.capture.namespace,
+    groups: [],
+    suffixStatus: "WAIT_MORE_INPUT",
+    contextRequest: null,
+    reviewRequests: [],
+    attentionCandidate: null,
+  };
+  await exerciseExecution(
+    v,
+    authorization(v.manifest),
+    firstThenAuthError(() => sse(snapshot, { text: JSON.stringify(response) })),
+  );
+  const r = await read(v, "quantitative/result.json");
+  const appended = r.events.slice(
+    snapshot.generation.precondition_events.length,
+  );
+  assert.equal(appended.length, 1);
+  const expected = product.acceptanceEvent.decisionEventPayload(
+    snapshot.task,
+    product.acceptance.validate(snapshot.prestate, snapshot.task, response),
+  );
+  for (const [key, value] of Object.entries(expected))
+    assert.deepEqual(appended[0][key], value);
+  assert.equal(appended[0].type, "inspected");
+  assert.equal(r.attempts[0].provider_completed, true);
+  assert.equal(r.attempts[0].parser_succeeded, true);
+  assert.equal(r.attempts[0].host_accepted, false);
+  assert.equal(r.attempts[0].host_decision_persisted, true);
+});
+
+test("attempt counters include failures and do not turn cleanup into provider completion", () => {
+  assert.deepEqual(
+    executionCounts([
+      {
+        semantic_score_available: false,
+        attempts: [
+          {
+            attempt_finished: true,
+            provider_completed: false,
+            parser_succeeded: false,
+            host_accepted: false,
+          },
+        ],
+      },
+    ]),
+    {
+      attempts_started: 1,
+      attempts_finished: 1,
+      provider_completed: 0,
+      parser_succeeded: 0,
+      host_accepted: 0,
+      terminal_failures: 1,
+      semantic_score_unavailable: 1,
+    },
+  );
+});
+
+test("phase summaries separate parser work from terminal drain and incomplete provider endings", () => {
+  const phases = [
+    { phase: "network-dispatch", at: 0 },
+    { phase: "upstream-terminal", at: 4, details: { completed: false } },
+    { phase: "provider-terminal", at: 5 },
+    { phase: "parser-start", at: 10 },
+    { phase: "parser-complete", at: 12 },
+  ].map((p) => ({ clockId: "test-clock", details: {}, ...p }));
+  const result = executionPhaseDurations(phases);
+  assert.equal(result.provider_terminal_ms, 4);
+  assert.equal(result.provider_completion_ms, null);
+  assert.equal(result.terminal_to_parser_ms, 7);
+  assert.equal(result.parse_ms, 2);
+  phases.at(-1).clockId = "other-clock";
+  assert.equal(executionPhaseDurations(phases).parse_ms, null);
+});
+
+test("slow diagnostic storage starts after retries and durable host acceptance", async () => {
+  const v = await context();
+  let calls = 0;
+  const diagnosticStarts = [];
+  await exerciseExecution(
+    v,
+    authorization(v.manifest),
+    async () => {
+      calls++;
+      if (calls <= 3) assert.equal(diagnosticStarts.length, 0);
+      return calls <= 2
+        ? httpError(500, "server_error")
+        : calls === 3
+          ? sse(snapshots[0])
+          : httpError(401, "invalid_api_key");
+    },
+    {
+      writeDiagnostic: async (path, value) => {
+        diagnosticStarts.push(performance.now());
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        return exclusive(path, value);
+      },
+    },
+  );
+  const r = await read(v, "quantitative/result.json");
+  assert.equal(r.status, "PASS");
+  assert.equal(r.attempts.length, 3);
+  const acceptedAt = r.attempts[2].phases.find(
+    (p) => p.phase === "host-accepted",
+  ).at;
+  assert(acceptedAt < diagnosticStarts[0]);
+  assert(r.diagnostic_write_ms >= 180);
+  assert(Math.abs(r.latency_ms - r.setup_ms - r.execution_ms) < 0.01);
+  assert(r.attempts.every((a) => a.reservation_write_ms >= 0));
+  assert(r.attempts.every((a) => a.raw_evidence.copy_ms >= 0));
+  assert.equal(r.attempts[2].host_accepted, true);
+  assert.equal(r.budget.filter((b) => b.usage === null).length, 2);
+});
+
+test("host rejection retains a monotonic boundary after a successful parser", async () => {
+  const v = await context();
+  const rejecting = {
+    ...product,
+    acceptance: {
+      ...product.acceptance,
+      validate() {
+        throw Error("independent-host-rejection");
+      },
+    },
+  };
+  await exerciseExecution(
+    { ...v, product: rejecting },
+    authorization(v.manifest),
+    firstThenAuthError(() => sse(snapshots[0])),
+  );
+  const r = await read(v, "quantitative/result.json");
+  assert.equal(r.host_error, "independent-host-rejection");
+  const a = r.attempts[0];
+  assert.equal(a.provider_completed, true);
+  assert.equal(a.parser_succeeded, true);
+  assert.equal(a.host_accepted, false);
+  assert(a.phases.some((p) => p.phase === "host-rejected"));
+  assert(a.phase_latency_ms.host_rejection_ms >= 0);
+});
+
+// Advance orchestration timers while real file/IndexedDB promises remain observable.
+async function waitFor(predicate) {
+  const limit = performance.now() + 2000;
+  while (!predicate() && performance.now() < limit)
+    await new Promise(setImmediate);
+  assert(predicate(), "expected asynchronous boundary was not reached");
+}
+
+test("precondition restoration does not consume the interpretation deadline", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const v = await context();
+  let entered = false,
+    release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  class RestoringStore extends product.storage.EventStore {
+    async append(event, sequence) {
+      if (!entered) {
+        entered = true;
+        await held;
+      }
+      return super.append(event, sequence);
+    }
+  }
+  const running = exerciseExecution(
+    {
+      ...v,
+      product: {
+        ...product,
+        storage: { ...product.storage, EventStore: RestoringStore },
+      },
+    },
+    authorization(v.manifest),
+    firstThenAuthError(() => sse(snapshots[0])),
+  );
+  await waitFor(() => entered);
+  t.mock.timers.tick(8001);
+  release();
+  await running;
+  const r = await read(v, "quantitative/result.json");
+  assert.equal(r.status, "PASS");
+  assert.equal(r.attempts[0].host_accepted, true);
+});
+
+test("deadline during retry backoff retains overall deadline and prior transport failure", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const v = await context();
+  let finished = 0,
+    calls = 0;
+  const observed = {
+    ...product,
+    execution: {
+      ...product.execution,
+      async executeCapturedRequest(...args) {
+        try {
+          return await product.execution.executeCapturedRequest(...args);
+        } finally {
+          finished++;
+        }
+      },
+    },
+  };
+  const running = exerciseExecution(
+    { ...v, product: observed },
+    authorization(v.manifest),
+    async () => {
+      calls++;
+      return httpError(500, "server_error");
+    },
+  );
+  await waitFor(() => finished === 1);
+  t.mock.timers.tick(20);
+  await waitFor(() => finished === 2);
+  t.mock.timers.tick(7980);
+  await running;
+  const r = await read(v, "quantitative/result.json");
+  assert.equal(calls, 2);
+  assert.equal(r.attempts.length, 2);
+  assert.equal(r.budget.length, 2);
+  assert.equal(r.execution_failure.category, "deadline");
+  assert.match(r.execution_failure.reason, /deadline exceeded/);
+  assert.equal(r.operational.failure_category, "deadline");
+  assert.equal(r.attempts[1].execution_failure.category, "transport");
+  assert.equal(r.attempts[1].execution_failure.reason, "model-transient");
+  assert.equal(r.semantic_score_available, false);
 });
