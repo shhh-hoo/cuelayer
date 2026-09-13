@@ -3,7 +3,10 @@ import { resolve } from "node:path";
 import { exclusive, readJSON, sha256 } from "../evidence.mjs";
 import { runCaptured } from "../execute-canary.mjs";
 import { verifyQualification } from "./manifest.mjs";
-import { createQualificationScope } from "./guard.mjs";
+import {
+  createQualificationScope,
+  ELIGIBLE_QUALIFICATION_IDENTITY,
+} from "./guard.mjs";
 import {
   buildCandidatePayload,
   providerResponseForCandidate,
@@ -92,7 +95,12 @@ export async function runQualification(
             "retry_min_ms",
             "retry_factor",
             "sdk_retries",
-          ].map((k) => [k, manifest.runtime_reference[k]]),
+          ].map((k) => [
+            k,
+            (manifest.identity === ELIGIBLE_QUALIFICATION_IDENTITY
+              ? manifest.execution_profile
+              : manifest.runtime_reference)[k],
+          ]),
         ),
       },
       actual_model_allowlist: [candidate.model],
@@ -179,6 +187,7 @@ export async function runQualification(
     rows,
     assessment_rows: assessed,
     budget: scope.discipline.budget.calls,
+    ...(scope.quota ? { quota: scope.quota.snapshot() } : {}),
     summary,
   };
   await exclusive(resolve(out, "qualification-results.json"), results);

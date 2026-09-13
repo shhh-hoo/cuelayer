@@ -1,33 +1,79 @@
 import { sha256 } from "../evidence.mjs";
 const same = (a, b) => sha256(a) === sha256(b);
-export function buildCandidatePayload(productPayload, candidate) {
+// The reviewed screening cohort uses dated snapshots. Aliases and arbitrary
+// configuration supplied in a proposal cannot expand this provider boundary.
+export const ELIGIBLE_MODEL_CONFIGURATIONS = Object.freeze({
+  "gpt-5.4-2026-03-05": "medium",
+  "gpt-5.4-mini-2026-03-17": "medium",
+  "gpt-5.4-nano-2026-03-17": "medium",
+  "gpt-5.2-2025-12-11": "medium",
+  "gpt-5.1-2025-11-13": "medium",
+  "gpt-5-2025-08-07": "medium",
+  "gpt-5-mini-2025-08-07": "medium",
+  "gpt-5-nano-2025-08-07": "medium",
+  "o1-2024-12-17": "medium",
+  "o3-2025-04-16": "medium",
+  "o3-mini-2025-01-31": "medium",
+  "o4-mini-2025-04-16": "medium",
+  "gpt-4.1-2025-04-14": null,
+  "gpt-4o-2024-08-06": null,
+  "gpt-4.1-mini-2025-04-14": null,
+  "gpt-4.1-nano-2025-04-14": null,
+  "gpt-4o-mini-2024-07-18": null,
+});
+export function validateEligibleCandidate(candidate) {
+  if (!Object.hasOwn(ELIGIBLE_MODEL_CONFIGURATIONS, candidate.model))
+    throw Error("unsupported-qualification-screening-model");
+  const effort = ELIGIBLE_MODEL_CONFIGURATIONS[candidate.model];
   if (
     candidate.provider !== "openai" ||
-    Object.keys(candidate.configuration).join(",") !== "reasoning" ||
-    Object.keys(candidate.configuration.reasoning).join(",") !== "effort" ||
-    !["none", "low", "medium", "high", "xhigh", "max"].includes(
-      candidate.configuration.reasoning.effort,
+    !same(
+      candidate.configuration,
+      effort === null ? {} : { reasoning: { effort } },
     )
   )
     throw Error("unsupported-qualification-configuration");
-  if (
-    !["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-luna"].includes(candidate.model) ||
-    (candidate.model === "gpt-6-astra" &&
-      candidate.configuration.reasoning.effort === "none")
-  )
-    throw Error("unsupported-qualification-model-effort");
+}
+export function buildCandidatePayload(productPayload, candidate) {
+  const screening = Object.hasOwn(
+    ELIGIBLE_MODEL_CONFIGURATIONS,
+    candidate.model,
+  );
+  if (screening) validateEligibleCandidate(candidate);
+  else {
+    if (
+      candidate.provider !== "openai" ||
+      Object.keys(candidate.configuration).join(",") !== "reasoning" ||
+      Object.keys(candidate.configuration.reasoning).join(",") !== "effort" ||
+      !["none", "low", "medium", "high", "xhigh", "max"].includes(
+        candidate.configuration.reasoning.effort,
+      )
+    )
+      throw Error("unsupported-qualification-configuration");
+    if (
+      !["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-luna"].includes(
+        candidate.model,
+      ) ||
+      (candidate.model === "gpt-6-astra" &&
+        candidate.configuration.reasoning.effort === "none")
+    )
+      throw Error("unsupported-qualification-model-effort");
+  }
   if (
     candidate.service_tier !== "standard" ||
     candidate.max_output_tokens !== 8192
   )
     throw Error("unsupported-qualification-service-policy");
-  return {
+  const payload = {
     ...structuredClone(productPayload),
     model: candidate.model,
-    reasoning: structuredClone(candidate.configuration.reasoning),
     max_output_tokens: candidate.max_output_tokens,
     service_tier: "default",
   };
+  if (candidate.configuration.reasoning)
+    payload.reasoning = structuredClone(candidate.configuration.reasoning);
+  else delete payload.reasoning;
+  return payload;
 }
 export async function providerResponseForCandidate(
   payload,

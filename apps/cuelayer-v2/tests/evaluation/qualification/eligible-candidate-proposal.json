@@ -1,0 +1,746 @@
+{
+  "identity": "cuelayer-v2-eligible-model-screening-proposal-1",
+  "review_status": "REVIEWED",
+  "paid_enabled": false,
+  "authorization_required": true,
+  "candidate_policy": "Preserve the 17 user-requested models in the catalog. Freeze exact dated snapshots and only the candidates explicitly selected in this proposal. No substitutions; medium reasoning for reasoning models, no reasoning parameter for nonreasoning models. Current documented complimentary eligibility is required separately from model access.",
+  "documentation_checked_on": "2026-09-13",
+  "candidates": [
+    {
+      "candidate_id": "gpt-5.4-medium",
+      "provider": "openai",
+      "requested_model": "gpt-5.4",
+      "model": "gpt-5.4-2026-03-05",
+      "configuration": {
+        "reasoning": {
+          "effort": "medium"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 1050000,
+      "max_input_tokens": null,
+      "prices_usd_per_million": {
+        "input": 2.5,
+        "output": 15,
+        "cached_input": 0.25
+      },
+      "long_context_pricing": {
+        "threshold_input_tokens": 272000,
+        "input_multiplier": 2,
+        "output_multiplier": 1.5
+      },
+      "quota_group": "large",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": [],
+        "details": null
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/gpt-5.4",
+        "https://developers.openai.com/api/docs/models/gpt-5.4.md",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/pricing.md"
+      ]
+    },
+    {
+      "candidate_id": "gpt-5.2-medium",
+      "provider": "openai",
+      "requested_model": "gpt-5.2",
+      "model": "gpt-5.2-2025-12-11",
+      "configuration": {
+        "reasoning": {
+          "effort": "medium"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 400000,
+      "max_input_tokens": null,
+      "prices_usd_per_million": {
+        "input": 1.75,
+        "output": 14,
+        "cached_input": 0.175
+      },
+      "quota_group": "large",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": [],
+        "details": null
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/gpt-5.2",
+        "https://developers.openai.com/api/docs/models/gpt-5.2.md",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/pricing.md"
+      ]
+    },
+    {
+      "candidate_id": "gpt-5.1-medium",
+      "provider": "openai",
+      "requested_model": "gpt-5.1",
+      "model": "gpt-5.1-2025-11-13",
+      "configuration": {
+        "reasoning": {
+          "effort": "medium"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 400000,
+      "max_input_tokens": null,
+      "prices_usd_per_million": {
+        "input": 1.25,
+        "output": 10,
+        "cached_input": 0.125
+      },
+      "quota_group": "large",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": [
+        "none",
+        "low",
+        "medium",
+        "high"
+      ],
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": [],
+        "details": null
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/gpt-5.1",
+        "https://developers.openai.com/api/docs/models/gpt-5.1.md",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/pricing.md"
+      ]
+    },
+    {
+      "candidate_id": "gpt-5-medium",
+      "provider": "openai",
+      "requested_model": "gpt-5",
+      "model": "gpt-5-2025-08-07",
+      "configuration": {
+        "reasoning": {
+          "effort": "medium"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 400000,
+      "max_input_tokens": 272000,
+      "prices_usd_per_million": {
+        "input": 1.25,
+        "output": 10,
+        "cached_input": 0.125
+      },
+      "quota_group": "large",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-12-11",
+        "snapshot_exceptions": [],
+        "details": {
+          "announcement_date": "2026-06-11",
+          "shutdown_date": "2026-12-11",
+          "affected_documented_snapshot": "gpt-5-2025-08-07",
+          "source_url": "https://developers.openai.com/api/docs/deprecations",
+          "alias_scope_note": "Deprecation table names the dated snapshot; the current model page identifies it as the default snapshot for gpt-5. No replacement is substituted in this catalog."
+        }
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/gpt-5",
+        "https://developers.openai.com/api/docs/models/gpt-5.md",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/pricing.md",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/deprecations.md"
+      ]
+    },
+    {
+      "candidate_id": "gpt-4.1-default",
+      "provider": "openai",
+      "requested_model": "gpt-4.1",
+      "model": "gpt-4.1-2025-04-14",
+      "configuration": {},
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 1047576,
+      "max_input_tokens": null,
+      "prices_usd_per_million": {
+        "input": 2,
+        "output": 8,
+        "cached_input": 0.5
+      },
+      "quota_group": "large",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": null,
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": []
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/gpt-4.1"
+      ]
+    },
+    {
+      "candidate_id": "gpt-4o-default",
+      "provider": "openai",
+      "requested_model": "gpt-4o",
+      "model": "gpt-4o-2024-08-06",
+      "configuration": {},
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 128000,
+      "max_input_tokens": null,
+      "prices_usd_per_million": {
+        "input": 2.5,
+        "output": 10,
+        "cached_input": 1.25
+      },
+      "quota_group": "large",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": null,
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": [
+          {
+            "model_id": "gpt-4o-2024-05-13",
+            "shutdown_date": "2026-10-23",
+            "structured_outputs": false,
+            "note": "Structured Outputs guide requires gpt-4o-2024-08-06 or later; do not use this legacy snapshot for the frozen strict-schema comparison."
+          }
+        ]
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/gpt-4o",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/guides/structured-outputs"
+      ]
+    },
+    {
+      "candidate_id": "o1-medium",
+      "provider": "openai",
+      "requested_model": "o1",
+      "model": "o1-2024-12-17",
+      "configuration": {
+        "reasoning": {
+          "effort": "medium"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 200000,
+      "max_input_tokens": null,
+      "prices_usd_per_million": {
+        "input": 15,
+        "output": 60,
+        "cached_input": 7.5
+      },
+      "quota_group": "large",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": null,
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-10-23",
+        "snapshot_exceptions": []
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/o1",
+        "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.2",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/models/o1.md"
+      ]
+    },
+    {
+      "candidate_id": "o3-medium",
+      "provider": "openai",
+      "requested_model": "o3",
+      "model": "o3-2025-04-16",
+      "configuration": {
+        "reasoning": {
+          "effort": "medium"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 200000,
+      "max_input_tokens": null,
+      "prices_usd_per_million": {
+        "input": 2,
+        "output": 8,
+        "cached_input": 0.5
+      },
+      "quota_group": "large",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-12-11",
+        "snapshot_exceptions": []
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/o3",
+        "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.2",
+        "https://developers.openai.com/api/docs/deprecations"
+      ]
+    },
+    {
+      "candidate_id": "gpt-5.4-mini-medium",
+      "provider": "openai",
+      "requested_model": "gpt-5.4-mini",
+      "model": "gpt-5.4-mini-2026-03-17",
+      "configuration": {
+        "reasoning": {
+          "effort": "medium"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 400000,
+      "max_input_tokens": 272000,
+      "prices_usd_per_million": {
+        "input": 0.75,
+        "output": 4.5,
+        "cached_input": 0.075
+      },
+      "quota_group": "small",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": [],
+        "details": null
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/gpt-5.4-mini",
+        "https://developers.openai.com/api/docs/models/gpt-5.4-mini.md",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/pricing.md"
+      ]
+    },
+    {
+      "candidate_id": "gpt-5.4-nano-medium",
+      "provider": "openai",
+      "requested_model": "gpt-5.4-nano",
+      "model": "gpt-5.4-nano-2026-03-17",
+      "configuration": {
+        "reasoning": {
+          "effort": "medium"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 400000,
+      "max_input_tokens": 272000,
+      "prices_usd_per_million": {
+        "input": 0.2,
+        "output": 1.25,
+        "cached_input": 0.02
+      },
+      "quota_group": "small",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": [],
+        "details": null
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/gpt-5.4-nano",
+        "https://developers.openai.com/api/docs/models/gpt-5.4-nano.md",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/pricing.md"
+      ]
+    },
+    {
+      "candidate_id": "gpt-5-mini-medium",
+      "provider": "openai",
+      "requested_model": "gpt-5-mini",
+      "model": "gpt-5-mini-2025-08-07",
+      "configuration": {
+        "reasoning": {
+          "effort": "medium"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 400000,
+      "max_input_tokens": 272000,
+      "prices_usd_per_million": {
+        "input": 0.25,
+        "output": 2,
+        "cached_input": 0.025
+      },
+      "quota_group": "small",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-12-11",
+        "snapshot_exceptions": []
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/gpt-5-mini",
+        "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/models/gpt-5-mini.md"
+      ]
+    },
+    {
+      "candidate_id": "gpt-5-nano-medium",
+      "provider": "openai",
+      "requested_model": "gpt-5-nano",
+      "model": "gpt-5-nano-2025-08-07",
+      "configuration": {
+        "reasoning": {
+          "effort": "medium"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 400000,
+      "max_input_tokens": 272000,
+      "prices_usd_per_million": {
+        "input": 0.05,
+        "output": 0.4,
+        "cached_input": 0.005
+      },
+      "quota_group": "small",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-12-11",
+        "snapshot_exceptions": []
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/gpt-5-nano",
+        "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/models/gpt-5-nano.md"
+      ]
+    },
+    {
+      "candidate_id": "gpt-4.1-mini-default",
+      "provider": "openai",
+      "requested_model": "gpt-4.1-mini",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "configuration": {},
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 1047576,
+      "max_input_tokens": null,
+      "prices_usd_per_million": {
+        "input": 0.4,
+        "output": 1.6,
+        "cached_input": 0.1
+      },
+      "quota_group": "small",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": null,
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": []
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/gpt-4.1-mini"
+      ]
+    },
+    {
+      "candidate_id": "gpt-4.1-nano-default",
+      "provider": "openai",
+      "requested_model": "gpt-4.1-nano",
+      "model": "gpt-4.1-nano-2025-04-14",
+      "configuration": {},
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 1047576,
+      "max_input_tokens": null,
+      "prices_usd_per_million": {
+        "input": 0.1,
+        "output": 0.4,
+        "cached_input": 0.025
+      },
+      "quota_group": "small",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": null,
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-10-23",
+        "snapshot_exceptions": []
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/gpt-4.1-nano",
+        "https://developers.openai.com/api/docs/deprecations"
+      ]
+    },
+    {
+      "candidate_id": "gpt-4o-mini-default",
+      "provider": "openai",
+      "requested_model": "gpt-4o-mini",
+      "model": "gpt-4o-mini-2024-07-18",
+      "configuration": {},
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 128000,
+      "max_input_tokens": null,
+      "prices_usd_per_million": {
+        "input": 0.15,
+        "output": 0.6,
+        "cached_input": 0.075
+      },
+      "quota_group": "small",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": null,
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": []
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/gpt-4o-mini"
+      ]
+    },
+    {
+      "candidate_id": "o3-mini-medium",
+      "provider": "openai",
+      "requested_model": "o3-mini",
+      "model": "o3-mini-2025-01-31",
+      "configuration": {
+        "reasoning": {
+          "effort": "medium"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 200000,
+      "max_input_tokens": null,
+      "prices_usd_per_million": {
+        "input": 1.1,
+        "output": 4.4,
+        "cached_input": 0.55
+      },
+      "quota_group": "unconfirmed",
+      "incentive_eligibility": "UNCONFIRMED",
+      "documented_reasoning_efforts": null,
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-10-23",
+        "snapshot_exceptions": []
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/o3-mini",
+        "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.2",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/models/o3-mini.md"
+      ]
+    },
+    {
+      "candidate_id": "o4-mini-medium",
+      "provider": "openai",
+      "requested_model": "o4-mini",
+      "model": "o4-mini-2025-04-16",
+      "configuration": {
+        "reasoning": {
+          "effort": "medium"
+        }
+      },
+      "service_tier": "standard",
+      "max_output_tokens": 8192,
+      "context_window_tokens": 200000,
+      "max_input_tokens": null,
+      "prices_usd_per_million": {
+        "input": 1.1,
+        "output": 4.4,
+        "cached_input": 0.275
+      },
+      "quota_group": "small",
+      "incentive_eligibility": "DOCUMENTED",
+      "documented_reasoning_efforts": null,
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-10-23",
+        "snapshot_exceptions": []
+      },
+      "evidence": [
+        "https://developers.openai.com/api/docs/models/o4-mini",
+        "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.2",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/models/o4-mini.md"
+      ]
+    }
+  ],
+  "excluded_candidates": [
+    {
+      "model": "claude-fable-5-1 / claude-sonnet-5 / gemini-3.8-flash",
+      "reason": "Deferred by explicit user choice to prepare OpenAI-only first. No Anthropic or Google credentials are required for this manifest."
+    }
+  ],
+  "common_protocol": {
+    "semantic_input": "Identical product-generated source/context, policy text and semantic output schema for every candidate. The oracle is never sent to the model.",
+    "transport": "The existing product OpenAI SDK and NDJSON executor are reused. Only model, reasoning effort and output cap are replaced with the frozen candidate configuration; prompt, source/context and strict semantic schema remain byte-equivalent.",
+    "tools": [],
+    "conversation": "Independent single-turn requests; no hidden prior interaction or provider conversation.",
+    "cache": "No explicit prompt-cache write requests, prewarming or discarded warmups. Report observed cache tokens and first schema use separately; provider-injected format instructions and automatic grammar caching are observable envelope differences.",
+    "sampling": "Use the explicit supported OpenAI reasoning effort. No temperature or other sampling override.",
+    "service_tier": "Explicit Responses service_tier=default for standard pricing; auto/project-default routing is forbidden. Record returned tier; unexpected tier stops execution and absent tier retains full cost reservation.",
+    "candidate_configuration": "Explicit medium for reasoning models; reasoning omitted for nonreasoning models. Exact dated snapshots. Other request fields unchanged.",
+    "retries": "Zero transport and SDK retries for screening; every attempted request remains evidence.",
+    "request_equivalence": "Same product prompt, source snapshot, accepted context, response schema, parser and oracle; only explicit candidate model/reasoning/output/service-tier fields differ. Every raw failure is retained."
+  },
+  "repetitions": 1,
+  "order": {
+    "seed": "micro58-order-1",
+    "strategy": "Interleave candidates within each case, rotate first candidate by case/repetition; every planned row is emitted even if later stopped."
+  },
+  "runtime_reference": {
+    "provider_deadline_ms": 6000,
+    "host_deadline_ms": 8000,
+    "transport_retries": 2,
+    "retry_min_ms": 20,
+    "retry_factor": 2,
+    "sdk_retries": 0
+  },
+  "observation_profile": {
+    "provider_deadline_ms": 30000,
+    "host_deadline_ms": 35000,
+    "concurrency": 1,
+    "purpose": "Bounded qualification observation window, not a new product freshness SLO. Retain whether each result crossed the unchanged 6s/8s runtime reference. Values beyond the observation window remain censored, not zero-latency or semantic failures.",
+    "freshness_thresholds": "UNSELECTED_PENDING_RESULTS",
+    "retry_policy": "Zero transport and SDK retries. One provider attempt per trial; retain failures."
+  },
+  "proposed_limits": {
+    "max_trials": 102,
+    "max_provider_attempts": 102,
+    "max_input_tokens_per_attempt": 8192,
+    "max_output_tokens_per_attempt": 8192,
+    "max_total_input_tokens": 835584,
+    "max_total_output_tokens": 835584,
+    "max_cost_usd": 10
+  },
+  "selection_rule": "Screening only: report per-case semantic correctness and accepted complete-response latency. Retain every failure. Repeat promising currently-supported candidates on all 26 frozen cases × 3 before selecting a replacement. One repetition and six cases do not support p95 or production claims.",
+  "required_metrics": [
+    "semantic_disposition_accuracy",
+    "false_terminal_no_change_rate",
+    "reference_resolution_accuracy",
+    "knowledge_mutation_correctness",
+    "field_provenance_correctness",
+    "structured_output_validity",
+    "host_acceptance_reason",
+    "end_state_correctness",
+    "first_answer_text_ms",
+    "provider_complete_ms",
+    "host_accepted_ms",
+    "timeout_failure_rate",
+    "latency_variance",
+    "latency_p50",
+    "cache_state",
+    "tokens",
+    "cost_usd"
+  ],
+  "freeze_requirements": [
+    "Reviewed exact candidate subset and six-case selection",
+    "Original #57 product SHA f82a97a987a71f0a4ef165827bf2870bef10dcca and clean evaluator SHA",
+    "Unchanged reviewed 26-case corpus/oracle, selected subset explicitly enumerated",
+    "Read-only exact model availability and exact payload-bound input-token counts without test-only markers",
+    "Separate manifest-bound authorization; enrolled project, fresh remaining organization allowance and other API traffic paused",
+    "No automatic daily reset, provider/model substitution, settings changes, product-model change or paid overages"
+  ],
+  "paid_execution_requirements": [
+    "Separate explicit approval of this exact manifest SHA-256 and limits SHA-256",
+    "All required API credentials preflight before dispatch; active unexpired manifest, clean bound code and exact request bytes"
+  ],
+  "scope": "Supplement to issue #58: the 17 models requested on 2026-09-13. One repetition is preliminary screening, not final qualification. Six matched cases preserve complete/incomplete, unit presence/absence and Stage handoff contrasts.",
+  "checked_at": "2026-09-13T11:52:19.629Z",
+  "selected_case_ids": [
+    "unfinished-proposition",
+    "complete-proposition",
+    "quantity-explicit-fields",
+    "quantity-unit-absent",
+    "source-review-future-promise",
+    "source-review-complete-assertion"
+  ],
+  "execution_profile": {
+    "transport_retries": 0,
+    "retry_min_ms": 20,
+    "retry_factor": 2,
+    "sdk_retries": 0
+  },
+  "complimentary_policy": {
+    "utc_reset": "00:00",
+    "daily_caps": {
+      "large": 250000,
+      "small": 2500000
+    },
+    "run_caps": {
+      "large": 200000,
+      "small": 1000000
+    },
+    "input_token_margin": 512,
+    "terms_url": "https://help.openai.com/en/articles/10306912-sharing-feedback-evals-and-api-data-with-openai",
+    "eligibility_caveat": "o3-mini appears in the user account banner but is absent from the current Help Center offer list; free-only execution requires resolution. Other models are documented, enrollment and remaining organization allowance must still be checked.",
+    "no_settings_changes": true,
+    "no_paid_overages_authorized": true
+  },
+  "runtime_reference_note": "The 6/8-second product policy is the historical reference from the original 312-trial comparison. Screening uses the same #57 product commit and unchanged 30/35-second observation policy; zero-retry execution_profile is authoritative.",
+  "scope_limitations": [
+    "Only six cases in three contrast pairs are exercised; reference binding, correction identity, explicit relations, field corrections and false-terminal recovery still require the broader26-case comparison.",
+    "Numerical latency summaries are descriptive; do not infer a production tail or change the selected model from one screening repetition."
+  ]
+}
