@@ -274,3 +274,31 @@ it("keeps WAIT inspection and missing visible output out of successful acceptanc
   expect(report.metrics.Live.browserToAcceptedMs.unavailable).toBe(1);
   expect(report.metrics.Live.browserToDomMs.unavailable).toBe(1);
 });
+
+it.each([{ groups: {} }, { operations: "bad" }, { results: [null] }])(
+  "reports schema-invalid provider output %j without crashing or dropping the attempt",
+  (output) => {
+    const report = analyze([
+      span("model-request", 0),
+      span("model-complete", 100, {
+        completed: true,
+        output: JSON.stringify(output),
+      }),
+      span("model-parser-failed", 101),
+      span("model-failure", 101, { reason: "model-schema-invalid" }),
+      span("model-attempt-finished", 102),
+    ]).execution;
+    expect(report.counts).toMatchObject({
+      instrumentedAttempts: 1,
+      providerCompleted: 1,
+      parserSucceeded: 0,
+      failed: 1,
+    });
+    expect(report.attempts[0]).toMatchObject({
+      hostAccepted: false,
+      visibleDomObserved: false,
+      failure: "model-schema-invalid",
+    });
+    expect(report.metrics.Live.browserToAcceptedMs.unavailable).toBe(1);
+  },
+);

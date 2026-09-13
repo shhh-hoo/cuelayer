@@ -71,12 +71,15 @@ export function executionPhases(spans) {
       } catch {
         /* Missing output is not an answer. */
       }
-      const operations =
-        proposal?.operations ??
-        proposal?.groups?.flatMap((g) => g.operations ?? []) ??
-        proposal?.results?.flatMap((r) => r.operations ?? []) ??
-        [];
-      const cue = operations.some((o) => o.type === "cue" && o.value);
+      const array = (value) => (Array.isArray(value) ? value : []);
+      const operations = hostAccepted
+        ? [
+            ...array(proposal?.operations),
+            ...array(proposal?.groups).flatMap((g) => array(g?.operations)),
+            ...array(proposal?.results).flatMap((r) => array(r?.operations)),
+          ]
+        : [];
+      const cue = operations.some((o) => o?.type === "cue" && o.value);
       const dom = hostAccepted
         ? spans.find(
             (s) =>
