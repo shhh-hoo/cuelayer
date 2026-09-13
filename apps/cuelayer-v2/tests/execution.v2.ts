@@ -115,19 +115,19 @@ function execute(
   });
 }
 
-it("pins the source-review and declarative Stage profile", async () => {
+it("pins the source-review and declarative Stage validation profile", async () => {
   const formats = [];
   for (const version of ["v2-live-request-5", "v2-stage-request-6"])
     formats.push(
       (await liveRequest({ version } as ProviderRequest)).text.format,
     );
-  // #57 intentionally adds source-classification and non-consuming Live review;
-  // transport/model/deadline equivalence remains separately checked below.
+  // #59 selects the measured validation model/tier and versioned deadlines;
+  // semantic policies and strict formats remain unchanged.
   const digest = createHash("sha256")
     .update(JSON.stringify({ modelProfile, livePolicy, stagePolicy, formats }))
     .digest("hex");
   expect(digest).toBe(
-    "756280a88a10a9c6d9b331b0d58ad1472404ce34e9137b2965d8a06a0c60fe7d",
+    "9f3b79e150471895d6fb19fc270e23619c8344c56a2bc5027f224f36df27ac2c",
   );
 });
 
@@ -328,7 +328,7 @@ it("uses the original pre-body provider deadline and reports timeout without pro
   vi.useFakeTimers();
   const parent = new AbortController(),
     deadline = createProviderDeadline(parent.signal);
-  await vi.advanceTimersByTimeAsync(5000);
+  await vi.advanceTimersByTimeAsync(11000);
   const observations: ExecutionObservation[] = [],
     task = captureLive(input(), "execution", "timeout", 0);
   const pending = executeCapturedRequest(capturedRequest(task), {

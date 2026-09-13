@@ -4,20 +4,23 @@ import { liveProviderDecisionSchema, wireDefinitions } from "../src/live-wire";
 import { bytes, type LiveRequest } from "../src/projection";
 import type { StageRequest } from "../src/stage";
 import { stageDeclarationReviewSchema } from "../src/stage-wire";
+import { latencyPolicy } from "../src/latency-policy";
 import {
   executionObserver,
   type ObservationOptions,
 } from "../src/execution-contract";
 export const modelProfile = {
   provider: "OpenAI",
-  model: "gpt-5.6-luna",
-  reasoning: "none" as const,
-  stageReasoning: "none" as const,
+  model: "gpt-6-astra",
+  reasoning: "medium" as const,
+  stageReasoning: "medium" as const,
+  serviceTier: "default" as const,
   structuredOutput:
     "json_schema (strict:true) + v2-live-decision-5 / v2-stage-declarations-2 validation",
   maxOutputTokens: 8192,
-  providerTimeoutMs: 6000,
-  clientTimeoutMs: 8000,
+  // Compatibility fields for existing config consumers; policy owns timing.
+  providerTimeoutMs: latencyPolicy.lanes.Live.providerHardMs,
+  clientTimeoutMs: latencyPolicy.lanes.Live.hostTotalMs,
   sdkRetries: 0,
   transportRetries: 2,
   retryMinMs: 20,
@@ -69,6 +72,7 @@ export async function liveRequest(
       });
   return {
     model,
+    service_tier: modelProfile.serviceTier,
     store: false,
     stream: true as const,
     reasoning: {
