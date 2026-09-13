@@ -3,7 +3,8 @@
   "git": {
     "deploymentEnabled": {
       "fix/cuelayer-v2-incremental-semantic-frontier": false,
-      "fix/cuelayer-v2-real-model-contract": false
+      "fix/cuelayer-v2-real-model-contract": false,
+      "fix/cuelayer-v2-text-delivery": false
     }
   },
   "functions": {

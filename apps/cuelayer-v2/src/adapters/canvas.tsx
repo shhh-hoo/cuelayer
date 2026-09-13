@@ -322,6 +322,9 @@ export function Board({
         fits = bounds.w + 24 <= size.w && bounds.h + 24 <= size.h;
       if (!fits) reason = "This frame exceeds the supported readable area.";
       else {
+        // Our resize observation can precede tldraw's throttled viewport update.
+        // Frame against the current container, not its cached desktop bounds.
+        editor.updateViewportScreenBounds(editor.getContainer());
         trace.mark("camera-command", {
           revision: state.revision,
           mode: frame.mode,

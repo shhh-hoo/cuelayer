@@ -174,6 +174,73 @@ test("a value-dependent outside the Live capture disappears from the DOM immedia
   await expect(page.locator(`[data-unit="${ids.q}"]`)).toHaveCount(0);
 });
 
+test("a wrapped teaching invitation reserves its full height above teacher text", async ({
+  page,
+}) => {
+  let providerCalls = 0;
+  await page.route("**/api/v2/live", (route) => {
+    providerCalls++;
+    return route.abort();
+  });
+  await page.goto(`/?services=real&session=${crypto.randomUUID()}`);
+  await page.waitForFunction(() => Boolean(window.v2?.handle.editor));
+  const invitation =
+    "Compare how the partial pressures of two components change when their mole fractions stay fixed but total pressure doubles. Discuss with a partner.";
+  await page.evaluate(async (invitation) => {
+    const { admit, establish } = (await import(
+      "/tests/frontier-fixtures.ts" as string
+    )) as typeof import("../frontier-fixtures");
+    const s = window.v2.session;
+    s.pause();
+    const text = `Pressure is 200 kPa. ${invitation}`;
+    await admit(s, text);
+    const task = s.capture("Live"),
+      decision = establish(task, text);
+    const put = decision.groups[0].operations.find(
+      (operation) => operation.type === "put",
+    )!;
+    decision.groups[0].operations.push({
+      type: "cue",
+      value: { text: invitation, targets: [put.id] },
+      basis: put.basis,
+    });
+    await s.accept(task, decision);
+  }, invitation);
+  const cue = page.getByTestId("teaching-cue");
+  await expect(cue).toContainText(invitation);
+  for (const viewport of [
+    { width: 1280, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const cue = document
+            .querySelector(".teaching-cue")!
+            .getBoundingClientRect();
+          const region = document
+            .querySelector(".cue-region")!
+            .getBoundingClientRect();
+          const composer = document
+            .querySelector(".text-entry")!
+            .getBoundingClientRect();
+          return (
+            cue.bottom <= region.bottom + 1 &&
+            region.bottom <= composer.top + 1 &&
+            cue.bottom <= composer.top + 1
+          );
+        }),
+      )
+      .toBe(true);
+    await expect(cue).toBeInViewport({ ratio: 1 });
+    await expect(
+      page.getByRole("textbox", { name: "Teacher text" }),
+    ).toBeInViewport();
+  }
+  expect(providerCalls).toBe(0);
+});
+
 test("Cue displays independently of attention, survives raw source, and never revives after correction or refresh", async ({
   page,
 }) => {

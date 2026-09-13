@@ -44,7 +44,7 @@ import {
   affectedReviews,
 } from "./acceptance";
 
-export const STAGE_WIRE_VERSION = "v2-stage-review-3";
+export const STAGE_WIRE_VERSION = "v2-stage-review-4";
 export type ReviewConcern = {
   id: string;
   version: number;
@@ -88,6 +88,7 @@ export const stageReviewSchema = z
               resolution: z
                 .object({
                   targets: z.array(z.string()).min(1).max(8),
+                  referents: z.array(z.string()).max(8),
                   basis: z.array(wireBasisSchema).min(1).max(24),
                 })
                 .strict()
@@ -109,7 +110,7 @@ export const stageReviewSchema = z
   .strict();
 export type StageReview = z.infer<typeof stageReviewSchema>;
 export type StageRequest = {
-  version: "v2-stage-request-3";
+  version: "v2-stage-request-4";
   scope: string;
   items: {
     id: string;
@@ -300,7 +301,7 @@ export function captureStage(
     if (replay.reviewInspections[key]) continue;
     const id = `r0`;
     const request: StageRequest = {
-      version: "v2-stage-request-3",
+      version: "v2-stage-request-4",
       scope: nonce,
       items: [
         {
@@ -442,12 +443,48 @@ export function validateStage(replay: Replay, task: Task, raw: unknown) {
     if (result.outcome === "RESOLVED") {
       if (item!.kind === "OBLIGATION") {
         requireThat(result.resolution, "missing-resolution-binding");
-        resolutions.push(
-          validateResolution(replay, task, next, {
-            obligation: result.item,
-            ...result.resolution!,
-          }),
+        const resolution = validateResolution(replay, task, next, {
+          obligation: result.item,
+          ...result.resolution!,
+        });
+        const referents = result.resolution!.referents.map((alias) =>
+          aliasLookup(c.units, alias),
         );
+        requireThat(
+          new Set(referents).size === referents.length,
+          "duplicate-stage-referent",
+        );
+        // The model selects antecedents. The host checks the accepted graph, never
+        // guesses a referent from text, Core membership or the only visible unit.
+        const closures = resolution.targets.map((target) => {
+          const reachable = new Set<string>();
+          const pending = [target];
+          while (pending.length) {
+            const id = pending.pop()!;
+            if (reachable.has(id) || !isCurrent(next, id)) continue;
+            reachable.add(id);
+            pending.push(...next.units[id].requires);
+          }
+          if (referents.length && !task.state.units[target])
+            requireThat(
+              referents.some((id) => reachable.has(id)),
+              "unbound-stage-referent",
+            );
+          return reachable;
+        });
+        for (const id of referents) {
+          requireThat(
+            task.state.units[id] &&
+              Object.hasOwn(task.dependencies, `unit/${id}`) &&
+              isCurrent(next, id),
+            "invalid-stage-referent",
+          );
+          requireThat(
+            closures.some((reachable) => reachable.has(id)),
+            "unbound-stage-referent",
+          );
+        }
+        resolutions.push({ ...resolution, referents });
       } else {
         requireThat(!result.resolution, "unexpected-resolution-binding");
         requireThat(

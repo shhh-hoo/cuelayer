@@ -83,6 +83,122 @@ function stream(raw: unknown) {
     .join("");
 }
 
+test("teacher text is admitted while inference is pending, then reaches the learner DOM and survives reload (mock model)", async ({
+  page,
+}) => {
+  let releaseModel!: () => void;
+  const modelPending = new Promise<void>((resolve) => {
+    releaseModel = resolve;
+  });
+  const tasks: LiveRequest[] = [];
+  let speechCalls = 0;
+  await page.route("**/api/v2/speech-token", (route) => {
+    speechCalls++;
+    return route.abort();
+  });
+  await page.route("**/api/v2/live", async (route) => {
+    const task = route.request().postDataJSON() as LiveRequest;
+    tasks.push(task);
+    if (tasks.length === 1) await modelPending;
+    await route.fulfill({
+      contentType: "application/x-ndjson",
+      body: stream(await proposed(task)),
+    });
+  });
+  await page.goto(`/?services=real&session=${crypto.randomUUID()}`);
+  const input = page.getByRole("textbox", { name: "Teacher text" });
+  const submit = page.getByRole("button", { name: "Add to lesson" });
+  try {
+    await expect(submit).toBeDisabled();
+    await input.fill("   ");
+    await expect(submit).toBeDisabled();
+    await input.fill(text);
+    await submit.click();
+    await expect(input).toHaveValue("");
+    await expect.poll(() => tasks.length).toBe(1);
+    expect(await page.evaluate(() => window.v2.session.state.revision)).toBe(0);
+    await input.fill("The same relationship still holds.");
+    await submit.click();
+    await expect(input).toHaveValue("");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          window.v2.session.replay.evidence.map((e) => e.text),
+        ),
+      )
+      .toEqual([text, "The same relationship still holds."]);
+  } finally {
+    releaseModel();
+  }
+  await expect(page.locator("[data-unit] .katex").first()).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.v2.session.window.consumedEvidenceIds.length),
+    )
+    .toBe(2);
+  const state = await page.evaluate(() => window.v2.session.state);
+  await page.screenshot({
+    path: "../../.cuelayer/v2/teacher-text-desktop.png",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(input).toBeInViewport();
+  await expect(submit).toBeInViewport();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await expect(page.locator("[data-unit] .katex").first()).toBeInViewport();
+  await page.screenshot({ path: "../../.cuelayer/v2/teacher-text-narrow.png" });
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.v2));
+  expect(await page.evaluate(() => window.v2.session.state)).toEqual(state);
+  await expect(page.locator("[data-unit] .katex").first()).toBeVisible();
+  await expect(page.locator("[data-unit] .katex").first()).toBeInViewport();
+  expect(speechCalls).toBe(0);
+});
+
+test("teacher text keeps an unadmitted passage and respects saved lesson boundaries", async ({
+  page,
+}) => {
+  await page.goto(`/?services=real&session=${crypto.randomUUID()}`);
+  const input = page.getByRole("textbox", { name: "Teacher text" });
+  const submit = page.getByRole("button", { name: "Add to lesson" });
+  await page.waitForFunction(() => Boolean(window.v2));
+  await page.evaluate(() => {
+    window.v2.inject = async () => {
+      throw new Error("test-admission-rejected");
+    };
+  });
+  await input.fill(text);
+  await submit.click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Your text is still here",
+  );
+  await expect(input).toHaveValue(text);
+  expect(await page.evaluate(() => window.v2.session.replay.evidence)).toEqual(
+    [],
+  );
+  await page.evaluate(() => {
+    Object.defineProperty(window.v2.session, "readOnly", {
+      value: true,
+      configurable: true,
+    });
+    window.v2.refresh();
+  });
+  await expect(input).toBeDisabled();
+  await expect(submit).toBeDisabled();
+  await expect(page.getByRole("status")).toContainText("read-only");
+  await page.evaluate(() => {
+    Object.defineProperty(window.v2.session, "readOnly", { value: false });
+    (window.v2.session as any).value.captureClosed = true;
+    window.v2.refresh();
+  });
+  await expect(input).toBeDisabled();
+  await expect(submit).toBeDisabled();
+  await expect(page.getByRole("status")).toContainText("lesson has ended");
+});
+
 test("real route: official microphone/ASR adapters, concurrent finals, complete model proposal, visible DOM and reload (mock services)", async ({
   page,
 }) => {

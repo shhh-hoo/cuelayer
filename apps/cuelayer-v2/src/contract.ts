@@ -340,6 +340,9 @@ export type WriteScope = {
 export type Resolution = {
   obligation: string;
   targets: string[];
+  // Stage v4 explicitly records the model-selected accepted antecedents.
+  // Older accepted events and Live resolutions remain replay-compatible.
+  referents?: string[];
   basis: Grounding[];
 };
 export type Replay = {

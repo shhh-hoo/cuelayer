@@ -96,6 +96,10 @@ function App() {
     [failed, setFailed] = useState(false),
     [mode, setMode] = useState<ProjectionIntent["mode"] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lessonText, setLessonText] = useState("");
+  const [addingText, setAddingText] = useState(false);
+  const [textError, setTextError] = useState<string | null>(null);
+  const [textAdded, setTextAdded] = useState(false);
   const revision = session.state.revision;
   const state = useMemo(() => session.state, [revision]);
   useEffect(() => session.subscribe(() => setTick((t) => t + 1)), []);
@@ -132,6 +136,25 @@ function App() {
   }, [state, intentKey]);
   const overlay = params.get("mode") === "overlay",
     w = session.window;
+  const textUnavailable = session.readOnly || session.replay.captureClosed;
+  const addText = async () => {
+    if (!lessonText.trim() || addingText || textUnavailable) return;
+    setAddingText(true);
+    setTextError(null);
+    setTextAdded(false);
+    try {
+      // Admission persists the source; interpretation continues independently.
+      await api.inject(lessonText);
+      setLessonText("");
+      setTextAdded(true);
+    } catch (e) {
+      setTextError(
+        `Could not add this passage. Your text is still here. ${String(e)}`,
+      );
+    } finally {
+      setAddingText(false);
+    }
+  };
   const run = async () => {
     setRunning(true);
     setError(null);
@@ -167,7 +190,9 @@ function App() {
     URL.revokeObjectURL(url);
   };
   return (
-    <main className={overlay ? "app overlay" : "app"}>
+    <main
+      className={`app${overlay ? " overlay" : ""}${real ? " with-text-entry" : ""}`}
+    >
       <header>
         <div className="brand">
           cue<span>layer</span>
@@ -245,7 +270,7 @@ function App() {
             </div>
             <p>
               {real
-                ? "Enable the microphone and begin teaching."
+                ? "Add a passage below to begin, or enable the microphone."
                 : "Run the deterministic story to explore this rebuild."}
             </p>
           </div>
@@ -265,6 +290,49 @@ function App() {
           </div>
         )}
       </section>
+      {real ? (
+        <form
+          className="text-entry"
+          aria-label="Add teaching text"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void addText();
+          }}
+        >
+          <label htmlFor="lesson-text">Teacher text</label>
+          <div className="text-entry-controls">
+            <textarea
+              id="lesson-text"
+              rows={2}
+              value={lessonText}
+              disabled={textUnavailable || addingText}
+              aria-describedby="lesson-text-hint"
+              placeholder="Type or paste the next part of your lesson…"
+              onChange={(event) => {
+                setLessonText(event.target.value);
+                setTextAdded(false);
+                setTextError(null);
+              }}
+            />
+            <button
+              type="submit"
+              disabled={textUnavailable || addingText || !lessonText.trim()}
+            >
+              {addingText ? "Adding…" : "Add to lesson"}
+            </button>
+          </div>
+          <p id="lesson-text-hint" role="status">
+            {session.readOnly
+              ? "This saved lesson is read-only."
+              : session.replay.captureClosed
+                ? "This lesson has ended."
+                : textAdded
+                  ? "Added to lesson. You can add the next passage while it updates."
+                  : "Add a sentence or a short passage. You can keep adding while the lesson updates."}
+          </p>
+          {textError ? <p role="alert">{textError}</p> : null}
+        </form>
+      ) : null}
       <footer>
         <span className="status-dot" />
         {real

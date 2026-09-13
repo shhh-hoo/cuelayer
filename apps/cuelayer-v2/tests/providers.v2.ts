@@ -97,7 +97,7 @@ describe("official SDK transport → existing proposal port", () => {
     const request = await liveRequest(task.capture!.request);
     expect(request).toMatchObject({
       model: "gpt-5.6-luna",
-      reasoning: { effort: "low" },
+      reasoning: { effort: "none" },
       max_output_tokens: 8192,
       store: false,
       text: { format: { type: "json_schema", strict: true } },

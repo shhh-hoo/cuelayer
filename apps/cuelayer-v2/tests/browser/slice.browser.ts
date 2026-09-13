@@ -225,26 +225,41 @@ test("continuous arrival overlaps Live; stale Stage rejected; reload preserves o
       ),
     )
     .toBe(true);
+  // An idle teacher/setup interval must not dilute the workload's arrival rate.
+  await page.waitForTimeout(6000);
   const result = await page.evaluate(async () => {
     const ages: number[] = [];
     const sourceSamples: {
+      at: number;
       gap: number;
       carry: number;
       recordedRate: number;
       accountedRate: number;
+      recentAdmittedChars: number;
     }[] = [];
+    const text = "Continue the explanation.",
+      startedAt = performance.now(),
+      admissions: number[] = [];
     let overlap = false,
       maxAge = 0,
       progressDuringArrival = false;
     for (let i = 0; i < 240; i++) {
-      await window.v2.inject("Continue the explanation.");
+      await window.v2.inject(text);
       overlap ||= Boolean(window.v2.session.window.activeLive);
       const working = window.v2.session.window;
+      const now = performance.now();
+      admissions.push(now);
+      const elapsedSeconds = Math.max(0.001, (now - startedAt) / 1000),
+        admittedChars = admissions.length * text.length;
       sourceSamples.push({
+        at: now - startedAt,
         gap: working.unaccountedChars,
         carry: working.carryChars,
-        recordedRate: working.recordedCharsPerSecond,
-        accountedRate: working.accountedCharsPerSecond,
+        recordedRate: admittedChars / elapsedSeconds,
+        accountedRate:
+          Math.max(0, admittedChars - working.unaccountedChars) / elapsedSeconds,
+        recentAdmittedChars:
+          admissions.filter((at) => at > now - 1000).length * text.length,
       });
       ages.push(working.oldestPendingAge);
       maxAge = Math.max(maxAge, window.v2.session.window.oldestPendingAge);
@@ -276,13 +291,16 @@ test("continuous arrival overlaps Live; stale Stage rejected; reload preserves o
   expect(result.progressDuringArrival).toBe(true);
   expect(result.maxAge).toBeLessThan(1000);
   expect(result.count).toBe(0);
-  // Source-rate/age gates remain meaningful when provider-final fragmentation changes.
-  // Snapshot phase may include the in-flight range; a final-count cap is not service rate.
+  // Rates cover this workload only. A character backlog must fit within the
+  // actual last second of admissions, independently of setup time or batch phase.
   const lastSource = result.sourceSamples.at(-1)!;
   expect(lastSource.accountedRate).toBeGreaterThanOrEqual(
     lastSource.recordedRate * 0.9,
   );
-  expect(lastSource.gap).toBeLessThanOrEqual(lastSource.recordedRate);
+  for (const sample of result.sourceSamples.filter((s) => s.at >= 1000))
+    expect(sample.gap, `backlog at ${sample.at}ms`).toBeLessThanOrEqual(
+      sample.recentAdmittedChars,
+    );
   const median = (values: number[]) =>
     [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
   expect(median(result.ages.slice(-40))).toBeLessThanOrEqual(
