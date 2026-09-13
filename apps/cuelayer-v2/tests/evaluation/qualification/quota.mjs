@@ -94,7 +94,7 @@ export function qualificationInputBound({
   };
 }
 
-// This is a local admission limit based on an explicit account attestation.
+// This is a local admission guard based on an explicit account attestation.
 // It cannot change sharing settings, reserve OpenAI's organization-wide allowance,
 // or prove the eventual invoice. Cached input and reasoning output still count.
 export function createQuotaGuard(manifest, approval, { now = Date.now } = {}) {
@@ -126,19 +126,12 @@ export function createQuotaGuard(manifest, approval, { now = Date.now } = {}) {
     throw Error("quota-current-account-confirmation-required");
   const limits = {};
   for (const group of ["large", "small"]) {
-    const remaining = account.remaining_tokens?.[group],
-      cap = policy.run_caps?.[group];
+    const remaining = account.remaining_tokens?.[group];
     if (!integer(remaining) || remaining > policy.daily_caps[group])
       throw Error("quota-invalid-group-limit");
-    if (
-      cap != null &&
-      (!integer(cap) || cap <= 0 || cap > policy.daily_caps[group])
-    )
-      throw Error("quota-invalid-group-limit");
-    // No evaluator-imposed run cap is required. When a legacy reviewed proposal
-    // explicitly carries one, preserve it; otherwise the inspected remaining
-    // complimentary allowance is the only aggregate admission boundary.
-    limits[group] = cap == null ? remaining : Math.min(remaining, cap);
+    // Screening has no evaluator-imposed aggregate token/cost ceiling.
+    // Admission follows only the freshly inspected complimentary allowance.
+    limits[group] = remaining;
   }
   const original = sha256({ policy, account });
   const reservations = new Map();
