@@ -16,16 +16,13 @@ import { captureLive, DEFAULT_BUDGET, bytes } from "./projection";
 import { captureStage, validateStage, reviewCandidates } from "./stage";
 import { position, recorded, rangeSize, sourcePieces } from "./source";
 import { validate, Rejection } from "./acceptance";
+import { decisionEventPayload } from "./acceptance-event";
 import { EventStore } from "./adapters/storage";
 import { Trace } from "./adapters/trace";
 import { SpeechEvidenceAdapter } from "./adapters/speech";
 
-export class TransientFailure extends Error {}
-export type Interpreter = (
-  task: Task,
-  signal: AbortSignal,
-  firstUseful: () => void,
-) => Promise<unknown>;
+import { TransientFailure, type Interpreter } from "./execution";
+export { TransientFailure, type Interpreter } from "./execution";
 export type WorkingWindow = {
   orderedCommittedEvidence: string[];
   preflight: unknown;
@@ -774,28 +771,7 @@ export class Session {
         start,
       );
       if (decision && !decision.groups.length) {
-        await this.append({
-          type: "inspected",
-          taskId: task.id,
-          context: task.capture
-            ? {
-                ...task.capture.inspectionContext!,
-                ...(decision.contextRequest
-                  ? {
-                      query: {
-                        ...decision.contextRequest,
-                        after: decision.contextRequest.after
-                          ? task.capture.units[decision.contextRequest.after]
-                          : null,
-                      },
-                    }
-                  : {}),
-              }
-            : undefined,
-          inspectionKey: task.inspectionKey!,
-          outcome: decision.suffixStatus as
-            "WAIT_MORE_INPUT" | "OUTPUT_CAPACITY",
-        });
+        await this.append(decisionEventPayload(task, result));
         this.trace.mark(
           decision.suffixStatus === "WAIT_MORE_INPUT"
             ? "live-wait"
@@ -810,7 +786,7 @@ export class Session {
         this.notify();
         return;
       }
-      await this.append({ type: "accepted", accepted });
+      await this.append(decisionEventPayload(task, result));
       if (task.lane === "Live") {
         this.error = null;
         this.paused = false;

@@ -3,6 +3,7 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import { liveProviderDecisionSchema, wireDefinitions } from "../src/live-wire";
 import { bytes, type LiveRequest } from "../src/projection";
 import { stageReviewSchema, type StageRequest } from "../src/stage";
+import { executionObserver, type ObservationOptions } from "../src/execution";
 export const modelProfile = {
   provider: "OpenAI",
   model: "gpt-5.6-luna",
@@ -79,8 +80,47 @@ export async function openLiveResponse(
   model: string,
   signal: AbortSignal,
   measure?: (size: number) => void,
+  options: ObservationOptions & { fetch?: typeof fetch } = {},
 ) {
-  const client = new OpenAI({ apiKey, maxRetries: 0 });
+  const observe = executionObserver(options);
+  const transport = options.fetch ?? fetch;
+  const client = new OpenAI({
+    apiKey,
+    maxRetries: 0,
+    fetch: async (input, init) => {
+      observe("provider-dispatch", {
+        boundary: "upstream-network",
+        requestedModel: model,
+      });
+      const response = await transport(input, init);
+      observe("provider-headers", {
+        boundary: "upstream-network",
+        status: response.status,
+      });
+      if (!response.body) return response;
+      let firstByte = false;
+      return new Response(
+        response.body.pipeThrough(
+          new TransformStream<Uint8Array, Uint8Array>({
+            transform(chunk, controller) {
+              if (!firstByte && chunk.byteLength) {
+                firstByte = true;
+                observe("first-upstream-byte", {
+                  boundary: "upstream-network",
+                });
+              }
+              controller.enqueue(chunk);
+            },
+          }),
+        ),
+        {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        },
+      );
+    },
+  });
   const payload = await liveRequest(request, model);
   measure?.(bytes(payload));
   return client.responses.create(payload, { signal });
