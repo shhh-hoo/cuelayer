@@ -1,4 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { executionPhases } from "./execution-phases.mjs";
 const path = process.argv[2];
 if (!path)
   throw new Error(
@@ -34,7 +35,7 @@ const stats = (values) => {
 };
 const interval = (name) => stats(named(name).map((s) => s.end - s.start));
 const first = [
-  ...named("first-provider-byte"),
+  ...named("model-first-output"),
   ...named("first-useful-output"),
 ].filter((s) => s.attributes.lane === "Live");
 const complete = named("model-complete").filter(
@@ -42,7 +43,11 @@ const complete = named("model-complete").filter(
 );
 const requestFor = (s) =>
   named("model-request").find(
-    (r) => r.attributes.taskId === s.attributes.taskId && sameSource(s, r),
+    (r) =>
+      r.attributes.taskId === s.attributes.taskId &&
+      sameSource(s, r) &&
+      (!s.attributes.attemptId ||
+        r.attributes.attemptId === s.attributes.attemptId),
   );
 const accepted = named("semantic-accepted").filter(
   (s) => s.attributes.lane === "Live",
@@ -121,7 +126,15 @@ const metrics = {
   finalToDurable: interval("final-to-window"),
   finalToLiveDispatch: interval("final-to-live-dispatch"),
   evidenceToLiveDispatch: interval("evidence-to-live-queued"),
-  liveStartToFirstOutput: stats(first.map((s) => s.end - s.start)),
+  liveStartToFirstOutput: stats(
+    first.map(
+      (s) =>
+        s.end -
+        (s.name === "model-first-output"
+          ? (requestFor(s)?.start ?? NaN)
+          : s.start),
+    ),
+  ),
   liveStartToComplete: stats(
     complete.map((s) => s.end - (requestFor(s)?.start ?? NaN)),
   ),
@@ -170,10 +183,25 @@ const carryChars = obligations.reduce(
           .reduce((n, e) => n + e.text.length, 0)),
   0,
 );
-const durationMs = spans.length
-  ? Math.max(...spans.map((s) => s.end)) -
-    Math.min(...spans.map((s) => s.start))
-  : 0;
+const browserClocks = new Map(
+  named("model-request").map((s) => [
+    s.attributes.traceSourceId,
+    s.attributes.clockId,
+  ]),
+);
+const localSpans = spans.filter(
+  (s) =>
+    !s.attributes.clockId ||
+    s.attributes.clockId === browserClocks.get(s.attributes.traceSourceId),
+);
+// Remote provider timing metadata and traces from different browser lifetimes
+// cannot form one elapsed wall-clock interval.
+const durationMs =
+  localSpans.length &&
+  new Set(localSpans.map((s) => s.attributes.traceSourceId)).size === 1
+    ? Math.max(...localSpans.map((s) => s.end)) -
+      Math.min(...localSpans.map((s) => s.start))
+    : 0;
 const calls = Object.fromEntries(
   ["Live", "Stage"].map((lane) => [
     lane,
@@ -295,6 +323,7 @@ const report = {
   scenario: run.scenario,
   config: run.config,
   metrics,
+  execution: executionPhases(spans),
   sourceMetrics,
   useful,
   quality: {
@@ -327,7 +356,7 @@ const report = {
     "No p95 for fewer than 20 samples. Small medians are descriptive, not performance guarantees.",
     "Generated audio/emulated microphone is not owner microphone dogfood.",
     "Missing useful DOM, timeout and schema failure are missing/failed observations, never zero latency.",
-    "All joined spans share one browser source/clock. Audio mapping uses PCM sample positions and <=100ms observation bins, not physical capture time.",
+    "Execution intervals require the same explicit monotonic clock ID. Provider and browser observations are separate; legacy source metrics retain their original browser boundary. Audio mapping uses PCM sample positions and <=100ms observation bins, not physical capture time.",
   ],
 };
 await writeFile(
@@ -348,6 +377,7 @@ console.log(
         ]),
       ),
       sourceMetrics,
+      execution: report.execution,
       quality: {
         ...report.quality,
         failures: failures.map((f) => ({ lane: f.lane, reason: f.reason })),

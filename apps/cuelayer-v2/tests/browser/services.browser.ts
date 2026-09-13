@@ -1,5 +1,7 @@
 import { test, expect } from "./fixtures";
 import type { WebSocketRoute } from "@playwright/test";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import type { LiveRequest } from "../../src/projection";
 import {
   projectMeaning,
@@ -150,6 +152,53 @@ test("teacher text is admitted while inference is pending, then reaches the lear
   ).toBe(true);
   await expect(page.locator("[data-unit] .katex").first()).toBeInViewport();
   await page.screenshot({ path: "../../.cuelayer/v2/teacher-text-narrow.png" });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.v2
+          .snapshot()
+          .spans.some(
+            (s) => s.name === "learner-visible-dom" && s.attributes.complete,
+          ),
+      ),
+    )
+    .toBe(true);
+  const directory = "../../.cuelayer/v2/execution-phases";
+  await mkdir(directory, { recursive: true });
+  await writeFile(
+    `${directory}/run.json`,
+    JSON.stringify({
+      identity: "offline-browser-execution-phases",
+      snapshot: await page.evaluate(() => window.v2.snapshot()),
+    }),
+  );
+  execFileSync(
+    process.execPath,
+    ["scripts/analyze-run.mjs", `${directory}/run.json`],
+    { stdio: "pipe" },
+  );
+  const report = JSON.parse(
+    await readFile(`${directory}/analysis.json`, "utf8"),
+  );
+  const first = report.execution.attempts.find(
+    (a: any) => a.hostAccepted && a.visibleDomObserved,
+  );
+  expect(first).toMatchObject({
+    attemptFinished: true,
+    providerCompleted: true,
+    parserSucceeded: true,
+    hostAccepted: true,
+    visibleDomObserved: true,
+  });
+  for (const name of [
+    "browserFirstAnswerMs",
+    "browserCompleteMs",
+    "parserMs",
+    "browserToAcceptedMs",
+    "browserToDomMs",
+  ])
+    expect(first.timings[name]).toBeGreaterThanOrEqual(0);
+  expect(first.timings.providerCompleteMs).toBeNull(); // The browser fixture supplies no upstream clock.
   await page.reload();
   await page.waitForFunction(() => Boolean(window.v2));
   expect(await page.evaluate(() => window.v2.session.state)).toEqual(state);
