@@ -128,15 +128,17 @@ export function createQuotaGuard(manifest, approval, { now = Date.now } = {}) {
   for (const group of ["large", "small"]) {
     const remaining = account.remaining_tokens?.[group],
       cap = policy.run_caps?.[group];
+    if (!integer(remaining) || remaining > policy.daily_caps[group])
+      throw Error("quota-invalid-group-limit");
     if (
-      !integer(remaining) ||
-      remaining > policy.daily_caps[group] ||
-      !integer(cap) ||
-      cap <= 0 ||
-      cap > policy.daily_caps[group]
+      cap != null &&
+      (!integer(cap) || cap <= 0 || cap > policy.daily_caps[group])
     )
       throw Error("quota-invalid-group-limit");
-    limits[group] = Math.min(remaining, cap);
+    // No evaluator-imposed run cap is required. When a legacy reviewed proposal
+    // explicitly carries one, preserve it; otherwise the inspected remaining
+    // complimentary allowance is the only aggregate admission boundary.
+    limits[group] = cap == null ? remaining : Math.min(remaining, cap);
   }
   const original = sha256({ policy, account });
   const reservations = new Map();
