@@ -3,7 +3,7 @@ import {
   executionObserver,
   type ObservationOptions,
   type ExecutionObservation,
-} from "../src/execution";
+} from "../src/execution-contract";
 import { modelProfile, openLiveResponse, type ProviderRequest } from "./live";
 
 export type ProviderDeadline = {

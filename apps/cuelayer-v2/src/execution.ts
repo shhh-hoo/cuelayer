@@ -1,77 +1,23 @@
 import { Stream } from "openai/core/streaming";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses";
 import type { Task } from "./contract";
-import { bytes, type LiveRequest } from "./projection";
-import { stageReviewSchema, type StageRequest } from "./stage";
+import { bytes } from "./projection";
+import { stageReviewSchema } from "./stage";
 import { liveDecisionSchema, expandProviderDecision } from "./live-wire";
 
-export type CapturedRequest = Readonly<{
-  taskId: string;
-  lane: "Live" | "Stage";
-  request: LiveRequest | StageRequest;
-}>;
-export type ProviderCompletion = {
-  completed: boolean;
-  terminalType: string | null;
-  actualModel: string | null;
-  responseId: string | null;
-  usage: unknown;
-};
-export type ExecutionResult = {
-  attemptId: string;
-  proposal: unknown;
-  outputText: string;
-  provider: ProviderCompletion;
-};
-export type ExecutionObservation = {
-  phase: string;
-  at: number;
-  clockId: string;
-  details: Readonly<Record<string, unknown>>;
-};
-export type ObservationOptions = {
-  observe?: (event: ExecutionObservation) => void | Promise<void>;
-  now?: () => number;
-  clockId?: string;
-};
-function deliverObservation(
-  options: ObservationOptions,
-  event: ExecutionObservation,
-) {
-  try {
-    const pending = options.observe?.(event);
-    if (pending) void Promise.resolve(pending).catch(() => {});
-  } catch {
-    /* Observation never changes execution or acceptance. */
-  }
-}
-/** Observations may enqueue work, but asynchronous sinks are never awaited. */
-export function executionObserver(options: ObservationOptions = {}) {
-  const now = options.now ?? (() => performance.now());
-  const clockId = options.clockId ?? `monotonic:${performance.timeOrigin}`;
-  return (phase: string, details: Record<string, unknown> = {}) => {
-    try {
-      deliverObservation(options, { phase, at: now(), clockId, details });
-    } catch {
-      /* Observation never changes execution or acceptance. */
-    }
-  };
-}
-export class ExecutionFailure extends Error {
-  attemptId: string | null = null;
-  outputText = "";
-  provider: ProviderCompletion | null = null;
-}
-export class TransientFailure extends ExecutionFailure {}
-export type Interpreter = (
-  task: Task,
-  signal: AbortSignal,
-  firstUseful: () => void,
-) => Promise<unknown>;
-export type ExecutionTransport = (
-  captured: CapturedRequest,
-  signal: AbortSignal,
-) => Promise<Response>;
+export * from "./execution-contract";
+import {
+  executionObserver,
+  deliverObservation,
+  ExecutionFailure,
+  TransientFailure,
+  type CapturedRequest,
+  type ExecutionResult,
+  type ExecutionObservation,
+  type ObservationOptions,
+  type ExecutionTransport,
+  type ProviderCompletion,
+} from "./execution-contract";
 
 export function capturedRequest(task: Task): CapturedRequest {
   const request =
@@ -268,6 +214,7 @@ export async function executeCapturedRequest(
     signal.throwIfAborted();
     if (!provider.completed)
       throw new ExecutionFailure("model-disconnected-before-complete");
+    mark("parser-start");
     parserAttempted = true;
     let raw: unknown;
     try {

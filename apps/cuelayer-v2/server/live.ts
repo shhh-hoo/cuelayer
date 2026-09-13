@@ -3,7 +3,10 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import { liveProviderDecisionSchema, wireDefinitions } from "../src/live-wire";
 import { bytes, type LiveRequest } from "../src/projection";
 import { stageReviewSchema, type StageRequest } from "../src/stage";
-import { executionObserver, type ObservationOptions } from "../src/execution";
+import {
+  executionObserver,
+  type ObservationOptions,
+} from "../src/execution-contract";
 export const modelProfile = {
   provider: "OpenAI",
   model: "gpt-5.6-luna",

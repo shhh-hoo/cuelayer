@@ -21,8 +21,8 @@ import { EventStore } from "./adapters/storage";
 import { Trace } from "./adapters/trace";
 import { SpeechEvidenceAdapter } from "./adapters/speech";
 
-import { TransientFailure, type Interpreter } from "./execution";
-export { TransientFailure, type Interpreter } from "./execution";
+import { TransientFailure, type Interpreter } from "./execution-contract";
+export { TransientFailure, type Interpreter } from "./execution-contract";
 export type WorkingWindow = {
   orderedCommittedEvidence: string[];
   preflight: unknown;
