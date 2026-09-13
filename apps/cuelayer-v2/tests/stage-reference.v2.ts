@@ -2,6 +2,8 @@ import { afterEach, expect, it } from "vitest";
 import { Session } from "../src/session";
 import { liveRequest } from "../server/live";
 import type { Task } from "../src/contract";
+import type { WireOperation } from "../src/live-wire";
+import { validateStage } from "../src/stage";
 import {
   admit,
   establish,
@@ -16,7 +18,7 @@ afterEach(() => {
   sessions.length = 0;
 });
 
-async function referenceTask() {
+async function referenceTask(existing?: "chain" | "reverse" | "unrelated") {
   const s = await openSession();
   sessions.push(s);
   s.pause();
@@ -26,6 +28,59 @@ async function referenceTask() {
     t,
     establish(t, "The pendulum period is the time needed for one cycle."),
   );
+  if (existing) {
+    const text =
+      existing === "chain"
+        ? "One complete swing takes one pendulum period."
+        : "A clock tick is another time interval. Both the clock tick and pendulum period are durations.";
+    await admit(s, text);
+    t = s.capture("Live");
+    const r = t.capture!.request,
+      basis = fixtureBasis(t, text, r.source.source),
+      referent = r.units[0].id;
+    const operations: WireOperation[] = [
+      {
+        type: "put",
+        id: r.newUnits[0],
+        coreId: r.cores[0].id,
+        meaning: {
+          kind: "statement",
+          text:
+            existing === "chain"
+              ? "One complete swing takes one pendulum period."
+              : "A clock tick is another time interval.",
+        },
+        dependencies:
+          existing === "chain" ? [{ target: referent, kind: "IDENTITY" }] : [],
+        basis,
+      },
+    ];
+    if (existing === "reverse")
+      operations.push({
+        type: "put",
+        id: r.newUnits[1],
+        coreId: r.cores[0].id,
+        meaning: {
+          kind: "relation",
+          targets: [referent, r.newUnits[0]],
+          relation: "comparison",
+          text: "The clock tick and pendulum period are both time intervals.",
+        },
+        dependencies: [],
+        basis,
+      });
+    await s.accept(t, {
+      ...fullGroup(t),
+      groups: [
+        {
+          ...fullGroup(t).groups[0],
+          outcome: "APPLY",
+          operations,
+          resolutions: [],
+        },
+      ],
+    });
+  }
   await admit(s, "That interval grows.");
   t = s.capture("Live");
   const carry = fullGroup(t, "CARRY");
@@ -63,12 +118,208 @@ function resolution(t: Task) {
             dependencies: [{ target: referent, kind: "IDENTITY" }],
             basis,
           },
-        ],
+        ] as Extract<WireOperation, { type: "put" }>[],
         resolution: { targets: [target], referents: [referent], basis },
       },
     ],
   };
 }
+
+function connectedResolution(t: Task) {
+  const reply = resolution(t),
+    result = reply.results[0],
+    claim = result.operations[0],
+    r = t.review!.request;
+  claim.dependencies = [];
+  result.operations.push(
+    {
+      ...claim,
+      id: r.newUnits[1],
+      meaning: {
+        kind: "annotation",
+        target: claim.id,
+        text: "The interval increases.",
+      },
+    },
+    {
+      ...claim,
+      id: r.newUnits[2],
+      meaning: {
+        kind: "relation",
+        targets: [result.resolution.referents[0], claim.id, r.newUnits[1]],
+        relation: "dependency",
+        text: "The increasing interval is the pendulum period.",
+      },
+    },
+  );
+  result.resolution.targets = result.operations.map((op) => op.id);
+  return reply;
+}
+
+it("binds a multi-unit resolution through its new relation without inventing leaf dependencies", async () => {
+  const { s, t } = await referenceTask();
+  const before = structuredClone(s.replay.accounted),
+    anchor = structuredClone(Object.values(s.state.units)[0]),
+    reply = connectedResolution(t);
+  await s.accept(t, reply);
+  expect(s.replay.unresolved).toEqual({});
+  expect(s.replay.accounted).toEqual(before);
+  expect(s.state.units[anchor.id]).toEqual(anchor);
+  const ids = reply.results[0].resolution.targets.map(
+    (alias) => t.review!.units[alias],
+  );
+  expect(s.state.units[ids[0]].requires).toEqual([]);
+  expect(s.state.units[ids[1]].requires).toEqual([ids[0]]);
+  expect(s.state.units[ids[2]].requires).toEqual([anchor.id, ids[0], ids[1]]);
+});
+
+it("rejects a disconnected new target beside a correctly connected result component", async () => {
+  const { s, t } = await referenceTask();
+  const before = structuredClone(s.replay),
+    reply = connectedResolution(t),
+    result = reply.results[0];
+  const unbound = {
+    ...result.operations[0],
+    id: t.review!.request.newUnits[3],
+    meaning: { kind: "statement" as const, text: "An unrelated claim." },
+  };
+  result.operations.push(unbound);
+  result.resolution.targets.push(unbound.id);
+  await expect(s.accept(t, reply)).rejects.toThrow("unbound-stage-referent");
+  expect(s.replay).toEqual(before);
+});
+
+it("rejects a disconnected existing target beside a correctly bound target", async () => {
+  const { s, t } = await referenceTask("unrelated");
+  const reply = resolution(t);
+  reply.results[0].resolution.targets.push(t.review!.request.units[1].id);
+  await expect(s.accept(t, reply)).rejects.toThrow("unbound-stage-referent");
+});
+
+it("preserves a directed dependency path through existing accepted knowledge", async () => {
+  const { s, t } = await referenceTask("chain");
+  const reply = resolution(t),
+    link = t.review!.request.units.find((u) => u.dependencies.length)!;
+  reply.results[0].operations[0].dependencies = [
+    { target: link.id, kind: "IDENTITY" },
+  ];
+  await s.accept(t, reply);
+  expect(s.replay.unresolved).toEqual({});
+});
+
+it("does not reverse an unchanged historical relation to bind an unrelated target", async () => {
+  const { s, t } = await referenceTask("reverse");
+  const reply = resolution(t),
+    clock = t.review!.request.units.find(
+      (u) =>
+        u.meaning.kind === "statement" && u.meaning.text.startsWith("A clock"),
+    )!;
+  reply.results[0].operations[0].dependencies = [
+    { target: clock.id, kind: "IDENTITY" },
+  ];
+  await expect(s.accept(t, reply)).rejects.toThrow("unbound-stage-referent");
+});
+
+it.each(["changed", "unchanged", "restored"])(
+  "only reverses a captured connector with a net semantic change (%s)",
+  async (change) => {
+    const { s, t } = await referenceTask("reverse");
+    const reply = resolution(t),
+      r = t.review!.request,
+      relation = r.units.find((u) => u.meaning.kind === "relation")!,
+      clock = r.units.find(
+        (u) =>
+          u.meaning.kind === "statement" &&
+          u.meaning.text.startsWith("A clock"),
+      )!;
+    // Exercise the validator port with explicit host authority for this connector.
+    t.writeScope!.units.push(t.review!.units[relation.id]);
+    r.writableUnits.push(relation.id);
+    const operations: WireOperation[] = reply.results[0].operations;
+    operations[0] = {
+      ...reply.results[0].operations[0],
+      dependencies: [{ target: clock.id, kind: "IDENTITY" }],
+    };
+    operations.push({
+      type: "revise",
+      id: relation.id,
+      change: {
+        field: "text",
+        value:
+          change !== "unchanged"
+            ? "The growing interval is the pendulum period, a time interval like the clock tick."
+            : "The clock tick and pendulum period are both time intervals.",
+      },
+      basis: reply.results[0].resolution.basis,
+    });
+    if (change === "restored")
+      operations.push({
+        type: "revise",
+        id: relation.id,
+        change: {
+          field: "text",
+          value: "The clock tick and pendulum period are both time intervals.",
+        },
+        basis: reply.results[0].resolution.basis,
+      });
+    if (change === "changed") {
+      const accepted = validateStage(s.replay, t, reply).accepted;
+      expect(accepted.resolved).toEqual(Object.keys(s.replay.unresolved));
+    } else
+      expect(() => validateStage(s.replay, t, reply)).toThrow(
+        "unbound-stage-referent",
+      );
+  },
+);
+
+it("rejects a component whose new connector is invalidated in the same result", async () => {
+  const { s, t } = await referenceTask();
+  const reply = connectedResolution(t),
+    result = reply.results[0],
+    operations: WireOperation[] = result.operations;
+  result.resolution.targets = [result.operations[0].id];
+  operations.push({
+    type: "invalidate",
+    id: result.operations[2].id,
+    basis: result.resolution.basis,
+  });
+  await expect(s.accept(t, reply)).rejects.toThrow("unbound-stage-referent");
+  expect(Object.keys(s.state.units)).toHaveLength(1);
+});
+
+it.each([true, false])(
+  "requires every declared referent to participate (second connected: %s)",
+  async (connected) => {
+    const { s, t } = await referenceTask("unrelated");
+    const reply = connectedResolution(t),
+      result = reply.results[0],
+      other = t.review!.request.units[1].id;
+    result.resolution.referents.push(other);
+    if (connected) {
+      const relation = result.operations[2].meaning;
+      if (relation.kind !== "relation")
+        throw new Error("missing-test-relation");
+      relation.targets.push(other);
+      await s.accept(t, reply);
+      expect(s.replay.unresolved).toEqual({});
+    } else
+      await expect(s.accept(t, reply)).rejects.toThrow(
+        "unbound-stage-referent",
+      );
+  },
+);
+
+it("rejects a connected result after its captured referent changes", async () => {
+  const { s, t } = await referenceTask();
+  const reply = connectedResolution(t),
+    text =
+      "Correction: the period means the time for a complete back-and-forth cycle.";
+  await admit(s, text);
+  const live = s.capture("Live");
+  await s.accept(live, establish(live, text));
+  await expect(s.accept(t, reply)).rejects.toThrow("stale-dependency:unit/");
+  expect(Object.keys(s.replay.unresolved)).toHaveLength(1);
+});
 
 it("does not accept the old disconnected resolution that never declares its referents", async () => {
   const { s, t } = await referenceTask();

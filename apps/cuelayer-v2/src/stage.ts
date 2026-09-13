@@ -7,6 +7,7 @@ import {
   type Replay,
   type Accepted,
   type Operation,
+  type Unit,
   version,
   same,
   semanticValue,
@@ -388,6 +389,24 @@ export function captureStage(
   }
   return null;
 }
+function bindingValue(unit: Unit | undefined) {
+  return (
+    unit && {
+      meaning: unit.meaning,
+      current: unit.valid && !unit.reviewRequired,
+      links: (
+        unit.links ??
+        unit.requires.map((target) => ({ target, kind: "IDENTITY" as const }))
+      )
+        .map((link) =>
+          link.kind === "IDENTITY"
+            ? { target: link.target, kind: link.kind }
+            : link,
+        )
+        .sort((a, b) => a.target.localeCompare(b.target)),
+    }
+  );
+}
 export function validateStage(replay: Replay, task: Task, raw: unknown) {
   const parsed = stageReviewSchema.safeParse(raw);
   requireThat(parsed.success, "incomplete-or-malformed-stage-review");
@@ -454,36 +473,60 @@ export function validateStage(replay: Replay, task: Task, raw: unknown) {
           new Set(referents).size === referents.length,
           "duplicate-stage-referent",
         );
-        // The model selects antecedents. The host checks the accepted graph, never
-        // guesses a referent from text, Core membership or the only visible unit.
-        const closures = resolution.targets.map((target) => {
-          const reachable = new Set<string>();
-          const pending = [target];
-          while (pending.length) {
-            const id = pending.pop()!;
-            if (reachable.has(id) || !isCurrent(next, id)) continue;
-            reachable.add(id);
-            pending.push(...next.units[id].requires);
-          }
-          if (referents.length && !task.state.units[target])
-            requireThat(
-              referents.some((id) => reachable.has(id)),
-              "unbound-stage-referent",
-            );
-          return reachable;
-        });
-        for (const id of referents) {
+        for (const id of referents)
           requireThat(
             task.state.units[id] &&
               Object.hasOwn(task.dependencies, `unit/${id}`) &&
               isCurrent(next, id),
             "invalid-stage-referent",
           );
+        // New or semantically changed result units may connect several targets
+        // through their typed links. Existing captured links remain forward-only:
+        // an unrelated old relation or shared Core cannot bind a new resolution.
+        const scope = new Set(Object.keys(task.state.units)),
+          incoming = new Map<string, Set<string>>();
+        for (const op of ops) {
+          if (op.type === "put") scope.add(op.id);
+          if (
+            (op.type === "put" ||
+              op.type === "revise" ||
+              op.type === "revalidate") &&
+            !semanticEqual(
+              bindingValue(next.units[op.id]),
+              bindingValue(state.units[op.id]),
+            ) &&
+            isCurrent(next, op.id)
+          )
+            for (const id of next.units[op.id].requires) {
+              if (!incoming.has(id)) incoming.set(id, new Set());
+              incoming.get(id)!.add(op.id);
+            }
+        }
+        const closures = resolution.targets.map((target) => {
+          const reachable = new Set<string>();
+          const pending = [target];
+          while (pending.length) {
+            const id = pending.pop()!;
+            if (reachable.has(id) || !scope.has(id) || !isCurrent(next, id))
+              continue;
+            reachable.add(id);
+            pending.push(
+              ...next.units[id].requires,
+              ...(incoming.get(id) ?? []),
+            );
+          }
+          if (referents.length)
+            requireThat(
+              referents.some((id) => reachable.has(id)),
+              "unbound-stage-referent",
+            );
+          return reachable;
+        });
+        for (const id of referents)
           requireThat(
             closures.some((reachable) => reachable.has(id)),
             "unbound-stage-referent",
           );
-        }
         resolutions.push({ ...resolution, referents });
       } else {
         requireThat(!result.resolution, "unexpected-resolution-binding");

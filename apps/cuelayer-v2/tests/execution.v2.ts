@@ -115,18 +115,19 @@ function execute(
   });
 }
 
-it("keeps the PR50 model profile, prompt bytes and strict schemas unchanged", async () => {
+it("keeps the reviewed Stage graph profile, prompt bytes and strict schemas unchanged", async () => {
   const formats = [];
   for (const version of ["v2-live-request-3", "v2-stage-request-4"])
     formats.push(
       (await liveRequest({ version } as ProviderRequest)).text.format,
     );
-  // Independent digest captured at product 44fbca2 before this extraction.
+  // Reviewed identity after #55's explicit Stage graph policy change. PR64
+  // separately proved extraction parity against the original PR50 profile.
   const digest = createHash("sha256")
     .update(JSON.stringify({ modelProfile, livePolicy, stagePolicy, formats }))
     .digest("hex");
   expect(digest).toBe(
-    "90ca77814469f5cfee3afdbe4e7939c66084af771ad3d0e9d6194be179ca6d79",
+    "8c7428df72ed3e0966b209a78436e7109e975bd3907333b434bfd48ea27c9caf",
   );
 });
 
