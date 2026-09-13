@@ -19,6 +19,12 @@ if (
     "execute-qualification",
     "export-qualification-review",
     "import-qualification-review",
+    "acquire-natural-assets",
+    "prepare-natural",
+    "verify-natural",
+    "execute-natural",
+    "export-natural-review",
+    "import-natural-review",
     "verify-canary",
     "execute-canary",
   ].includes(process.argv[2])

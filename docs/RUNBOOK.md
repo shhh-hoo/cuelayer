@@ -380,3 +380,28 @@ node apps/cuelayer-v2/scripts/evaluate-frontier.mjs import-qualification-review 
 ```
 
 Apply every frozen required decision with original evidence and resolvable output pointers. Uncertain judgments remain `UNRESOLVED`; absent reviews remain pending. A manual role binding for a new quantity enables exact field-citation checks but does not itself certify the quantity's meaning. Preserve the raw result and report all failures/unavailable/unrun cases alongside observed latencies. Run the canonical `self-test` command to exercise both historical evaluators and the new qualification modules without provider access.
+
+### Natural text lesson
+
+Acquire the fixed public tldraw 5.4.2 assets during unpaid preparation, then freeze the reviewed short lesson using separate clean evaluator and selected product checkouts. Acquisition permits only the listed public asset GETs; execution serves their verified bytes locally. These commands are credential-free, create no authorization, and require fresh output directories:
+
+```sh
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs acquire-natural-assets --out=/absolute/path/to/new-renderer-cache
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs prepare-natural --product=/absolute/path/to/latency-policy-product --product-sha=FULL_40_CHARACTER_SHA --assets=/absolute/path/to/new-renderer-cache/renderer-assets.json --out=/absolute/path/to/new-natural-run
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs verify-natural --manifest=/absolute/path/to/new-natural-run/natural-manifest.json
+```
+
+Review the frozen lesson, SHA bindings, product policy, attempt/token/cost limits and expiration before requesting approval. The 97-second lesson, post-input observation and reload are one bounded run. No earlier comparison approval carries forward. After explicit approval, supply a separate authorization JSON containing `identity: "cuelayer-v2-natural-lesson-authorization-1"`, `approved: true`, and the exact `manifest_sha256` and `limits_sha256`. Only then read the locally configured OpenAI key into the execution environment:
+
+```sh
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs execute-natural --manifest=/absolute/path/to/new-natural-run/natural-manifest.json --authorization=/absolute/path/to/approved-natural-authorization.json
+```
+
+The exclusive `execution/` directory prevents replacement runs. The real product runs in a local browser with external renderer requests blocked; only guarded OpenAI Responses calls may leave the evaluator. Each task is captured naturally from admitted source. Every actual retry counts. A failure preserves partial evidence and all unrun arrivals; do not repair or restart the paid run under the same approval. Inspect `natural-results.json`, its seal, reservation journal, raw/forwarded recordings and screenshots before offline semantic review.
+
+```sh
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs export-natural-review --manifest=/absolute/path/to/new-natural-run/natural-manifest.json --input=/absolute/path/to/new-natural-run/execution/natural-results.json --out=/absolute/path/to/new-natural-review-packet.json
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs import-natural-review --manifest=/absolute/path/to/new-natural-run/natural-manifest.json --input=/absolute/path/to/new-natural-run/execution/natural-results.json --adjudication=/absolute/path/to/natural-adjudication.json --out=/absolute/path/to/new-natural-reviewed-results.json
+```
+
+Review remains offline after authorization expiry and preserves the original result. Supply explicit judgments and real accepted-unit bindings; missing evidence stays pending. STUB tests, schema success, host acceptance or final accounting alone cannot clear the semantic gate. Retained failures block progression to the full cohort; later paid experiments require their own concrete scope and approval.

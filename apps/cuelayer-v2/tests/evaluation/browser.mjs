@@ -1,11 +1,14 @@
 import { createServer } from "vite";
 import react from "@vitejs/plugin-react";
 import { chromium } from "@playwright/test";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, realpath } from "node:fs/promises";
 import { resolve } from "node:path";
 import { exclusive, sha256, calibrateClock } from "./evidence.mjs";
 import { drive } from "./driver.mjs";
 import { Socket } from "node:net";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { StringDecoder } from "node:string_decoder";
 import { surfaceFidelity } from "./assessment.mjs";
 import { predicate } from "./score.mjs";
 import { loadScenarios } from "./assets.mjs";
@@ -52,11 +55,47 @@ export function prohibitProviderEgress() {
     Socket.prototype.connect = connect;
   };
 }
+// Same bounded UTF-8/body/deadline lifecycle as the product HTTP adapter.
+export function readHarnessBody(req, signal) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    const decoder = new StringDecoder("utf8");
+    const cleanup = () => {
+      req.removeListener("data", data);
+      req.removeListener("end", end);
+      req.removeListener("error", fail);
+      signal.removeEventListener("abort", abort);
+    };
+    const fail = (error) => {
+      cleanup();
+      reject(error);
+    };
+    const abort = () => fail(Error("model-timeout"));
+    const data = (part) => {
+      body += decoder.write(part);
+      if (body.length > 32000) fail(Error("request-too-large"));
+    };
+    const end = () => {
+      body += decoder.end();
+      cleanup();
+      resolve(body);
+    };
+    req.on("data", data).on("end", end).on("error", fail);
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+  });
+}
 export async function startBrowserHarness(
   provenance,
   product,
   out,
-  { responder } = {},
+  {
+    responder,
+    providerBridge,
+    serviceConfig,
+    allowRendererNetwork = true,
+    rendererAssets,
+  } = {},
 ) {
   const requests = [],
     errors = [],
@@ -64,8 +103,9 @@ export async function startBrowserHarness(
     journal = [],
     assets = [];
   let page;
-  const cache = resolve(out, "compile-cache");
+  let cache = resolve(out, "compile-cache");
   await mkdir(cache, { recursive: false });
+  cache = await realpath(cache);
   provenance.cache = cache;
   const endpoint = {
     name: "gate3b-local-only-stub",
@@ -84,16 +124,28 @@ export async function startBrowserHarness(
             modelConfigured: true,
             speechConfigured: false,
             observationOnly: false,
-            dependencyMode: "STUB",
+            dependencyMode: providerBridge ? "LIVE" : "STUB",
+            ...serviceConfig,
           });
         if (req.url !== "/live" || req.method !== "POST")
           return json(403, { error: "preflight-egress-disabled" });
+        const disconnected = new AbortController();
+        const abort = () => {
+          if (!res.writableEnded) disconnected.abort("browser-disconnected");
+        };
+        req.once("aborted", abort);
+        res.once("close", abort);
+        const deadline = providerBridge
+          ? product.providerExecution.createProviderDeadline(
+              disconnected.signal,
+            )
+          : null;
         try {
-          let body = "";
-          for await (const chunk of req) {
-            body += chunk.toString();
-            if (body.length > 32000) throw Error("request-too-large");
-          }
+          const body = await readHarnessBody(
+            req,
+            deadline?.controller.signal ?? disconnected.signal,
+          );
+          deadline?.controller.signal.throwIfAborted();
           const request = JSON.parse(body),
             payload = await product.provider.liveRequest(request);
           const captured = await page.evaluate(
@@ -111,6 +163,25 @@ export async function startBrowserHarness(
             )
           )
             throw Error("request-capture-drift");
+          if (providerBridge) {
+            const response = await providerBridge({
+              captured,
+              request,
+              payload,
+              signal: disconnected.signal,
+              deadline,
+            });
+            requests.push({ captured, request, payload, at: now() });
+            res.writeHead(
+              response.status,
+              Object.fromEntries(response.headers),
+            );
+            res.flushHeaders();
+            if (response.body)
+              await pipeline(Readable.fromWeb(response.body), res);
+            else res.end();
+            return;
+          }
           const response = responder
             ? await responder(captured, request)
             : captured.task.lane === "Stage"
@@ -165,7 +236,13 @@ export async function startBrowserHarness(
           );
         } catch (error) {
           errors.push({ boundary: "evaluator-stub", message: error.message });
-          json(500, { error: "preflight-stub-failed" });
+          if (!res.headersSent)
+            json(500, { error: "evaluator-boundary-failed" });
+          else res.end();
+        } finally {
+          deadline?.close();
+          req.removeListener("aborted", abort);
+          res.removeListener("close", abort);
         }
       });
     },
@@ -199,10 +276,21 @@ export async function startBrowserHarness(
     clearScreen: false,
     logLevel: "error",
   });
-  await server.listen();
+  try {
+    await server.listen();
+  } catch (error) {
+    await server.close();
+    throw error;
+  }
   const address = server.httpServer.address(),
     url = `http://127.0.0.1:${address.port}`;
-  const browser = await chromium.launch({ headless: true });
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true });
+  } catch (error) {
+    await server.close();
+    throw error;
+  }
   const context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
     reducedMotion: "reduce",
@@ -211,8 +299,19 @@ export async function startBrowserHarness(
   await context.route("**/*", (route) => {
     const u = route.request().url();
     if (localOnly(u) || u.startsWith("data:")) return route.continue();
+    const asset = rendererAssets?.get(u);
+    if (route.request().method() === "GET" && asset)
+      return route.fulfill({
+        status: 200,
+        body: asset.body,
+        headers: {
+          "Content-Type": asset.content_type,
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
     // Public, versioned renderer assets are not model egress. Their bytes are recorded.
     if (
+      allowRendererNetwork &&
       route.request().method() === "GET" &&
       /^https:\/\/cdn\.tldraw\.com\/5\.4\.2\/(fonts|icons|translations|embed-icons)\//.test(
         u,

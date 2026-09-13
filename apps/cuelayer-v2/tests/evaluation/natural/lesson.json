@@ -1,0 +1,240 @@
+{
+  "identity": "cuelayer-v2-natural-short-lesson-1",
+  "lesson_id": "pressure-and-membrane",
+  "review_status": "REVIEWED",
+  "source": {
+    "kind": "authored",
+    "private": false
+  },
+  "duration_ms": 97000,
+  "transcript_events": [
+    {
+      "event_id": "e0",
+      "at_ms": 0,
+      "text": "For a flat piston face, pressure P equals the perpendicular force F divided by the area A."
+    },
+    {
+      "event_id": "e1",
+      "at_ms": 900,
+      "text": "In that relationship, P is measured in pascals, F in newtons, and A in square metres. The force is perpendicular to the flat face."
+    },
+    {
+      "event_id": "e2",
+      "at_ms": 10000,
+      "text": "For our sealed vessel, the pressure reading Q is ninety kilopascals. Q denotes the pressure reading of this vessel."
+    },
+    {
+      "event_id": "e3",
+      "at_ms": 30000,
+      "text": "I need to correct that pressure reading Q for the same sealed vessel. It is ninety-five kilopascals, not ninety kilopascals."
+    },
+    {
+      "event_id": "e4",
+      "at_ms": 43000,
+      "text": "With your partner, decide whether the corrected reading is higher or lower than the original reading, and explain your choice."
+    },
+    {
+      "event_id": "e5",
+      "at_ms": 57000,
+      "text": "The membrane allows..."
+    },
+    {
+      "event_id": "e6",
+      "at_ms": 57900,
+      "text": "Please turn to page twelve. I will finish that membrane statement later."
+    },
+    {
+      "event_id": "e7",
+      "at_ms": 70000,
+      "text": "To finish the membrane statement: the membrane allows water to cross but prevents sucrose from crossing."
+    },
+    {
+      "event_id": "e8",
+      "at_ms": 82000,
+      "text": "Returning to the same sealed vessel, its pressure reading Q remains ninety-five kilopascals."
+    }
+  ],
+  "checkpoints": [
+    {
+      "id": "initial-reading",
+      "at_ms": 29000,
+      "why": "Retain the original pressure relation and reading before the correction arrives."
+    },
+    {
+      "id": "corrected-reading",
+      "at_ms": 42000,
+      "why": "Inspect correction identity and current value before the learner invitation."
+    },
+    {
+      "id": "invitation",
+      "at_ms": 56500,
+      "why": "Inspect the teacher invitation and visible learner surface before the topic changes."
+    },
+    {
+      "id": "unresolved-before-clarification",
+      "at_ms": 69000,
+      "why": "Inspect exact unfinished-source recoverability after administration and a promise, before actual completion."
+    },
+    {
+      "id": "clarified-and-returned",
+      "at_ms": 97000,
+      "why": "Inspect actual membrane completion and the preserved corrected vessel identity."
+    }
+  ],
+  "oracle": {
+    "rubric": "Review the exact source available at each request and checkpoint, canonical proposals, accepted history, current state and captured learner surface. Only each retained task/request defines the captured model inputs. A request-row prestate labeled as observed replay at dispatch may include newer source or concurrent accepted changes and grants no additional model evidence or write authority. Never use a future source event to justify an earlier assertion. A schema-valid or host-accepted proposal is not automatically semantically correct. Judge subjects, polarity, relation direction, quantities, units, conditions and identity explicitly. Equivalent faithful mathematical notation is allowed. A missing outcome is a coverage failure; an unsupported accepted assertion or answer leak is a semantic failure. Host-rejected proposals remain separately inspectable and do not count as accepted outcomes. Map semantic roles to actual accepted unit IDs only after reading their meaning. Never invent a missing binding. Missing evidence, missing checkpoints or an undecidable meaning remains UNRESOLVED. A promise is not a clarification. No manually injected Stage result or forced batching may satisfy this natural-path oracle. This short lesson does not erase or replace the retained qualification failures from issue 58.",
+    "criteria": [
+      {
+        "id": "pressure-relationship",
+        "claim": "Establish the quantitative relationship P = F / A, with P denoting pressure in Pa, F perpendicular force in N, and A area in square metres. Preserve the flat-face and perpendicular-force scope. Do not substitute an unrelated value assignment or a merely plausible formula.",
+        "evidence_refs": ["e0", "e1"],
+        "checkpoint_ids": [
+          "initial-reading",
+          "clarified-and-returned",
+          "post_reload"
+        ]
+      },
+      {
+        "id": "initial-reading",
+        "claim": "Before correction, establish Q = 90 kPa for the stated sealed vessel, with that physical role and vessel identity distinct from the general P/F/A relationship.",
+        "evidence_refs": ["e2"],
+        "checkpoint_ids": ["initial-reading"]
+      },
+      {
+        "id": "reading-correction",
+        "claim": "The explicit correction makes Q = 95 kPa current on the same accepted reading identity. Preserve the original 90 kPa version as history, and do not leave a separate conflicting current 90 kPa reading or alter the general pressure relationship.",
+        "evidence_refs": ["e0", "e1", "e2", "e3"],
+        "checkpoint_ids": [
+          "initial-reading",
+          "corrected-reading",
+          "clarified-and-returned",
+          "post_reload"
+        ]
+      },
+      {
+        "id": "teacher-invitation",
+        "claim": "Retain and visibly present the teacher-origin partner invitation to compare the corrected and original readings. Do not establish or reveal the higher/lower answer, replace the invitation with an answer, or relabel it as an AI-authored task. The earlier and corrected numeric facts themselves remain legitimate history.",
+        "evidence_refs": ["e2", "e3", "e4"],
+        "checkpoint_ids": ["invitation"]
+      },
+      {
+        "id": "unfinished-survives-administration",
+        "claim": "Before e7, preserve the exact unfinished membrane source as pending evidence or separately addressable unresolved/review work. Administration and the promise to finish later supply no completion. Do not assert what crosses, terminally discard the unfinished source, or replace its identity/range with e6.",
+        "evidence_refs": ["e5", "e6"],
+        "checkpoint_ids": ["unresolved-before-clarification"]
+      },
+      {
+        "id": "actual-membrane-clarification",
+        "claim": "After the actual clarification, establish that the membrane permits water to cross and prevents sucrose from crossing, preserving both substances and opposite polarities. Resolve the original unfinished subject against e7 without attaching it to the unrelated pressure relationship or treating the promise as evidence for either permeability claim.",
+        "evidence_refs": ["e5", "e6", "e7"],
+        "checkpoint_ids": ["clarified-and-returned", "post_reload"]
+      },
+      {
+        "id": "topic-return",
+        "claim": "Returning to the same sealed vessel preserves the corrected reading identity and Q = 95 kPa. The membrane topic does not erase the pressure knowledge, create a second vessel, restore 90 kPa, or conflate Q with the general pressure variable P.",
+        "evidence_refs": ["e0", "e1", "e2", "e3", "e7", "e8"],
+        "checkpoint_ids": [
+          "clarified-and-returned",
+          "pre_reload",
+          "post_reload"
+        ]
+      },
+      {
+        "id": "all-accepted-meaning",
+        "claim": "Every accepted assertion and every learner-visible claim across the full timeline is grounded in evidence available then, with correct subject, direction, polarity, quantity, unit, scope and source authority. No speculative partial generation, invented quantity field, factual completion from the promise, or comparison answer is published. Review intermediate versions and surfaces, not only the final snapshot.",
+        "evidence_refs": ["e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8"],
+        "checkpoint_ids": [
+          "initial-reading",
+          "corrected-reading",
+          "invitation",
+          "unresolved-before-clarification",
+          "clarified-and-returned",
+          "pre_reload",
+          "post_reload"
+        ]
+      },
+      {
+        "id": "source-no-loss",
+        "claim": "Every authored event is admitted exactly once with its immutable text/order and remains in durable source history. Final accounting and separately retained obligations accurately cover all source; NO_CHANGE or review confirmation loses no unfinished assertion. Closing and reopening must not manufacture, duplicate or omit source.",
+        "evidence_refs": ["e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8"],
+        "checkpoint_ids": ["pre_reload", "post_reload"]
+      },
+      {
+        "id": "reload-and-surface",
+        "claim": "Reload reconstructs the same accepted knowledge, identity, field provenance, source accounting and remaining obligations. The current learner surface is grounded in accepted current meaning and preserves any visible quantity units/conditions; no stale 90 kPa current value, expired attention, transcript fallback or unaccepted model draft is replayed. Reload performs no provider request.",
+        "evidence_refs": ["e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8"],
+        "checkpoint_ids": ["pre_reload", "post_reload"]
+      }
+    ],
+    "bindings": [
+      {
+        "key": "pressure-law",
+        "checkpoint_id": "initial-reading",
+        "meaning_kind": "quantity",
+        "field_grounding": [
+          {
+            "field": "expression",
+            "evidence_any": ["e0"]
+          },
+          {
+            "field": "symbols",
+            "evidence_any": ["e1"]
+          },
+          {
+            "field": "conditions",
+            "evidence_any": ["e0", "e1"]
+          }
+        ]
+      },
+      {
+        "key": "reading-initial",
+        "checkpoint_id": "initial-reading",
+        "meaning_kind": "quantity",
+        "field_grounding": [
+          {
+            "field": "expression",
+            "evidence_any": ["e2"]
+          },
+          {
+            "field": "symbols",
+            "evidence_any": ["e2"]
+          }
+        ]
+      },
+      {
+        "key": "reading-corrected",
+        "checkpoint_id": "corrected-reading",
+        "meaning_kind": "quantity",
+        "field_grounding": [
+          {
+            "field": "expression",
+            "evidence_any": ["e3"]
+          },
+          {
+            "field": "symbols",
+            "evidence_any": ["e2", "e3"]
+          }
+        ]
+      },
+      {
+        "key": "reading-returned",
+        "checkpoint_id": "clarified-and-returned",
+        "meaning_kind": "quantity",
+        "field_grounding": [
+          {
+            "field": "expression",
+            "evidence_any": ["e3", "e8"]
+          },
+          {
+            "field": "symbols",
+            "evidence_any": ["e2", "e3", "e8"]
+          }
+        ]
+      }
+    ],
+    "same_identity": [
+      ["reading-initial", "reading-corrected", "reading-returned"]
+    ],
+    "distinct_identity": [["pressure-law", "reading-initial"]]
+  }
+}
