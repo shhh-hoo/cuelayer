@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { evaluatorRoot } from "../manifest.mjs";
 import { Provenance, git } from "../provenance.mjs";
@@ -12,6 +13,7 @@ import {
   ELIGIBLE_MODEL_CONFIGURATIONS,
   validateEligibleCandidate,
 } from "./provider.mjs";
+import { createQuotaGuard } from "./quota.mjs";
 
 // Exact researched snapshots, independently listed so a changed adapter cannot
 // silently enlarge the cohort. Injected SSE is mechanical evidence only.
@@ -54,6 +56,61 @@ const semanticPayload = (payload) =>
         ),
     ),
   );
+const smallBatch = JSON.parse(
+  readFileSync(
+    new URL("./eligible-small-candidate-proposal.json", import.meta.url),
+    "utf8",
+  ),
+);
+
+test("first complimentary batch is exactly eight by six with no aggregate evaluator ceiling", () => {
+  assert.equal(smallBatch.batch.candidate_count, 8);
+  assert.equal(smallBatch.batch.case_count, 6);
+  assert.equal(smallBatch.batch.repetitions, 1);
+  assert.equal(smallBatch.batch.trial_count, 48);
+  assert.equal(smallBatch.candidates.length, 8);
+  assert.equal(smallBatch.selected_case_ids.length, 6);
+  assert.equal(smallBatch.proposed_limits.max_trials, 48);
+  assert.equal(smallBatch.proposed_limits.max_provider_attempts, 48);
+  assert(smallBatch.candidates.every((c) => c.quota_group === "small"));
+  for (const field of [
+    "max_total_input_tokens",
+    "max_total_output_tokens",
+    "max_cost_usd",
+  ])
+    assert.equal(Object.hasOwn(smallBatch.proposed_limits, field), false);
+  assert.equal(
+    Object.hasOwn(smallBatch.complimentary_policy, "run_caps"),
+    false,
+  );
+  assert.equal(
+    Object.hasOwn(smallBatch.batch, "combined_input_output_token_ceiling"),
+    false,
+  );
+
+  const now = Date.parse("2026-09-13T12:00:00Z");
+  const quota = createQuotaGuard(
+    smallBatch,
+    {
+      complimentary_usage: {
+        enrolled: true,
+        project_confirmed: true,
+        sharing_authorized: true,
+        exclusive_org_usage: true,
+        source: "offline no-ceiling regression fixture",
+        checked_at: new Date(now).toISOString(),
+        utc_date: "2026-09-13",
+        remaining_tokens: { large: 123456, small: 2345678 },
+      },
+    },
+    { now: () => now },
+  );
+  assert.deepEqual(quota.snapshot().limits, {
+    large: 123456,
+    small: 2345678,
+  });
+});
+
 test("screening adapter permits exactly the reviewed dated snapshots and preserves semantic fields", () => {
   assert.deepEqual(
     Object.keys(ELIGIBLE_MODEL_CONFIGURATIONS).sort(),
