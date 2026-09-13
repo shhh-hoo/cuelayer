@@ -1,22 +1,40 @@
 import { sha256 } from "../evidence.mjs";
+import { createQuotaGuard } from "./quota.mjs";
 
 export const QUALIFICATION_IDENTITY = "cuelayer-v2-semantic-qualification-1";
 export const QUALIFICATION_APPROVAL_IDENTITY =
   "cuelayer-v2-semantic-qualification-authorization-1";
+export const ELIGIBLE_QUALIFICATION_IDENTITY =
+  "cuelayer-v2-eligible-model-screening-1";
+export const ELIGIBLE_QUALIFICATION_APPROVAL_IDENTITY =
+  "cuelayer-v2-eligible-model-screening-authorization-1";
 export function createQualificationScope(manifest, approval, apiKeys) {
+  const screening = manifest.identity === ELIGIBLE_QUALIFICATION_IDENTITY;
   if (
-    manifest.identity !== QUALIFICATION_IDENTITY ||
+    (!screening && manifest.identity !== QUALIFICATION_IDENTITY) ||
     manifest.paid_enabled !== false ||
     manifest.freeze_status !== "FROZEN"
   )
     throw Error("qualification-not-frozen");
   if (
-    approval?.identity !== QUALIFICATION_APPROVAL_IDENTITY ||
+    approval?.identity !==
+      (screening
+        ? ELIGIBLE_QUALIFICATION_APPROVAL_IDENTITY
+        : QUALIFICATION_APPROVAL_IDENTITY) ||
     approval.approved !== true ||
     approval.manifest_sha256 !== sha256(manifest) ||
     approval.limits_sha256 !== sha256(manifest.proposed_limits)
   )
     throw Error("qualification-approval-mismatch");
+  if (
+    screening &&
+    (manifest.execution_profile?.transport_retries !== 0 ||
+      manifest.execution_profile?.sdk_retries !== 0 ||
+      manifest.proposed_limits?.max_provider_attempts !==
+        manifest.trials.length)
+  )
+    throw Error("qualification-screening-execution-drift");
+  const quota = screening ? createQuotaGuard(manifest, approval) : null;
   const manifestHash = sha256(manifest),
     approvalHash = sha256(approval);
   const candidates = new Map(
@@ -29,19 +47,21 @@ export function createQualificationScope(manifest, approval, apiKeys) {
   )
     throw Error("qualification-duplicate-identity");
   const limits = manifest.proposed_limits;
-  for (const name of [
+  const requiredLimitNames = [
     "max_trials",
     "max_provider_attempts",
     "max_input_tokens_per_attempt",
     "max_output_tokens_per_attempt",
-    "max_total_input_tokens",
-    "max_total_output_tokens",
-  ])
+    ...(screening
+      ? []
+      : ["max_total_input_tokens", "max_total_output_tokens"]),
+  ];
+  for (const name of requiredLimitNames)
     if (!Number.isSafeInteger(limits[name]) || limits[name] <= 0)
       throw Error("qualification-invalid-limit");
   if (
-    !Number.isFinite(limits.max_cost_usd) ||
-    limits.max_cost_usd <= 0 ||
+    (!screening &&
+      (!Number.isFinite(limits.max_cost_usd) || limits.max_cost_usd <= 0)) ||
     trials.size !== limits.max_trials
   )
     throw Error("qualification-invalid-limit");
@@ -116,6 +136,7 @@ export function createQualificationScope(manifest, approval, apiKeys) {
     if (sha256(manifest) !== manifestHash || sha256(approval) !== approvalHash)
       invalid = "qualification-approval-drift";
     if (invalid) throw Error(invalid);
+    quota?.assertActive();
   };
   const budget = {
     calls,
@@ -129,6 +150,12 @@ export function createQualificationScope(manifest, approval, apiKeys) {
       if (actualModel && actualModel !== call.model) {
         invalid = "qualification-model-drift";
         throw Error(invalid);
+      }
+      try {
+        quota?.settle(id, usage, actualModel);
+      } catch (error) {
+        invalid = error.message;
+        throw error;
       }
       if (!usage) return;
       const input = usage.input_tokens,
@@ -156,7 +183,8 @@ export function createQualificationScope(manifest, approval, apiKeys) {
       call.output_tokens = output;
       call.cached_input_tokens = cached;
       call.cache_state = cached ? "HIT" : "MISS";
-      // Without exact cache-creation billing, retain the largest published input rate.
+      // Published-rate estimates remain evidence only. Complimentary screening
+      // admission is governed by the provider allowance guard, not a local cost cap.
       const rates = multipliers(c, input);
       call.cost =
         (((input - cached) * maxInputRate(c) + cached * p.cached_input) *
@@ -169,9 +197,10 @@ export function createQualificationScope(manifest, approval, apiKeys) {
           output * p.output * rates.output_multiplier) /
         1e6;
       if (
-        cost() > limits.max_cost_usd ||
-        totals("input_tokens") > limits.max_total_input_tokens ||
-        totals("output_tokens") > limits.max_total_output_tokens
+        !screening &&
+        (cost() > limits.max_cost_usd ||
+          totals("input_tokens") > limits.max_total_input_tokens ||
+          totals("output_tokens") > limits.max_total_output_tokens)
       ) {
         invalid = "qualification-budget-exceeded";
         throw Error(invalid);
@@ -181,6 +210,7 @@ export function createQualificationScope(manifest, approval, apiKeys) {
   return {
     assertActive,
     discipline: { budget },
+    ...(quota ? { quota } : {}),
     authorization: approval,
     reserve(trialId, url, method, body) {
       assertActive();
@@ -193,7 +223,8 @@ export function createQualificationScope(manifest, approval, apiKeys) {
         sha256(body) !== trial.payload_sha256
       )
         throw Error("qualification-unapproved-request");
-      if (count >= 3) throw Error("qualification-retry-limit");
+      if (count >= (screening ? 1 : 3))
+        throw Error("qualification-retry-limit");
       const c = candidates.get(trial.candidate_id),
         input = trial.input_tokens_upper_bound,
         output = c.max_output_tokens;
@@ -206,12 +237,14 @@ export function createQualificationScope(manifest, approval, apiKeys) {
         throw Error("qualification-invalid-reservation");
       if (
         calls.length >= limits.max_provider_attempts ||
-        cost() + reserved > limits.max_cost_usd ||
-        totals("input_tokens") + input > limits.max_total_input_tokens ||
-        totals("output_tokens") + output > limits.max_total_output_tokens
+        (!screening &&
+          (cost() + reserved > limits.max_cost_usd ||
+            totals("input_tokens") + input > limits.max_total_input_tokens ||
+            totals("output_tokens") + output > limits.max_total_output_tokens))
       )
         throw Error("qualification-budget-exceeded");
       const id = trialId + ":attempt-" + (count + 1);
+      quota?.reserve(trial, c, id);
       counts.set(trialId, count + 1);
       calls.push({
         id,

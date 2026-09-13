@@ -381,6 +381,23 @@ node apps/cuelayer-v2/scripts/evaluate-frontier.mjs import-qualification-review 
 
 Apply every frozen required decision with original evidence and resolvable output pointers. Uncertain judgments remain `UNRESOLVED`; absent reviews remain pending. A manual role binding for a new quantity enables exact field-citation checks but does not itself certify the quantity's meaning. Preserve the raw result and report all failures/unavailable/unrun cases alongside observed latencies. Run the canonical `self-test` command to exercise both historical evaluators and the new qualification modules without provider access.
 
+### Complimentary-model screening
+
+Keep a complete 17-model plan and freeze separate small/large candidate subsets. Record unconfirmed eligibility explicitly. The six selected snapshots must retain their exact product-created scope IDs: reuse their saved bytes for token counting and preparation, because recapturing generates new IDs. Input counting transmits the same authored source, CueLayer prompt, context and schema to OpenAI; obtain authorization for that endpoint and data before sending it. It generates no model answer and is not semantic validation.
+
+For each exact candidate body, `qualification/quota.mjs` exports `inputTokenCountPayload`. Save a count record with `model`, `endpoint`, `status`, `object`, `input_tokens`, `checked_at`, and SHA256 hashes of `JSON.stringify(payload)` and `JSON.stringify(countPayload)` as `payload_sha256` and `count_request_sha256`. Use only the official count endpoint and preserve error records; do not fabricate counts or substitute observed historical usage. Test-only counts cannot create a live manifest.
+
+After saving the exact snapshot array, reviewed proposal subset, real model metadata and count records, commit the evaluator and prepare a fresh directory:
+
+```sh
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs prepare-qualification --product=/absolute/path/to/product --product-sha=f82a97a987a71f0a4ef165827bf2870bef10dcca --proposal=/absolute/path/to/reviewed-proposal.json --snapshots=/absolute/path/to/exact-snapshots.json --availability=/absolute/path/to/model-availability.json --input-token-counts=/absolute/path/to/input-counts.json --out=/absolute/path/to/new-screening-run
+node apps/cuelayer-v2/scripts/evaluate-frontier.mjs verify-qualification --manifest=/absolute/path/to/new-screening-run/qualification-manifest.json
+```
+
+The authorization identity is `cuelayer-v2-eligible-model-screening-authorization-1`, with exact manifest/limits hashes and `approved: true`. In addition, `complimentary_usage` must contain `enrolled`, `project_confirmed`, `sharing_authorized`, and `exclusive_org_usage` all true; `checked_at` no more than 30 minutes old; `utc_date`; a descriptive `source`; and `remaining_tokens: {large, small}` for the whole organization. Confirm the API key belongs to the inspected account/project and pause other organization API traffic. Never invent these confirmations. Use the existing `execute-qualification` command only within the user's authorized data-sharing and execution scope. A nonzero published-rate ceiling accounts for exposure; it does not authorize a charge.
+
+Run the canonical offline `self-test` before freezing. Its screening tests exercise both historical and new grids, all 17 exact model overlays through the product SDK, nonreasoning-field removal, proposal/count/snapshot tampering, quota accounting, unknown usage and cross-day stops. Generated packets, account observations, count records and results belong in ignored `.cuelayer/`. Keep the natural lesson run and any later repeated comparison under their own authorization.
+
 ### Natural text lesson
 
 Acquire the fixed public tldraw 5.4.2 assets during unpaid preparation, then freeze the reviewed short lesson using separate clean evaluator and selected product checkouts. Acquisition permits only the listed public asset GETs; execution serves their verified bytes locally. These commands are credential-free, create no authorization, and require fresh output directories:

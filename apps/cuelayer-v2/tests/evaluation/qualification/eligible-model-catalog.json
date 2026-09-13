@@ -1,0 +1,1040 @@
+{
+  "identity": "cuelayer-official-openai-model-catalog-research-1",
+  "checked_at": "2026-09-13T11:49:59.475005Z",
+  "research_only": true,
+  "provider_generation_calls": 0,
+  "requested_model_count": 17,
+  "scope": "Current official documentation only. Exact requested names retained. No substitutions, account availability claim, free-usage entitlement claim, or CueLayer qualification claim.",
+  "snapshot_note": "The requested alias and documented paired snapshot are separate fields. Snapshot support can differ; see GPT-4o 2024-05-13 exception. Do not silently choose another snapshot. Pairing is documentary evidence, not a runtime routing or returned-identity check.",
+  "pricing_note": "Published standard USD tariffs per one million text tokens; cached input is separate. These are gross tariffs, not a promise of the account incentive. GPT-5.4 long-context pricing needs the separately recorded full-session surcharge.",
+  "input_limit_note": "Null maximum_input_tokens means no independent maximum verified from checked sources; it is not zero or an inferred context-minus-output maximum.",
+  "suggested_config_status": "Comparable explicit medium for reasoning models; reasoning omitted for non-reasoning. This is a proposed setting, not measured compatibility or quality. Omit temperature, top_p, logprobs and unrequested sampling settings. Current model pages do not enumerate exact efforts for o1/o3-mini/o4-mini; these rows retain explicit inference status and null documented_reasoning_efforts.",
+  "quota_research_handoff": {
+    "status": "separately_owned_by_parent_not_verified_here",
+    "reported_mismatch": "The parent reports current help article 10306912 omits o3-mini and includes Sol/Luna, unlike the quoted user list. Preserve o3-mini as requested and resolve eligibility separately; do not replace it or assume it is free."
+  },
+  "models": [
+    {
+      "requested_model": "gpt-5.4",
+      "alias": "gpt-5.4",
+      "documented_snapshot_pair": "gpt-5.4-2026-03-05",
+      "snapshots": ["gpt-5.4-2026-03-05"],
+      "context_window_tokens": 1050000,
+      "maximum_input_tokens": null,
+      "max_output_tokens": 128000,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": true,
+        "efforts": ["none", "low", "medium", "high", "xhigh"],
+        "efforts_verification": "explicit model-page enumeration",
+        "default_effort": "none",
+        "suggested_comparable_effort": "medium",
+        "request_rule": "Set reasoning.effort=medium explicitly."
+      },
+      "documented_reasoning_efforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "price_usd_per_1m_tokens": {
+        "input": 2.5,
+        "cached_input": 0.25,
+        "output": 15,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": {
+        "separate_rates_published": true,
+        "threshold_input_tokens": 272000,
+        "comparison": ">",
+        "scope": "full session",
+        "applies_to_tiers": ["standard", "batch", "flex"],
+        "prices_usd_per_million": {
+          "input": 5,
+          "cached_input": 0.5,
+          "output": 22.5
+        },
+        "price_tier": "standard",
+        "input_multiplier": 2,
+        "cached_input_multiplier": 2,
+        "output_multiplier": 1.5,
+        "note": "Model-page prose defines >272K input; the central pricing row labels short context <272K. Exact equality at 272000 is not reconciled by these two labels."
+      },
+      "regional_processing_uplift_percent": 10,
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": [],
+        "details": null
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/gpt-5.4",
+        "https://developers.openai.com/api/docs/models/gpt-5.4.md",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/pricing.md"
+      ],
+      "uncertainties": [
+        "The model page does not specify an independent maximum input-token count; context-window size must not be treated as an independently documented input maximum.",
+        "Exact 272000-token threshold equality is worded inconsistently: model footnote uses >272K for long context, while central pricing labels short context <272K. Avoid boundary assumptions when freezing the budget."
+      ],
+      "checked_at": "2026-09-13T11:44:37Z",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": {
+          "effort": "medium"
+        }
+      }
+    },
+    {
+      "requested_model": "gpt-5.2",
+      "alias": "gpt-5.2",
+      "documented_snapshot_pair": "gpt-5.2-2025-12-11",
+      "snapshots": ["gpt-5.2-2025-12-11"],
+      "context_window_tokens": 400000,
+      "maximum_input_tokens": null,
+      "max_output_tokens": 128000,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": true,
+        "efforts": ["none", "low", "medium", "high", "xhigh"],
+        "efforts_verification": "explicit model-page enumeration",
+        "default_effort": "none",
+        "suggested_comparable_effort": "medium",
+        "request_rule": "Set reasoning.effort=medium explicitly."
+      },
+      "documented_reasoning_efforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "price_usd_per_1m_tokens": {
+        "input": 1.75,
+        "cached_input": 0.175,
+        "output": 14,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": {
+        "separate_rates_published": false,
+        "threshold_input_tokens": null,
+        "comparison": null,
+        "prices_usd_per_million": null,
+        "note": "Standard pricing table shows dashes for the long-context columns; no separate long-context surcharge is published for this model in the checked model page or pricing table."
+      },
+      "regional_processing_uplift_percent": null,
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": [],
+        "details": null
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/gpt-5.2",
+        "https://developers.openai.com/api/docs/models/gpt-5.2.md",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/pricing.md"
+      ],
+      "uncertainties": [
+        "The model page does not specify an independent maximum input-token count; context-window size must not be treated as an independently documented input maximum."
+      ],
+      "checked_at": "2026-09-13T11:44:37Z",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": {
+          "effort": "medium"
+        }
+      }
+    },
+    {
+      "requested_model": "gpt-5.1",
+      "alias": "gpt-5.1",
+      "documented_snapshot_pair": "gpt-5.1-2025-11-13",
+      "snapshots": ["gpt-5.1-2025-11-13"],
+      "context_window_tokens": 400000,
+      "maximum_input_tokens": null,
+      "max_output_tokens": 128000,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": true,
+        "efforts": ["none", "low", "medium", "high"],
+        "efforts_verification": "explicit model-page enumeration",
+        "default_effort": "none",
+        "suggested_comparable_effort": "medium",
+        "request_rule": "Set reasoning.effort=medium explicitly."
+      },
+      "documented_reasoning_efforts": ["none", "low", "medium", "high"],
+      "price_usd_per_1m_tokens": {
+        "input": 1.25,
+        "cached_input": 0.125,
+        "output": 10,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": {
+        "separate_rates_published": false,
+        "threshold_input_tokens": null,
+        "comparison": null,
+        "prices_usd_per_million": null,
+        "note": "Standard pricing table shows dashes for the long-context columns; no separate long-context surcharge is published for this model in the checked model page or pricing table."
+      },
+      "regional_processing_uplift_percent": null,
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": [],
+        "details": null
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/gpt-5.1",
+        "https://developers.openai.com/api/docs/models/gpt-5.1.md",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/pricing.md"
+      ],
+      "uncertainties": [
+        "The model page does not specify an independent maximum input-token count; context-window size must not be treated as an independently documented input maximum."
+      ],
+      "checked_at": "2026-09-13T11:44:37Z",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": {
+          "effort": "medium"
+        }
+      }
+    },
+    {
+      "requested_model": "gpt-5",
+      "alias": "gpt-5",
+      "documented_snapshot_pair": "gpt-5-2025-08-07",
+      "snapshots": ["gpt-5-2025-08-07"],
+      "context_window_tokens": 400000,
+      "maximum_input_tokens": 272000,
+      "max_output_tokens": 128000,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": true,
+        "efforts": ["minimal", "low", "medium", "high"],
+        "efforts_verification": "explicit model-page enumeration",
+        "default_effort": null,
+        "suggested_comparable_effort": "medium",
+        "request_rule": "Set reasoning.effort=medium explicitly."
+      },
+      "documented_reasoning_efforts": ["minimal", "low", "medium", "high"],
+      "price_usd_per_1m_tokens": {
+        "input": 1.25,
+        "cached_input": 0.125,
+        "output": 10,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": {
+        "separate_rates_published": false,
+        "threshold_input_tokens": null,
+        "comparison": null,
+        "prices_usd_per_million": null,
+        "note": "Standard pricing table shows dashes for the long-context columns; no separate long-context surcharge is published for this model in the checked model page or pricing table."
+      },
+      "regional_processing_uplift_percent": null,
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-12-11",
+        "snapshot_exceptions": [],
+        "details": {
+          "announcement_date": "2026-06-11",
+          "shutdown_date": "2026-12-11",
+          "affected_documented_snapshot": "gpt-5-2025-08-07",
+          "source_url": "https://developers.openai.com/api/docs/deprecations",
+          "alias_scope_note": "Deprecation table names the dated snapshot; the current model page identifies it as the default snapshot for gpt-5. No replacement is substituted in this catalog."
+        }
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/gpt-5",
+        "https://developers.openai.com/api/docs/models/gpt-5.md",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/pricing.md",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/deprecations.md"
+      ],
+      "uncertainties": [
+        "The model page enumerates reasoning efforts but does not identify the default; it is retained as null."
+      ],
+      "checked_at": "2026-09-13T11:44:37Z",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": {
+          "effort": "medium"
+        }
+      }
+    },
+    {
+      "alias": "gpt-4.1",
+      "snapshots": ["gpt-4.1-2025-04-14"],
+      "context_window_tokens": 1047576,
+      "max_output_tokens": 32768,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": false,
+        "efforts": null,
+        "efforts_verification": "not_applicable",
+        "suggested_comparable_effort": null,
+        "request_rule": "Omit reasoning entirely; null is catalog metadata, not an API none setting."
+      },
+      "price_usd_per_1m_tokens": {
+        "input": 2,
+        "cached_input": 0.5,
+        "output": 8,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": null,
+      "long_context_pricing_status": "No separate surcharge listed on this model page; standard published text rates recorded.",
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": []
+      },
+      "sources": ["https://developers.openai.com/api/docs/models/gpt-4.1"],
+      "uncertainties": [],
+      "requested_model": "gpt-4.1",
+      "documented_snapshot_pair": "gpt-4.1-2025-04-14",
+      "maximum_input_tokens": null,
+      "documented_reasoning_efforts": null,
+      "checked_at": "2026-09-13T11:45:30.830208+00:00",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": null
+      }
+    },
+    {
+      "alias": "gpt-4o",
+      "snapshots": [
+        "gpt-4o-2024-08-06",
+        "gpt-4o-2024-11-20",
+        "gpt-4o-2024-05-13"
+      ],
+      "context_window_tokens": 128000,
+      "max_output_tokens": 16384,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": false,
+        "efforts": null,
+        "efforts_verification": "not_applicable",
+        "suggested_comparable_effort": null,
+        "request_rule": "Omit reasoning entirely; null is catalog metadata, not an API none setting."
+      },
+      "price_usd_per_1m_tokens": {
+        "input": 2.5,
+        "cached_input": 1.25,
+        "output": 10,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": null,
+      "long_context_pricing_status": "No separate surcharge listed on this model page; standard published text rates recorded.",
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": [
+          {
+            "model_id": "gpt-4o-2024-05-13",
+            "shutdown_date": "2026-10-23",
+            "structured_outputs": false,
+            "note": "Structured Outputs guide requires gpt-4o-2024-08-06 or later; do not use this legacy snapshot for the frozen strict-schema comparison."
+          }
+        ]
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/gpt-4o",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/guides/structured-outputs"
+      ],
+      "uncertainties": [],
+      "requested_model": "gpt-4o",
+      "documented_snapshot_pair": "gpt-4o-2024-08-06",
+      "maximum_input_tokens": null,
+      "documented_reasoning_efforts": null,
+      "checked_at": "2026-09-13T11:45:30.830208+00:00",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": null
+      }
+    },
+    {
+      "alias": "o1",
+      "snapshots": ["o1-2024-12-17"],
+      "context_window_tokens": 200000,
+      "max_output_tokens": 100000,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": true,
+        "efforts": ["low", "medium", "high"],
+        "efforts_verification": "family_level_inference_not_model_specific_enum",
+        "suggested_comparable_effort": "medium",
+        "request_rule": "Suggested reasoning.effort=medium is based on earlier o-series family documentation; exact individual effort enumeration remains unverified."
+      },
+      "price_usd_per_1m_tokens": {
+        "input": 15,
+        "cached_input": 7.5,
+        "output": 60,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": null,
+      "long_context_pricing_status": "No separate surcharge listed on this model page; standard published text rates recorded.",
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-10-23",
+        "snapshot_exceptions": []
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/o1",
+        "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.2",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/models/o1.md"
+      ],
+      "uncertainties": [
+        "Current individual model page confirms reasoning support but does not enumerate efforts; low/medium/high and suggested medium are inferred from the documented earlier o-series family, not generation-tested."
+      ],
+      "requested_model": "o1",
+      "documented_snapshot_pair": "o1-2024-12-17",
+      "maximum_input_tokens": null,
+      "documented_reasoning_efforts": null,
+      "checked_at": "2026-09-13T11:45:30.830208+00:00",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": {
+          "effort": "medium"
+        }
+      }
+    },
+    {
+      "alias": "o3",
+      "snapshots": ["o3-2025-04-16"],
+      "context_window_tokens": 200000,
+      "max_output_tokens": 100000,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": true,
+        "efforts": ["low", "medium", "high"],
+        "efforts_verification": "documented_for_o3",
+        "suggested_comparable_effort": "medium",
+        "request_rule": "Set reasoning.effort=medium explicitly."
+      },
+      "price_usd_per_1m_tokens": {
+        "input": 2,
+        "cached_input": 0.5,
+        "output": 8,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": null,
+      "long_context_pricing_status": "No separate surcharge listed on this model page; standard published text rates recorded.",
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-12-11",
+        "snapshot_exceptions": []
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/o3",
+        "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.2",
+        "https://developers.openai.com/api/docs/deprecations"
+      ],
+      "uncertainties": [],
+      "requested_model": "o3",
+      "documented_snapshot_pair": "o3-2025-04-16",
+      "maximum_input_tokens": null,
+      "documented_reasoning_efforts": ["low", "medium", "high"],
+      "checked_at": "2026-09-13T11:45:30.830208+00:00",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": {
+          "effort": "medium"
+        }
+      }
+    },
+    {
+      "requested_model": "gpt-5.4-mini",
+      "alias": "gpt-5.4-mini",
+      "documented_snapshot_pair": "gpt-5.4-mini-2026-03-17",
+      "snapshots": ["gpt-5.4-mini-2026-03-17"],
+      "context_window_tokens": 400000,
+      "maximum_input_tokens": 272000,
+      "max_output_tokens": 128000,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": true,
+        "efforts": ["none", "low", "medium", "high", "xhigh"],
+        "efforts_verification": "explicit model-page enumeration",
+        "default_effort": "none",
+        "suggested_comparable_effort": "medium",
+        "request_rule": "Set reasoning.effort=medium explicitly."
+      },
+      "documented_reasoning_efforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "price_usd_per_1m_tokens": {
+        "input": 0.75,
+        "cached_input": 0.075,
+        "output": 4.5,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": {
+        "separate_rates_published": false,
+        "threshold_input_tokens": null,
+        "comparison": null,
+        "prices_usd_per_million": null,
+        "note": "Standard pricing table shows dashes for the long-context columns; no separate long-context surcharge is published for this model in the checked model page or pricing table."
+      },
+      "regional_processing_uplift_percent": 10,
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": [],
+        "details": null
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/gpt-5.4-mini",
+        "https://developers.openai.com/api/docs/models/gpt-5.4-mini.md",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/pricing.md"
+      ],
+      "uncertainties": [],
+      "checked_at": "2026-09-13T11:44:37Z",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": {
+          "effort": "medium"
+        }
+      }
+    },
+    {
+      "requested_model": "gpt-5.4-nano",
+      "alias": "gpt-5.4-nano",
+      "documented_snapshot_pair": "gpt-5.4-nano-2026-03-17",
+      "snapshots": ["gpt-5.4-nano-2026-03-17"],
+      "context_window_tokens": 400000,
+      "maximum_input_tokens": 272000,
+      "max_output_tokens": 128000,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": true,
+        "efforts": ["none", "low", "medium", "high", "xhigh"],
+        "efforts_verification": "explicit model-page enumeration",
+        "default_effort": "none",
+        "suggested_comparable_effort": "medium",
+        "request_rule": "Set reasoning.effort=medium explicitly."
+      },
+      "documented_reasoning_efforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "price_usd_per_1m_tokens": {
+        "input": 0.2,
+        "cached_input": 0.02,
+        "output": 1.25,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": {
+        "separate_rates_published": false,
+        "threshold_input_tokens": null,
+        "comparison": null,
+        "prices_usd_per_million": null,
+        "note": "Standard pricing table shows dashes for the long-context columns; no separate long-context surcharge is published for this model in the checked model page or pricing table."
+      },
+      "regional_processing_uplift_percent": 10,
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": [],
+        "details": null
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/gpt-5.4-nano",
+        "https://developers.openai.com/api/docs/models/gpt-5.4-nano.md",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/pricing.md"
+      ],
+      "uncertainties": [],
+      "checked_at": "2026-09-13T11:44:37Z",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": {
+          "effort": "medium"
+        }
+      }
+    },
+    {
+      "alias": "gpt-5-mini",
+      "snapshots": ["gpt-5-mini-2025-08-07"],
+      "context_window_tokens": 400000,
+      "max_output_tokens": 128000,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": true,
+        "efforts": ["minimal", "low", "medium", "high"],
+        "efforts_verification": "documented_model_family",
+        "suggested_comparable_effort": "medium",
+        "request_rule": "Set reasoning.effort=medium explicitly."
+      },
+      "price_usd_per_1m_tokens": {
+        "input": 0.25,
+        "cached_input": 0.025,
+        "output": 2,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": null,
+      "long_context_pricing_status": "No separate surcharge listed on this model page; standard published text rates recorded.",
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-12-11",
+        "snapshot_exceptions": []
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/gpt-5-mini",
+        "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/models/gpt-5-mini.md"
+      ],
+      "uncertainties": [],
+      "requested_model": "gpt-5-mini",
+      "documented_snapshot_pair": "gpt-5-mini-2025-08-07",
+      "maximum_input_tokens": 272000,
+      "documented_reasoning_efforts": ["minimal", "low", "medium", "high"],
+      "checked_at": "2026-09-13T11:45:30.830208+00:00",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": {
+          "effort": "medium"
+        }
+      }
+    },
+    {
+      "alias": "gpt-5-nano",
+      "snapshots": ["gpt-5-nano-2025-08-07"],
+      "context_window_tokens": 400000,
+      "max_output_tokens": 128000,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": true,
+        "efforts": ["minimal", "low", "medium", "high"],
+        "efforts_verification": "documented_model_family",
+        "suggested_comparable_effort": "medium",
+        "request_rule": "Set reasoning.effort=medium explicitly."
+      },
+      "price_usd_per_1m_tokens": {
+        "input": 0.05,
+        "cached_input": 0.005,
+        "output": 0.4,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": null,
+      "long_context_pricing_status": "No separate surcharge listed on this model page; standard published text rates recorded.",
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-12-11",
+        "snapshot_exceptions": []
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/gpt-5-nano",
+        "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/models/gpt-5-nano.md"
+      ],
+      "uncertainties": [],
+      "requested_model": "gpt-5-nano",
+      "documented_snapshot_pair": "gpt-5-nano-2025-08-07",
+      "maximum_input_tokens": 272000,
+      "documented_reasoning_efforts": ["minimal", "low", "medium", "high"],
+      "checked_at": "2026-09-13T11:45:30.830208+00:00",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": {
+          "effort": "medium"
+        }
+      }
+    },
+    {
+      "alias": "gpt-4.1-mini",
+      "snapshots": ["gpt-4.1-mini-2025-04-14"],
+      "context_window_tokens": 1047576,
+      "max_output_tokens": 32768,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": false,
+        "efforts": null,
+        "efforts_verification": "not_applicable",
+        "suggested_comparable_effort": null,
+        "request_rule": "Omit reasoning entirely; null is catalog metadata, not an API none setting."
+      },
+      "price_usd_per_1m_tokens": {
+        "input": 0.4,
+        "cached_input": 0.1,
+        "output": 1.6,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": null,
+      "long_context_pricing_status": "No separate surcharge listed on this model page; standard published text rates recorded.",
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": []
+      },
+      "sources": ["https://developers.openai.com/api/docs/models/gpt-4.1-mini"],
+      "uncertainties": [],
+      "requested_model": "gpt-4.1-mini",
+      "documented_snapshot_pair": "gpt-4.1-mini-2025-04-14",
+      "maximum_input_tokens": null,
+      "documented_reasoning_efforts": null,
+      "checked_at": "2026-09-13T11:45:30.830208+00:00",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": null
+      }
+    },
+    {
+      "alias": "gpt-4.1-nano",
+      "snapshots": ["gpt-4.1-nano-2025-04-14"],
+      "context_window_tokens": 1047576,
+      "max_output_tokens": 32768,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": false,
+        "efforts": null,
+        "efforts_verification": "not_applicable",
+        "suggested_comparable_effort": null,
+        "request_rule": "Omit reasoning entirely; null is catalog metadata, not an API none setting."
+      },
+      "price_usd_per_1m_tokens": {
+        "input": 0.1,
+        "cached_input": 0.025,
+        "output": 0.4,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": null,
+      "long_context_pricing_status": "No separate surcharge listed on this model page; standard published text rates recorded.",
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-10-23",
+        "snapshot_exceptions": []
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/gpt-4.1-nano",
+        "https://developers.openai.com/api/docs/deprecations"
+      ],
+      "uncertainties": [],
+      "requested_model": "gpt-4.1-nano",
+      "documented_snapshot_pair": "gpt-4.1-nano-2025-04-14",
+      "maximum_input_tokens": null,
+      "documented_reasoning_efforts": null,
+      "checked_at": "2026-09-13T11:45:30.830208+00:00",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": null
+      }
+    },
+    {
+      "alias": "gpt-4o-mini",
+      "snapshots": ["gpt-4o-mini-2024-07-18"],
+      "context_window_tokens": 128000,
+      "max_output_tokens": 16384,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": false,
+        "efforts": null,
+        "efforts_verification": "not_applicable",
+        "suggested_comparable_effort": null,
+        "request_rule": "Omit reasoning entirely; null is catalog metadata, not an API none setting."
+      },
+      "price_usd_per_1m_tokens": {
+        "input": 0.15,
+        "cached_input": 0.075,
+        "output": 0.6,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": null,
+      "long_context_pricing_status": "No separate surcharge listed on this model page; standard published text rates recorded.",
+      "lifecycle": {
+        "deprecated": false,
+        "shutdown_date": null,
+        "snapshot_exceptions": []
+      },
+      "sources": ["https://developers.openai.com/api/docs/models/gpt-4o-mini"],
+      "uncertainties": [],
+      "requested_model": "gpt-4o-mini",
+      "documented_snapshot_pair": "gpt-4o-mini-2024-07-18",
+      "maximum_input_tokens": null,
+      "documented_reasoning_efforts": null,
+      "checked_at": "2026-09-13T11:45:30.830208+00:00",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": null
+      }
+    },
+    {
+      "alias": "o3-mini",
+      "snapshots": ["o3-mini-2025-01-31"],
+      "context_window_tokens": 200000,
+      "max_output_tokens": 100000,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false
+      },
+      "reasoning": {
+        "is_reasoning_model": true,
+        "efforts": ["low", "medium", "high"],
+        "efforts_verification": "family_level_inference_not_model_specific_enum",
+        "suggested_comparable_effort": "medium",
+        "request_rule": "Suggested reasoning.effort=medium is based on earlier o-series family documentation; exact individual effort enumeration remains unverified."
+      },
+      "price_usd_per_1m_tokens": {
+        "input": 1.1,
+        "cached_input": 0.55,
+        "output": 4.4,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": null,
+      "long_context_pricing_status": "No separate surcharge listed on this model page; standard published text rates recorded.",
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-10-23",
+        "snapshot_exceptions": []
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/o3-mini",
+        "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.2",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/models/o3-mini.md"
+      ],
+      "uncertainties": [
+        "Current individual model page confirms reasoning support but does not enumerate efforts; low/medium/high and suggested medium are inferred from the documented earlier o-series family, not generation-tested."
+      ],
+      "requested_model": "o3-mini",
+      "documented_snapshot_pair": "o3-mini-2025-01-31",
+      "maximum_input_tokens": null,
+      "documented_reasoning_efforts": null,
+      "checked_at": "2026-09-13T11:45:30.830208+00:00",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": {
+          "effort": "medium"
+        }
+      }
+    },
+    {
+      "alias": "o4-mini",
+      "snapshots": ["o4-mini-2025-04-16"],
+      "context_window_tokens": 200000,
+      "max_output_tokens": 100000,
+      "supports": {
+        "responses": true,
+        "streaming": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true
+      },
+      "reasoning": {
+        "is_reasoning_model": true,
+        "efforts": ["low", "medium", "high"],
+        "efforts_verification": "family_level_inference_not_model_specific_enum",
+        "suggested_comparable_effort": "medium",
+        "request_rule": "Suggested reasoning.effort=medium is based on earlier o-series family documentation; exact individual effort enumeration remains unverified."
+      },
+      "price_usd_per_1m_tokens": {
+        "input": 1.1,
+        "cached_input": 0.275,
+        "output": 4.4,
+        "tier": "standard",
+        "currency": "USD"
+      },
+      "long_context_pricing": null,
+      "long_context_pricing_status": "No separate surcharge listed on this model page; standard published text rates recorded.",
+      "lifecycle": {
+        "deprecated": true,
+        "shutdown_date": "2026-10-23",
+        "snapshot_exceptions": []
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/models/o4-mini",
+        "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.2",
+        "https://developers.openai.com/api/docs/deprecations",
+        "https://developers.openai.com/api/docs/models/o4-mini.md"
+      ],
+      "uncertainties": [
+        "Current individual model page confirms reasoning support but does not enumerate efforts; low/medium/high and suggested medium are inferred from the documented earlier o-series family, not generation-tested."
+      ],
+      "requested_model": "o4-mini",
+      "documented_snapshot_pair": "o4-mini-2025-04-16",
+      "maximum_input_tokens": null,
+      "documented_reasoning_efforts": null,
+      "checked_at": "2026-09-13T11:45:30.830208+00:00",
+      "suggested_comparison_config": {
+        "max_output_tokens": 8192,
+        "stream": true,
+        "service_tier": "default",
+        "reasoning": {
+          "effort": "medium"
+        }
+      }
+    }
+  ]
+}

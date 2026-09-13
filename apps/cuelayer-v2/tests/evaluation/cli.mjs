@@ -179,10 +179,26 @@ export async function run() {
               productSha: option("product-sha"),
               out: required("out"),
               availability: await readJSON(required("availability")),
+              ...(option("proposal")
+                ? { proposalPath: required("proposal") }
+                : {}),
+              ...(option("input-token-counts")
+                ? {
+                    inputTokenCounts: await readJSON(
+                      required("input-token-counts"),
+                    ),
+                  }
+                : {}),
+              ...(option("snapshots")
+                ? { inputSnapshots: await readJSON(required("snapshots")) }
+                : {}),
               development: process.argv.includes("--development"),
             })
           : await verifyQualification(required("manifest"), {
               allowExpired: true,
+              ...(option("proposal")
+                ? { proposalPath: required("proposal") }
+                : {}),
             });
       console.log(
         JSON.stringify({
@@ -294,6 +310,9 @@ export async function run() {
               "manifest-self-test",
               "adjudication-self-test",
               "report-self-test",
+              "screening-self-test",
+              "eligible-provider-self-test",
+              "quota-self-test",
             ].map((name) => "qualification/" + name + ".mjs"),
             ...[
               "guard-self-test",
