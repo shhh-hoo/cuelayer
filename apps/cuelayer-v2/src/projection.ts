@@ -1,3 +1,4 @@
+import { getSourceSubject } from "./terminal-review";
 import { references, semanticIndex } from "./semantic-index";
 import {
   same,
@@ -23,11 +24,11 @@ import {
 import { projectMeaning } from "./live-wire";
 
 export type LiveRequest = {
-  version: "v2-live-request-4";
+  version: "v2-live-request-5";
   scope: string;
-  mode: "CONTINUOUS" | "FINALIZE";
+  mode: "CONTINUOUS" | "FINALIZE" | "REVIEW";
   source: {
-    role: "PROCESS";
+    role: "PROCESS" | "REVIEW";
     text: string;
     start: string;
     end: string;
@@ -35,7 +36,8 @@ export type LiveRequest = {
   };
   context: {
     source: string;
-    role: "CONTEXT_ONLY" | "FOLLOWING_CONTEXT" | "CARRY_CONTEXT";
+    role:
+      "CONTEXT_ONLY" | "FOLLOWING_CONTEXT" | "CARRY_CONTEXT" | "REVIEW_CONTEXT";
     text: string;
   }[];
   cores: { id: string; label: string }[];
@@ -83,6 +85,11 @@ export type LiveCapture = {
   request: LiveRequest;
   namespace: string;
   inspectionContext?: import("./contract").InspectionContext;
+  recovery?: {
+    subjectId: string;
+    subjectVersion: number;
+    through: SourceCursor;
+  };
 };
 export const DEFAULT_BUDGET = {
   sourceChars: 2400,
@@ -236,20 +243,71 @@ export function captureLive(
   epoch: number,
   budget = DEFAULT_BUDGET,
   explicitCores?: string[],
+  recoverySubject?: string,
 ): Task {
-  const nominal = boundedRange(
-    replay.evidence,
-    replay.accounted,
-    budget.sourceChars,
-  );
-  const queryContext = Object.values(replay.inspectionContexts)
-    .filter(
-      (c) =>
-        c.query &&
-        position(replay.evidence, c.anchor.start) ===
-          position(replay.evidence, replay.accounted),
-    )
-    .at(-1);
+  const subject = recoverySubject
+    ? getSourceSubject(replay, recoverySubject)
+    : undefined;
+  if (
+    recoverySubject &&
+    (!subject?.range ||
+      !(
+        ("sourceReview" in subject && subject.sourceReview) ||
+        ("readyForLive" in subject && subject.readyForLive)
+      ) ||
+      replay.captureClosed ||
+      replay.ended)
+  )
+    throw new Error("no-eligible-source-review");
+  const nominal =
+    subject?.range ??
+    boundedRange(replay.evidence, replay.accounted, budget.sourceChars);
+  const recoveryContexts = recoverySubject
+    ? Object.values(replay.inspectionContexts).filter(
+        (c) => c.reviewSubject === recoverySubject && same(c.anchor, nominal),
+      )
+    : [];
+  const recoveryCursor =
+    subject &&
+    ("sourceReview" in subject
+      ? subject.sourceReview?.cursor
+      : "cursor" in subject
+        ? subject.cursor
+        : undefined);
+  const previousRecoveryEnd =
+    recoveryContexts.at(-1)?.following?.end ?? nominal.end;
+  const recoveryStart =
+    recoveryCursor &&
+    position(replay.evidence, recoveryCursor) >
+      position(replay.evidence, previousRecoveryEnd)
+      ? recoveryCursor
+      : previousRecoveryEnd;
+  const nextRecoveryPage =
+    recoverySubject &&
+    position(replay.evidence, recoveryStart) <
+      position(replay.evidence, replay.accounted)
+      ? boundedRange(replay.evidence, recoveryStart, budget.precedingChars)
+      : undefined;
+  const recoveryPage = nextRecoveryPage
+    ? {
+        start: nextRecoveryPage.start,
+        end:
+          position(replay.evidence, nextRecoveryPage.end) >
+          position(replay.evidence, replay.accounted)
+            ? replay.accounted
+            : nextRecoveryPage.end,
+      }
+    : recoveryContexts.at(-1)?.following;
+  const queryContext = recoverySubject
+    ? undefined
+    : Object.values(replay.inspectionContexts)
+        .filter(
+          (c) =>
+            c.query &&
+            position(replay.evidence, c.anchor.start) ===
+              position(replay.evidence, replay.accounted),
+        )
+        .at(-1);
   const queryPages = Object.values(replay.inspectionContexts).filter(
     (c) =>
       c.query?.query === queryContext?.query?.query &&
@@ -269,18 +327,22 @@ export function captureLive(
     .at(-1)?.results;
   const { state, dependencies, coreIds, writeScope, retrieved } = selectState(
     replay,
-    explicitCores,
+    recoverySubject && subject?.coreId ? [subject.coreId] : explicitCores,
     {
       range: nominal,
-      query: queryContext?.query?.query ?? readable(replay.evidence, nominal),
+      query:
+        queryContext?.query?.query ??
+        readable(replay.evidence, nominal) +
+          (recoveryPage ? " " + readable(replay.evidence, recoveryPage) : ""),
       modify: queryContext?.query?.purpose === "MODIFY",
       exclude: excluded,
       prefer: preferred,
     },
   );
   const providedRetrieved = retrieved.filter((id) => state.units[id]);
-  writeScope.mainline = true;
-  writeScope.cue = true;
+  writeScope.mainline = !recoverySubject || !replay.state.currentCoreId;
+  writeScope.cue = !recoverySubject;
+  if (recoverySubject) writeScope.labels = [];
   if (Object.keys(state.units).length > budget.maxUnits)
     throw new Error("context-blocked:semantic-closure");
   let limit = budget.sourceChars,
@@ -288,7 +350,8 @@ export function captureLive(
     hi = budget.sourceChars;
   let best: Task | undefined;
   for (;;) {
-    const range = boundedRange(replay.evidence, replay.accounted, limit);
+    const range =
+      subject?.range ?? boundedRange(replay.evidence, replay.accounted, limit);
     const boundaries = Object.fromEntries(
       legalCursors(replay.evidence, range).map((c, i) => [`b${i}`, c]),
     );
@@ -324,6 +387,7 @@ export function captureLive(
     const context: LiveRequest["context"] = [];
     const inspected = Object.values(replay.inspectionContexts).filter(
       (c) =>
+        !c.reviewSubject &&
         position(replay.evidence, c.anchor.start) ===
           position(replay.evidence, range.start) &&
         position(replay.evidence, c.anchor.end) ===
@@ -338,9 +402,12 @@ export function captureLive(
         ? boundedRange(replay.evidence, nextStart, budget.precedingChars)
         : undefined;
     // Keep the last real page when nothing new exists: the same basis stays suppressed.
-    const page = following ?? inspected.at(-1)?.following;
+    const page = recoverySubject
+      ? recoveryPage
+      : (following ?? inspected.at(-1)?.following);
     const inspectionContext = {
       anchor: range,
+      ...(recoverySubject ? { reviewSubject: recoverySubject } : {}),
       ...(page ? { following: page } : {}),
       ...(queryContext?.query
         ? { query: queryContext.query, results: providedRetrieved, pageAfter }
@@ -380,13 +447,21 @@ export function captureLive(
       obligationVersions: Record<string, number> = {};
     const carried: LiveRequest["obligations"] = [];
     let carryChars = 0;
-    const relevant = Object.values(replay.unresolved).filter(
-      (o) => !o.coreId || coreIds.includes(o.coreId),
-    );
+    const relevant = (
+      recoverySubject
+        ? [subject!]
+        : [
+            ...Object.values(replay.unresolved),
+            ...Object.values(replay.reviewConcerns).filter(
+              (o) => o.kind === "SOURCE_NO_CHANGE",
+            ),
+          ]
+    ).filter((o) => !o.coreId || coreIds.includes(o.coreId));
     for (const o of relevant.slice().reverse()) {
       if (
         !o.range ||
-        carryChars + rangeSize(replay.evidence, o.range) > budget.carryChars
+        (!recoverySubject &&
+          carryChars + rangeSize(replay.evidence, o.range) > budget.carryChars)
       )
         continue;
       carryChars += rangeSize(replay.evidence, o.range);
@@ -398,13 +473,14 @@ export function captureLive(
       carried.push({
         id,
         kind: o.kind ?? "LEGACY_UNSPECIFIED",
-        phrase: o.phrase,
+        phrase: "phrase" in o ? o.phrase : readable(replay.evidence, o.range),
         core: o.coreId ? coreAlias(o.coreId) : null,
         source,
       });
       context.push({
         source,
-        role: "CARRY_CONTEXT",
+        role:
+          o.kind === "SOURCE_NO_CHANGE" ? "REVIEW_CONTEXT" : "CARRY_CONTEXT",
         text: readable(replay.evidence, o.range),
       });
     }
@@ -437,11 +513,15 @@ export function captureLive(
       text += join + segment + `<${cuts[i][0]}>`;
     }
     const request: LiveRequest = {
-      version: "v2-live-request-4",
+      version: "v2-live-request-5",
       scope: nonce,
-      mode: replay.captureClosed ? "FINALIZE" : "CONTINUOUS",
+      mode: recoverySubject
+        ? "REVIEW"
+        : replay.captureClosed
+          ? "FINALIZE"
+          : "CONTINUOUS",
       source: {
-        role: "PROCESS",
+        role: recoverySubject ? "REVIEW" : "PROCESS",
         text,
         start: cuts[0][0],
         end: cuts.at(-1)![0],
@@ -492,8 +572,14 @@ export function captureLive(
       newUnits,
       omitted: {
         sourceAfter:
-          position(replay.evidence, range.end) <
-          position(replay.evidence, replay.recorded),
+          position(
+            replay.evidence,
+            recoverySubject ? (page?.end ?? range.end) : range.end,
+          ) <
+          position(
+            replay.evidence,
+            recoverySubject ? replay.accounted : replay.recorded,
+          ),
         preceding: position(replay.evidence, before) > 0,
         cores: Object.keys(replay.state.cores).length - coreIds.length,
         obligations: relevant.length - carried.length,
@@ -510,6 +596,8 @@ export function captureLive(
       },
     };
     if (bytes(request) > budget.maxRequestBytes) {
+      if (recoverySubject)
+        throw new Error("context-blocked:source-review-projection");
       hi = limit - 1;
       if (hi < lo) {
         if (best) return best;
@@ -527,7 +615,8 @@ export function captureLive(
         pieces: sourcePieces(replay.evidence, r),
       })),
       dependencies,
-      obligationVersions,
+      obligationVersions: recoverySubject ? undefined : obligationVersions,
+      recoverySubject,
       mode: request.mode,
       writeScope,
     });
@@ -546,7 +635,9 @@ export function captureLive(
           sourcePieces(replay.evidence, r).some((p) => p.evidenceId === e.id),
         ),
       ),
-      obligations: carried.map((o) => replay.unresolved[obligations[o.id]]),
+      obligations: carried
+        .map((o) => replay.unresolved[obligations[o.id]])
+        .filter(Boolean),
       createdAt: performance.now(),
       attentionEpoch: epoch,
       capture: {
@@ -561,9 +652,18 @@ export function captureLive(
         request,
         namespace: nonce,
         inspectionContext,
+        ...(recoverySubject
+          ? {
+              recovery: {
+                subjectId: recoverySubject,
+                subjectVersion: subject!.version ?? 1,
+                through: page?.end ?? range.end,
+              },
+            }
+          : {}),
       },
     };
-    if (limit === budget.sourceChars || lo > hi) return best;
+    if (recoverySubject || limit === budget.sourceChars || lo > hi) return best;
     lo = limit + 1;
     if (lo > hi) return best;
     limit = Math.floor((lo + hi) / 2);

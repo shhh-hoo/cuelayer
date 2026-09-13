@@ -7,7 +7,8 @@
       "fix/cuelayer-v2-text-delivery": false,
       "feat/cuelayer-v2-phase-reporting-54": false,
       "fix/cuelayer-v2-stage-graph-55": false,
-      "feat/cuelayer-v2-declarative-stage-56": false
+      "feat/cuelayer-v2-declarative-stage-56": false,
+      "fix/cuelayer-v2-terminal-review-57": false
     }
   },
   "functions": {

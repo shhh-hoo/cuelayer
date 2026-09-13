@@ -1,3 +1,5 @@
+import { getSourceSubject, terminalRisk } from "./terminal-review";
+import type { ReviewConcern } from "./stage";
 import {
   reduceSemanticOperations,
   isCurrent,
@@ -67,7 +69,7 @@ export function validateDependencies(replay: Replay, task: Task) {
     requireThat(version(replay.state, key) === v, `stale-dependency:${key}`);
   for (const [id, v] of Object.entries(task.capture!.obligationVersions))
     requireThat(
-      replay.unresolved[id]?.version === v,
+      (getSourceSubject(replay, id)?.version ?? 0) === v,
       `stale-dependency:obligation/${id}`,
     );
   for (const e of task.evidence)
@@ -339,7 +341,7 @@ export function validateResolution(
 ): Resolution {
   const c = (task.review ?? task.capture)!;
   const id = aliasLookup(c.obligations, wire.obligation),
-    obligation = replay.unresolved[id];
+    obligation = getSourceSubject(replay, id);
   requireThat(
     obligation?.range && obligation.version === c.obligationVersions[id],
     "unbound-resolution",
@@ -354,8 +356,8 @@ export function validateResolution(
       "invalid-resolution-target",
     );
   const basis = expandGrounding(replay, task, wire.basis, group);
-  const lo = position(replay.evidence, obligation.range!.start),
-    hi = position(replay.evidence, obligation.range!.end);
+  const lo = position(replay.evidence, obligation!.range!.start),
+    hi = position(replay.evidence, obligation!.range!.end);
   let through = lo;
   for (const b of basis
     .filter((b) => b.range)
@@ -395,10 +397,25 @@ export function validate(replay: Replay, task: Task, raw: unknown) {
       "invalid-search-cursor",
     );
   requireThat(
-    position(replay.evidence, replay.accounted) ===
-      position(replay.evidence, c.range.start),
+    c.recovery ||
+      position(replay.evidence, replay.accounted) ===
+        position(replay.evidence, c.range.start),
     "noncontiguous-accounting",
   );
+  if (c.recovery) {
+    requireThat(!replay.captureClosed, "source-review-capture-closed");
+    requireThat(
+      !p.attentionCandidate && !p.contextRequest && !p.reviewRequests.length,
+      "source-review-cannot-publish-attention-or-search",
+    );
+    requireThat(
+      p.groups.length <= 1 &&
+        (!p.groups.length ||
+          (p.groups[0].throughBoundary === c.request.source.end &&
+            p.suffixStatus === "NONE")),
+      "source-review-must-cover-whole-subject",
+    );
+  }
   let start = c.range.start,
     state = replay.state;
   const operationBatches: number[] = [];
@@ -415,6 +432,13 @@ export function validate(replay: Replay, task: Task, raw: unknown) {
       rangeSize(replay.evidence, range) > 0,
       "noncontiguous-accounting",
     );
+    if (c.recovery && g.outcome === "NO_CHANGE")
+      requireThat(
+        position(replay.evidence, c.recovery.through) ===
+          position(replay.evidence, replay.recorded) &&
+          !c.request.omitted.sourceAfter,
+        "source-review-unseen-continuation",
+      );
     const ops = expandOperations(
       replay,
       task,
@@ -464,7 +488,7 @@ export function validate(replay: Replay, task: Task, raw: unknown) {
       (g.outcome === "APPLY") === changed,
       "semantic-no-op-or-change-disposition-mismatch",
     );
-    if (g.outcome === "CARRY") {
+    if (g.outcome === "CARRY" && !c.recovery) {
       const coreId = g.core ? aliasLookup(c.cores, g.core) : null;
       requireThat(!coreId || next.cores[coreId], "unknown-obligation-core");
       unresolved.push({
@@ -497,7 +521,7 @@ export function validate(replay: Replay, task: Task, raw: unknown) {
       !p.attentionCandidate && !p.reviewRequests.length,
       "wait-cannot-publish",
     );
-  const reviewRequests = p.reviewRequests.map((r, i) => {
+  const reviewRequests: ReviewConcern[] = p.reviewRequests.map((r, i) => {
     const coreId = aliasLookup(c.cores, r.core);
     requireThat(state.cores[coreId], "invalid-review-core");
     const unitIds = r.targets.map((a) => aliasLookup(c.units, a));
@@ -515,6 +539,55 @@ export function validate(replay: Replay, task: Task, raw: unknown) {
       createdAt: Date.now(),
     };
   });
+  if (!c.recovery)
+    for (const [i, group] of groups.entries()) {
+      if (group.outcome !== "NO_CHANGE") continue;
+      const reasons = terminalRisk(readable(replay.evidence, group.range));
+      if (reasons.length)
+        reviewRequests.push({
+          id: `source-review:${task.id}:${i}`,
+          kind: "SOURCE_NO_CHANGE",
+          version: 1,
+          range: group.range,
+          coreId: null,
+          purpose:
+            "Review a structurally incomplete terminal no-change decision",
+          risk: { version: "v2-terminal-risk-1", reasons },
+          createdAt: Date.now(),
+        });
+    }
+  if (c.recovery && groups.length && groups[0].outcome === "APPLY") {
+    requireThat(
+      resolutions.length === 1 &&
+        resolutions[0].obligation === c.recovery.subjectId,
+      "source-review-needs-original-resolution",
+    );
+    const bound = new Set(resolutions[0].targets);
+    const pending = [...bound];
+    while (pending.length)
+      for (const id of state.units[pending.pop()!]?.requires ?? []) {
+        if (!bound.has(id)) {
+          bound.add(id);
+          pending.push(id);
+        }
+      }
+    requireThat(
+      operations.every(
+        (op) => !("id" in op) || op.type === "core" || bound.has(op.id),
+      ),
+      "unrelated-source-review-mutation",
+    );
+    requireThat(
+      operations
+        .filter((op) => op.type === "core")
+        .every((op) =>
+          resolutions[0].targets.some(
+            (id) => state.units[id]?.coreId === op.id,
+          ),
+        ),
+      "unrelated-source-review-core",
+    );
+  }
   const attention = p.attentionCandidate
     ? {
         ...p.attentionCandidate,
@@ -558,6 +631,28 @@ export function validate(replay: Replay, task: Task, raw: unknown) {
       inspectionKey: task.inspectionKey!,
     },
   };
+  if (c.recovery) {
+    delete accepted.processing;
+    accepted.context = c.inspectionContext;
+    if (groups.length) {
+      const group = p.groups[0];
+      accepted.recovery = {
+        version: "v2-live-source-review-1",
+        ...c.recovery,
+        range: c.range,
+        inspectionKey: task.inspectionKey!,
+        outcome: group.outcome,
+        ...(group.outcome === "CARRY"
+          ? {
+              carry: {
+                kind: group.kind,
+                coreId: group.core ? aliasLookup(c.cores, group.core) : null,
+              },
+            }
+          : {}),
+      };
+    }
+  }
   return { proposal: { attention, operations }, accepted, decision: p };
 }
 
