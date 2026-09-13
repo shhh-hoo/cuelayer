@@ -6,7 +6,8 @@
       "chore/cuelayer-v2-evaluation-design": false,
       "fix/cuelayer-v2-stage-oracle-v2": false,
       "feat/v2-evaluation-execution-53": false,
-      "feat/v2-semantic-qualification-58": false
+      "feat/v2-semantic-qualification-58": false,
+      "feat/v2-natural-lesson-60": false
     }
   },
   "functions": {

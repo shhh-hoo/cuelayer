@@ -27,6 +27,41 @@ const required = (name) => {
 };
 export async function run() {
   const command = process.argv[2];
+  if (command === "acquire-natural-assets") {
+    const { acquireNaturalAssets } = await import("./natural/assets.mjs");
+    const manifest = await acquireNaturalAssets(required("out"));
+    console.log(
+      JSON.stringify({
+        identity: manifest.identity,
+        assets: manifest.assets.length,
+        provider_invocations: 0,
+      }),
+    );
+    return;
+  }
+  if (command === "execute-natural") {
+    const options = process.argv.slice(3);
+    if (
+      options.length !== 2 ||
+      options.some((x) => !/^--(manifest|authorization)=.+/.test(x)) ||
+      new Set(options.map((x) => x.split("=")[0])).size !== 2
+    )
+      throw Error("natural-execution-options");
+    const { executeNatural } = await import("./natural/execute.mjs");
+    const result = await executeNatural(
+      required("manifest"),
+      required("authorization"),
+    );
+    console.log(
+      JSON.stringify({
+        status: result.status,
+        full_cohort: result.full_cohort,
+        provider_attempts: result.attempts.length,
+        cost_upper_bound_usd: result.cost_upper_bound_usd,
+      }),
+    );
+    return;
+  }
   if (command === "execute-qualification") {
     const options = process.argv.slice(3);
     if (
@@ -68,6 +103,69 @@ export async function run() {
   }
   const restore = prohibitProviderEgress();
   try {
+    if (["prepare-natural", "verify-natural"].includes(command)) {
+      const { prepareNatural, verifyNatural } =
+        await import("./natural/manifest.mjs");
+      const result =
+        command === "prepare-natural"
+          ? await prepareNatural({
+              productRoot: required("product"),
+              productSha: option("product-sha"),
+              out: required("out"),
+              assets: option("assets") ? required("assets") : undefined,
+              development: process.argv.includes("--development"),
+            })
+          : await verifyNatural(required("manifest"), {
+              allowExpired: true,
+              allowDevelopment: process.argv.includes("--development"),
+            });
+      console.log(
+        JSON.stringify({
+          manifest_sha256: result.manifest_sha256,
+          paid_enabled: false,
+          provider_invocations: 0,
+        }),
+      );
+      return;
+    }
+    if (["export-natural-review", "import-natural-review"].includes(command)) {
+      const { verifyNatural } = await import("./natural/manifest.mjs");
+      const { exportNaturalReview, importNaturalReview } =
+        await import("./natural/review.mjs");
+      const { verifyNaturalResultArtifacts } =
+        await import("./natural/execute.mjs");
+      const verified = await verifyNatural(required("manifest"), {
+        allowExpired: true,
+      });
+      const resultPath = required("input"),
+        result = await readJSON(resultPath);
+      const seal = await readJSON(
+        resolve(resultPath, "../natural-results-seal.json"),
+      );
+      if (
+        seal.object_sha256 !== sha256(result) ||
+        seal.file_sha256 !== sha256(await readFile(resultPath))
+      )
+        throw Error("natural-result-seal-drift");
+      await verifyNaturalResultArtifacts(verified.manifest, result);
+      const input = {
+        manifest: verified.manifest,
+        lesson: verified.lesson,
+        result,
+      };
+      const review =
+        command === "export-natural-review"
+          ? exportNaturalReview(input)
+          : importNaturalReview({
+              ...input,
+              submission: await readJSON(required("adjudication")),
+            });
+      await exclusive(required("out"), review);
+      console.log(
+        JSON.stringify({ identity: review.identity, provider_invocations: 0 }),
+      );
+      return;
+    }
     if (
       command === "prepare-qualification" ||
       command === "verify-qualification"
@@ -197,6 +295,12 @@ export async function run() {
               "adjudication-self-test",
               "report-self-test",
             ].map((name) => "qualification/" + name + ".mjs"),
+            ...[
+              "guard-self-test",
+              "review-self-test",
+              "performance-self-test",
+              "execution-self-test",
+            ].map((name) => "natural/" + name + ".mjs"),
           ].map((name) =>
             resolve(evaluatorRoot, "apps/cuelayer-v2/tests/evaluation", name),
           ),

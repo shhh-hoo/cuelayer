@@ -26,6 +26,10 @@ jobs:
         with:
           path: qualification-product
           ref: f82a97a987a71f0a4ef165827bf2870bef10dcca
+      - uses: actions/checkout@v4
+        with:
+          path: natural-product
+          ref: 8d14a004738c3beaf51f3b09d52b494d5067c2b0
       - uses: actions/setup-node@v4
         with:
           node-version: 26
@@ -36,12 +40,19 @@ jobs:
       - run: npm ci
         working-directory: qualification-product/apps/cuelayer-v2
       - run: npm ci
+        working-directory: natural-product/apps/cuelayer-v2
+      - run: npm ci
         working-directory: evaluator/apps/cuelayer-v2
+      - run: npx playwright install --with-deps chromium
+        working-directory: evaluator/apps/cuelayer-v2
+      - run: node apps/cuelayer-v2/scripts/evaluate-frontier.mjs acquire-natural-assets --out=.cuelayer/v2/natural60-assets
+        working-directory: evaluator
       - run: node apps/cuelayer-v2/scripts/evaluate-frontier.mjs self-test
         working-directory: evaluator
         env:
           GATE3B_PRODUCT_ROOT: ${{ github.workspace }}/frozen-product
           GATE3B_SHARED_PRODUCT_ROOT: ${{ github.workspace }}/shared-product
           GATE3B_QUALIFICATION_PRODUCT_ROOT: ${{ github.workspace }}/qualification-product
+          GATE3B_NATURAL_PRODUCT_ROOT: ${{ github.workspace }}/natural-product
       # CI self-tests are not the full 600-second/browser 3b-0 gate.
       # No provider credentials, paid jobs, deployment or automatic gate promotion.
